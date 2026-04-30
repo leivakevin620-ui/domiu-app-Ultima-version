@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const { login, register, loading: authLoading } = useAuth();
+  const { login, register, user, profile, loading: authLoading } = useAuth();
   const router = useRouter();
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState("");
@@ -13,6 +13,13 @@ export default function LoginPage() {
   const [nombre, setNombre] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (user && profile) {
+      if (profile.rol === 'admin') router.push("/admin");
+      else if (profile.rol === 'repartidor') router.push("/repartidor");
+    }
+  }, [user, profile, router]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -22,10 +29,9 @@ export default function LoginPage() {
     try {
       if (isRegister) {
         await register(email, password, nombre);
-        setError("Cuenta creada. Verifica tu email e inicia sesión.");
+        setError("Cuenta creada. Inicia sesión.");
       } else {
         await login(email, password);
-        router.push("/dashboard");
       }
     } catch (err: any) {
       setError(err.message || "Error al autenticar");
@@ -67,9 +73,9 @@ export default function LoginPage() {
           <div style={{
             padding: "12px 16px",
             borderRadius: 12,
-            background: error.includes("Verifica") ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
-            border: `1px solid ${error.includes("Verifica") ? "#22c55e" : "#ef4444"}`,
-            color: error.includes("Verifica") ? "#86efac" : "#fca5a5",
+            background: error.includes("Verifica") || error.includes("creada") ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
+            border: `1px solid ${error.includes("Verifica") || error.includes("creada") ? "#22c55e" : "#ef4444"}`,
+            color: error.includes("Verifica") || error.includes("creada") ? "#86efac" : "#fca5a5",
             marginBottom: 20,
             fontSize: 14,
           }}>

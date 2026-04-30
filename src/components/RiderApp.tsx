@@ -28,13 +28,13 @@ export default function RiderApp() {
 
   async function updateEstado(id: string, nuevo: string) {
     const { error } = await supabase.from("pedidos").update({ estado: nuevo }).eq("id", id);
-    if (!error) { toast.success(Estado: ); loadData(); } else toast.error(error.message);
+    if (!error) { toast.success(`Estado: ${nuevo}`); loadData(); } else toast.error(error.message);
   }
 
   async function setEstado(estado: string) {
     if (!riderData) return;
     const { error } = await supabase.from("repartidores").update({ estado }).eq("id", riderData.id);
-    if (!error) { toast.success(Estado cambiado a: ); loadData(); }
+    if (!error) { toast.success(`Estado cambiado a: ${estado}`); loadData(); }
   }
 
   const entregados = pedidos.filter(p => p.estado === "Entregado");
@@ -42,7 +42,7 @@ export default function RiderApp() {
   const ganancia = entregados.reduce((a, b) => a + (b.pago_repartidor || 0), 0);
 
   function copyInfo(p: any) {
-    const text = Pedido: #\nCliente: \nContacto: \nDirección: \nTarifa: }{p.precio}\nFecha: ;
+    const text = `Pedido: #${p.codigo}\nCliente: ${p.cliente}\nContacto: ${p.telefono}\nDirección: ${p.direccion}\nTarifa: $${p.precio}\nFecha: ${new Date(p.created_at).toLocaleString()}`;
     navigator.clipboard.writeText(text);
     toast.success("Copiado");
   }
@@ -59,7 +59,7 @@ export default function RiderApp() {
           </div>
           <div>
             <h1 className="font-bold text-white text-sm">{profile?.nombre}</h1>
-            <span className={	ext-[10px] px-2 py-0.5 rounded-full }>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full ${riderData?.estado === 'Disponible' ? 'bg-green-500 text-white' : 'bg-slate-700 text-slate-400'}`}>
               {riderData?.estado || 'Inactivo'}
             </span>
           </div>
@@ -74,7 +74,7 @@ export default function RiderApp() {
              <div className="grid grid-cols-2 gap-3">
                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
                  <p className="text-xs text-slate-400">Ganancia Turno</p>
-                 <p className="text-xl font-bold text-yellow-400"></p>
+                 <p className="text-xl font-bold text-yellow-400">${ganancia.toLocaleString()}</p>
                </div>
                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
                  <p className="text-xs text-slate-400">Entregados</p>
@@ -83,9 +83,9 @@ export default function RiderApp() {
              </div>
              
              <div className="flex gap-2 overflow-x-auto pb-2">
-               <button onClick={() => setEstado('Disponible')} className={px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap }>Disponible</button>
-               <button onClick={() => setEstado('Ocupado')} className={px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap }>Ocupado</button>
-               <button onClick={() => setEstado('No disponible')} className={px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap }>No disponible</button>
+               <button onClick={() => setEstado('Disponible')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${riderData?.estado === 'Disponible' ? 'bg-green-500 text-white' : 'bg-slate-800'}`}>Disponible</button>
+               <button onClick={() => setEstado('Ocupado')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${riderData?.estado === 'Ocupado' ? 'bg-yellow-500 text-black' : 'bg-slate-800'}`}>Ocupado</button>
+               <button onClick={() => setEstado('No disponible')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${riderData?.estado === 'No disponible' ? 'bg-red-500 text-white' : 'bg-slate-800'}`}>No disponible</button>
              </div>
 
              <h3 className="font-bold text-white mt-4">Pedidos Activos</h3>
@@ -114,9 +114,9 @@ export default function RiderApp() {
                 <p className="text-slate-400 mb-4">{p.direccion}</p>
                 
                 <div className="grid grid-cols-2 gap-2 mb-4">
-                  <a href={https://wa.me/} target="_blank" className="flex items-center justify-center gap-2 py-2 bg-green-500/20 text-green-400 rounded-lg"><MessageCircle size={16}/> WhatsApp</a>
-                  <a href={	el:} className="flex items-center justify-center gap-2 py-2 bg-slate-800 text-slate-300 rounded-lg"><Phone size={16}/> Llamar</a>
-                  <button onClick={() => window.open(https://maps.google.com/?q=)} className="flex items-center justify-center gap-2 py-2 bg-blue-500/20 text-blue-400 rounded-lg"><MapPin size={16}/> Mapa</button>
+                  <a href={`https://wa.me/${p.telefono}`} target="_blank" className="flex items-center justify-center gap-2 py-2 bg-green-500/20 text-green-400 rounded-lg"><MessageCircle size={16}/> WhatsApp</a>
+                  <a href={`tel:${p.telefono}`} className="flex items-center justify-center gap-2 py-2 bg-slate-800 text-slate-300 rounded-lg"><Phone size={16}/> Llamar</a>
+                  <button onClick={() => window.open(`https://maps.google.com/?q=${p.direccion}`)} className="flex items-center justify-center gap-2 py-2 bg-blue-500/20 text-blue-400 rounded-lg"><MapPin size={16}/> Mapa</button>
                   <button onClick={() => copyInfo(p)} className="flex items-center justify-center gap-2 py-2 bg-slate-800 text-slate-300 rounded-lg"><Copy size={16}/> Copiar</button>
                 </div>
 
@@ -140,7 +140,7 @@ export default function RiderApp() {
                    <span className="text-yellow-400 text-sm font-bold">{p.codigo}</span>
                    <p className="text-white">{p.direccion}</p>
                  </div>
-                 <button onClick={() => window.open(https://maps.google.com/?q=)} className="px-4 py-2 bg-blue-500 text-white rounded-lg font-bold">Ir</button>
+                 <button onClick={() => window.open(`https://maps.google.com/?q=${p.direccion}`)} className="px-4 py-2 bg-blue-500 text-white rounded-lg font-bold">Ir</button>
                </div>
              ))}
            </div>
@@ -151,13 +151,13 @@ export default function RiderApp() {
              <h2 className="text-lg font-bold text-white">Mi Liquidación</h2>
              <div className="bg-yellow-400/10 p-6 rounded-xl border border-yellow-400/30 text-center">
                <p className="text-yellow-400 text-sm">Total a Recibir</p>
-               <h1 className="text-4xl font-bold text-yellow-400"></h1>
+               <h1 className="text-4xl font-bold text-yellow-400">${ganancia.toLocaleString()}</h1>
              </div>
              <div className="space-y-2">
                {entregados.map(p => (
                  <div key={p.id} className="flex justify-between p-3 bg-slate-900 rounded-lg border border-slate-800">
                    <span className="text-white text-sm">{p.codigo} - {p.cliente}</span>
-                   <span className="text-green-400 font-bold">+</span>
+                   <span className="text-green-400 font-bold">+${p.pago_repartidor}</span>
                  </div>
                ))}
              </div>
@@ -179,7 +179,7 @@ export default function RiderApp() {
       {/* Bottom Nav */}
       <nav className="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 flex justify-around items-center p-2 z-50">
         {[{id:'inicio', icon:Home}, {id:'pedidos', icon:ListOrdered}, {id:'mapa', icon:MapPin}, {id:'liquidacion', icon:DollarSign}, {id:'perfil', icon:User}].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={lex flex-col items-center p-2 rounded }>
+          <button key={t.id} onClick={() => setTab(t.id)} className={`flex flex-col items-center p-2 rounded ${tab===t.id ? 'text-yellow-400' : 'text-slate-500'}`}>
             <t.icon size={20} />
             <span className="text-[9px] mt-1">{t.id.charAt(0).toUpperCase() + t.id.slice(1)}</span>
           </button>
