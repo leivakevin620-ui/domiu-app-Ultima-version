@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "DomiU Magdalena - Gestión de Domicilios",
-  description: "App profesional para gestión de domicilios",
+  title: "DomiU Magdalena - Gestion de Domicilios",
+  description: "App profesional para gestion de domicilios",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body className="min-h-screen bg-slate-950">{children}</body>
     </html>
   );
 }
