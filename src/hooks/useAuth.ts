@@ -4,13 +4,24 @@ import { useState, useEffect, useCallback } from "react";
 import { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
+export type UserProfile = {
+  id: string;
+  email: string;
+  nombre: string;
+  rol: "admin" | "repartidor";
+};
+
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = useCallback(async (userId: string) => {
-    const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, email, nombre, rol")
+      .eq("id", userId)
+      .single();
     if (data) setProfile(data);
     setLoading(false);
   }, []);
@@ -40,11 +51,38 @@ export function useAuth() {
     return data.user;
   }, []);
 
-  const register = useCallback(async (email: string, password: string, nombre: string) => {
+  const registerAdmin = useCallback(async (email: string, password: string, nombre: string, accessCode: string) => {
+    const code = process.env.NEXT_PUBLIC_ADMIN_ACCESS_CODE;
+    if (accessCode !== code) throw new Error("Codigo de acceso invalido");
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { nombre } },
+      options: {
+        data: { nombre, role: "admin" },
+      },
+    });
+    if (error) throw error;
+    return data.user;
+  }, []);
+
+  const registerRepartidor = useCallback(async (
+    email: string, password: string, nombre: string,
+    telefono: string, documento: string, vehiculo: string, placa: string
+  ) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          nombre,
+          role: "repartidor",
+          telefono,
+          documento,
+          vehiculo,
+          placa,
+        },
+      },
     });
     if (error) throw error;
     return data.user;
@@ -54,5 +92,5 @@ export function useAuth() {
     await supabase.auth.signOut();
   }, []);
 
-  return { user, profile, loading, login, register, logout };
+  return { user, profile, loading, login, registerAdmin, registerRepartidor, logout };
 }
