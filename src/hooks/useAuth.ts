@@ -55,14 +55,18 @@ export function useAuth() {
     const code = process.env.NEXT_PUBLIC_ADMIN_ACCESS_CODE;
     if (accessCode !== code) throw new Error("Codigo de acceso invalido");
 
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { nombre, role: "admin" } },
     });
-    if (error) throw error;
+    if (authError) throw authError;
+
     if (data.user) {
-      await supabase.from("profiles").upsert({ id: data.user.id, email, nombre, rol: "admin" });
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .insert({ id: data.user.id, email, nombre, rol: "admin" });
+      if (profileError) throw new Error("Error perfil: " + profileError.message);
     }
     return data.user;
   }, []);
@@ -71,27 +75,34 @@ export function useAuth() {
     email: string, password: string, nombre: string,
     telefono: string, documento: string, vehiculo: string, placa: string
   ) => {
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error: authError } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: { nombre, role: "repartidor", telefono, documento, vehiculo, placa },
-      },
+      options: { data: { nombre, role: "repartidor", telefono, documento, vehiculo, placa } },
     });
-    if (error) throw error;
+    if (authError) throw new Error("Error auth: " + authError.message);
+
     if (data.user) {
       const userId = data.user.id;
-      await supabase.from("profiles").upsert({ id: userId, email, nombre, rol: "repartidor" });
-      await supabase.from("repartidores").insert({
-        user_id: userId,
-        nombre: nombre,
-        telefono: telefono,
-        documento: documento,
-        vehiculo: vehiculo,
-        placa: placa,
-        estado: "No disponible",
-        activo: true,
-      });
+
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .insert({ id: userId, email, nombre, rol: "repartidor" });
+      if (profileError) throw new Error("Error perfil: " + profileError.message);
+
+      const { error: riderError } = await supabase
+        .from("repartidores")
+        .insert({
+          user_id: userId,
+          nombre,
+          telefono,
+          documento,
+          vehiculo,
+          placa,
+          estado: "No disponible",
+          activo: true,
+        });
+      if (riderError) throw new Error("Error repartidor: " + riderError.message);
     }
     return data.user;
   }, []);
