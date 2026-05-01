@@ -113,7 +113,7 @@ export default function RiderApp() {
     }
   }
 
-  const estadoColors = {
+  const estadoColors: Record<string, string> = {
     "Disponible": "bg-green-500 text-white",
     "Ocupado": "bg-yellow-500 text-black",
     "No disponible": "bg-red-500 text-white",
@@ -130,7 +130,7 @@ export default function RiderApp() {
           </div>
           <div>
             <h1 className="font-bold text-white text-sm">{profile?.nombre || riderData?.nombre}</h1>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${estadoColors[estadoRider as keyof typeof estadoColors] || "bg-slate-700 text-slate-400"}`}>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${estadoColors[estadoRider] || "bg-slate-700 text-slate-400"}`}>
               {estadoRider}
             </span>
           </div>
@@ -214,21 +214,6 @@ export default function RiderApp() {
                 </div>
               ))
             }
-
-            {entregados.length > 0 && (
-              <div className="mt-6">
-                <h3 className="font-bold text-white mb-2">Entregados Recientes</h3>
-                {entregados.slice(0, 5).map((p) => (
-                  <div key={p.id} className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 mb-2 flex justify-between items-center">
-                    <div>
-                      <span className="text-yellow-400 font-semibold text-sm">{p.codigo}</span>
-                      <p className="text-slate-400 text-xs">{p.cliente}</p>
-                    </div>
-                    <span className="text-green-400 font-bold text-sm">{formatMoney(p.pago_repartidor)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
@@ -302,10 +287,6 @@ export default function RiderApp() {
                 <span className="text-slate-400">Email</span>
                 <span className="text-white font-semibold text-sm">{profile?.email}</span>
               </div>
-            </div>
-            <div className="pt-4">
-              <p className="text-sm text-slate-400 mb-2">Estado actual:</p>
-              <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${estadoColors[estadoRider as keyof typeof estadoColors] || "bg-slate-700 text-slate-400"}`}>{estadoRider}</span>
             </div>
           </div>
         )}
