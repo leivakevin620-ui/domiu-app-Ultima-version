@@ -2,11 +2,10 @@
 
 import { useState, FormEvent, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const { login, register, user, profile, loading: authLoading } = useAuth();
+  const { login, registerAdmin, registerRepartidor, user, profile, loading: authLoading } = useAuth();
   const router = useRouter();
   const [isRegister, setIsRegister] = useState(false);
   const [rol, setRol] = useState<"admin" | "repartidor">("admin");
@@ -35,24 +34,10 @@ export default function LoginPage() {
     try {
       if (isRegister) {
         if (rol === "repartidor") {
-          const { error: rpcError } = await supabase.rpc("register_rider", {
-            p_email: email,
-            p_password: password,
-            p_nombre: nombre,
-            p_telefono: telefono,
-            p_vehiculo: vehiculo || null,
-            p_placa: placa || null,
-            p_documento: documento || null,
-          });
-          if (rpcError) throw rpcError;
+          await registerRepartidor(email, password, nombre, telefono, documento, vehiculo, placa);
           setError("Repartidor creado exitosamente. Inicia sesión.");
         } else {
-          const { error: rpcError } = await supabase.rpc("register_admin_user", {
-            p_email: email,
-            p_password: password,
-            p_nombre: nombre,
-          });
-          if (rpcError) throw rpcError;
+          await registerAdmin(email, password, nombre, "");
           setError("Cuenta de admin creada exitosamente. Inicia sesión.");
         }
       } else {

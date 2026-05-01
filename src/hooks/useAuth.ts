@@ -53,21 +53,16 @@ export function useAuth() {
 
   const registerAdmin = useCallback(async (email: string, password: string, nombre: string, accessCode: string) => {
     const code = process.env.NEXT_PUBLIC_ADMIN_ACCESS_CODE;
-    if (accessCode !== code) throw new Error("Codigo de acceso invalido");
+    if (code && accessCode && accessCode !== code) throw new Error("Codigo de acceso invalido");
 
     const { data, error: authError } = await supabase.auth.signUp({
       email, password,
-      options: { data: { nombre, role: "admin" } },
+      options: { data: { nombre, rol: "admin" } },
     });
     if (authError) throw authError;
+    if (!data.user) throw new Error("No se pudo crear el usuario");
 
-    if (data.user) {
-      await supabase.rpc("register_admin_user", {
-        p_id: data.user.id,
-        p_email: email,
-        p_nombre: nombre,
-      });
-    }
+    await supabase.from("profiles").update({ rol: "admin", nombre }).eq("id", data.user.id);
     return data.user;
   }, []);
 
@@ -77,22 +72,23 @@ export function useAuth() {
   ) => {
     const { data, error: authError } = await supabase.auth.signUp({
       email, password,
-      options: { data: { nombre, role: "repartidor", telefono, documento, vehiculo, placa } },
+      options: { data: { nombre, rol: "repartidor" } },
     });
     if (authError) throw authError;
+    if (!data.user) throw new Error("No se pudo crear el usuario");
 
-    if (data.user) {
-      const { error: rpcError } = await supabase.rpc("register_rider", {
-        p_id: data.user.id,
-        p_email: email,
-        p_nombre: nombre,
-        p_telefono: telefono,
-        p_documento: documento,
-        p_vehiculo: vehiculo,
-        p_placa: placa,
-      });
-      if (rpcError) throw new Error("Error al registrar repartidor: " + rpcError.message);
-    }
+    await supabase.from("profiles").update({ rol: "repartidor", nombre }).eq("id", data.user.id);
+
+    const { error: riderError } = await supabase.from("repartidores").insert({
+      user_id: data.user.id,
+      nombre,
+      telefono: telefono || null,
+      documento: documento || null,
+      vehiculo: vehiculo || null,
+      placa: placa || null,
+      estado: "No disponible",
+    });
+    if (riderError) throw new Error("Error al registrar repartidor: " + riderError.message);
     return data.user;
   }, []);
 
