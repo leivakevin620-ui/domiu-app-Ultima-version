@@ -56,17 +56,17 @@ export function useAuth() {
     if (accessCode !== code) throw new Error("Codigo de acceso invalido");
 
     const { data, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
+      email, password,
       options: { data: { nombre, role: "admin" } },
     });
     if (authError) throw authError;
 
     if (data.user) {
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .insert({ id: data.user.id, email, nombre, rol: "admin" });
-      if (profileError) throw new Error("Error perfil: " + profileError.message);
+      await supabase.rpc("register_admin_user", {
+        p_id: data.user.id,
+        p_email: email,
+        p_nombre: nombre,
+      });
     }
     return data.user;
   }, []);
@@ -76,33 +76,22 @@ export function useAuth() {
     telefono: string, documento: string, vehiculo: string, placa: string
   ) => {
     const { data, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
+      email, password,
       options: { data: { nombre, role: "repartidor", telefono, documento, vehiculo, placa } },
     });
-    if (authError) throw new Error("Error auth: " + authError.message);
+    if (authError) throw authError;
 
     if (data.user) {
-      const userId = data.user.id;
-
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .insert({ id: userId, email, nombre, rol: "repartidor" });
-      if (profileError) throw new Error("Error perfil: " + profileError.message);
-
-      const { error: riderError } = await supabase
-        .from("repartidores")
-        .insert({
-          user_id: userId,
-          nombre,
-          telefono,
-          documento,
-          vehiculo,
-          placa,
-          estado: "No disponible",
-          activo: true,
-        });
-      if (riderError) throw new Error("Error repartidor: " + riderError.message);
+      const { error: rpcError } = await supabase.rpc("register_rider", {
+        p_id: data.user.id,
+        p_email: email,
+        p_nombre: nombre,
+        p_telefono: telefono,
+        p_documento: documento,
+        p_vehiculo: vehiculo,
+        p_placa: placa,
+      });
+      if (rpcError) throw new Error("Error al registrar repartidor: " + rpcError.message);
     }
     return data.user;
   }, []);
