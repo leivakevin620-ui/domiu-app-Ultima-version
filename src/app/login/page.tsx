@@ -44,9 +44,11 @@ export default function LoginPage() {
         if (!accessCode.trim()) throw new Error("Ingresa el codigo de acceso");
         await registerAdmin(email, password, nombre, accessCode);
         setSuccess("Cuenta creada. Inicia sesion.");
+        setNombre(""); setEmail(""); setPassword(""); setAccessCode("");
       } else {
         await registerRepartidor(email, password, nombre, telefono, documento, vehiculo, placa);
         setSuccess("Registro exitoso. Inicia sesion.");
+        setNombre(""); setEmail(""); setPassword(""); setTelefono(""); setDocumento(""); setVehiculo(""); setPlaca("");
       }
     } catch (err: any) {
       setError(err.message || "Error al autenticar");

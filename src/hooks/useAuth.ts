@@ -61,6 +61,9 @@ export function useAuth() {
       options: { data: { nombre, role: "admin" } },
     });
     if (error) throw error;
+    if (data.user) {
+      await supabase.from("profiles").upsert({ id: data.user.id, email, nombre, rol: "admin" });
+    }
     return data.user;
   }, []);
 
@@ -76,6 +79,20 @@ export function useAuth() {
       },
     });
     if (error) throw error;
+    if (data.user) {
+      const userId = data.user.id;
+      await supabase.from("profiles").upsert({ id: userId, email, nombre, rol: "repartidor" });
+      await supabase.from("repartidores").insert({
+        user_id: userId,
+        nombre: nombre,
+        telefono: telefono,
+        documento: documento,
+        vehiculo: vehiculo,
+        placa: placa,
+        estado: "No disponible",
+        activo: true,
+      });
+    }
     return data.user;
   }, []);
 
