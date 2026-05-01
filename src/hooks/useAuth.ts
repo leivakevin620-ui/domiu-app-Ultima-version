@@ -58,9 +58,7 @@ export function useAuth() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: { nombre, role: "admin" },
-      },
+      options: { data: { nombre, role: "admin" } },
     });
     if (error) throw error;
     return data.user;
@@ -74,14 +72,7 @@ export function useAuth() {
       email,
       password,
       options: {
-        data: {
-          nombre,
-          role: "repartidor",
-          telefono,
-          documento,
-          vehiculo,
-          placa,
-        },
+        data: { nombre, role: "repartidor", telefono, documento, vehiculo, placa },
       },
     });
     if (error) throw error;
