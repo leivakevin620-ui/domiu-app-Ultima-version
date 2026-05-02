@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -20,29 +19,18 @@ type TabType = "inicio" | "pedidos" | "mapa" | "liquidacion" | "perfil";
 
 /* ======================== COMPONENTE ======================== */
 export default function RiderApp() {
-  const { user, profile, logout, loading: authLoading } = useAuth();
-  const router = useRouter();
+  const { user, profile, logout } = useAuth();
   const [tab, setTab] = useState<TabType>("inicio");
   const [riderData, setRiderData] = useState<any>(null);
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [locales, setLocales] = useState<any[]>([]);
-  const [dataLoading, setDataLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [estadoRider, setEstadoRider] = useState("No disponible");
   const [toast, setToast] = useState("");
   const [toastType, setToastType] = useState<"ok" | "err">("ok");
   const [currentTime, setCurrentTime] = useState("");
   const [currentDate, setCurrentDate] = useState("");
   const subRef = useRef<any>(null);
-
-  // Route protection
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace("/login");
-    } else if (!authLoading && user && profile?.rol !== "repartidor") {
-      logout();
-      router.replace("/login");
-    }
-  }, [user, authLoading, profile, router, logout]);
 
   // Clock
   useEffect(() => {
@@ -73,7 +61,7 @@ export default function RiderApp() {
       const { data: locs } = await supabase.from("locales").select("*");
       setLocales(locs || []);
     } catch (e) { console.error(e); }
-    finally { setDataLoading(false); }
+    finally { setLoading(false); }
   }, [user]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -204,8 +192,8 @@ export default function RiderApp() {
     Cancelado: { padding: "4px 10px", borderRadius: 999, background: colors.gray600, color: "#fff", fontSize: 11, fontWeight: 700 },
   };
 
-  if (authLoading || dataLoading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: colors.bg }}><p style={{ color: colors.gray400 }}>Cargando...</p></div>;
-  if (!user || !riderData) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: colors.bg }}><p style={{ color: colors.gray400 }}>Redirigiendo...</p></div>;
+  if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: colors.bg }}><p style={{ color: colors.gray400 }}>Cargando...</p></div>;
+  if (!user || !riderData) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: colors.bg }}><p style={{ color: colors.gray400 }}>Cargando...</p></div>;
 
   /* ======================== RENDER ======================== */
   return (

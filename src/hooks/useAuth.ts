@@ -24,8 +24,8 @@ export function useAuth() {
       .single();
 
     if (error) {
-      const session = await supabase.auth.getSession();
-      const u = session.data.session?.user;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const u = sessionData.session?.user;
       if (u) {
         const meta = u.user_metadata || {};
         const rol = meta.rol || "admin";
@@ -102,7 +102,9 @@ export function useAuth() {
   const login = useCallback(async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    if (data.user) await fetchProfile(data.user.id);
+    if (data.user) {
+      await fetchProfile(data.user.id);
+    }
     return data.user;
   }, [fetchProfile]);
 
@@ -118,7 +120,6 @@ export function useAuth() {
     });
     if (signUpError) throw signUpError;
     if (!data.user) throw new Error("No se pudo crear el usuario");
-
     return data.user;
   }, []);
 
@@ -127,20 +128,17 @@ export function useAuth() {
     if (!validCode || accessCode !== validCode) {
       throw new Error("Código de acceso inválido.");
     }
-
     const { data, error: signUpError } = await supabase.auth.signUp({
       email, password,
       options: { data: { nombre, rol: "admin" } },
     });
     if (signUpError) throw signUpError;
     if (!data.user) throw new Error("No se pudo crear el usuario");
-
     return data.user;
   }, []);
 
   const logout = useCallback(async () => {
-    setLoading(true);
-    await supabase.auth.signOut({ scope: "global" });
+    await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
     setLoading(false);
