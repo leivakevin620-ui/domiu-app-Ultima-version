@@ -16,54 +16,26 @@ export function useAuth() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function fetchProfile(userId: string) {
-    let { data, error } = await supabase
-      .from("profiles")
-      .select("id, email, nombre, rol")
-      .eq("id", userId)
-      .single();
-
-    if (error) {
-      const { data: sd } = await supabase.auth.getSession();
-      const u = sd.session?.user;
-      if (u) {
-        const meta = u.user_metadata || {};
-        const rol = meta.rol || "admin";
-        try { await supabase.from("profiles").insert({ id: userId, email: u.email, nombre: meta.nombre || u.email, rol }); } catch {}
-        if (rol === "repartidor") {
-          try { await supabase.from("repartidores").insert({ user_id: userId, nombre: meta.nombre || u.email, estado: "No disponible" }); } catch {}
-        }
-        data = { id: userId, email: u.email, nombre: meta.nombre || u.email, rol };
-      }
-    }
-
-    if (data) {
-      setProfile({ id: data.id, email: data.email, nombre: data.nombre, rol: data.rol === "repartidor" ? "repartidor" : "admin" });
-    }
-  }
-
   useEffect(() => {
     let mounted = true;
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (mounted) {
-        if (session) {
-          setUser(session.user);
-          fetchProfile(session.user.id);
-        } else {
-          setUser(null);
-          setProfile(null);
-        }
+      if (mounted && session) {
+        setUser(session.user);
+        getOrCreateProfile(session.user.id, session.user);
       }
-    }).catch(() => {
-      if (mounted) { setUser(null); setProfile(null); }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
+      if (event === "SIGNED_OUT") {
+        setUser(null);
+        setProfile(null);
+        return;
+      }
       if (session) {
         setUser(session.user);
-        fetchProfile(session.user.id);
+        getOrCreateProfile(session.user.id, session.user);
       } else {
         setUser(null);
         setProfile(null);
@@ -73,11 +45,35 @@ export function useAuth() {
     return () => { mounted = false; subscription.unsubscribe(); };
   }, []);
 
+  async function getOrCreateProfile(userId: string, authUser: User) {
+    const { data: existing } = await supabase
+      .from("profiles")
+      .select("id, email, nombre, rol")
+      .eq("id", userId)
+      .single();
+
+    if (existing) {
+      setProfile({ id: existing.id, email: existing.email, nombre: existing.nombre, rol: existing.rol === "repartidor" ? "repartidor" : "admin" });
+    } else {
+      const meta = authUser.user_metadata || {};
+      const rol = meta.rol || "admin";
+      await supabase.from("profiles").insert({
+        id: userId, email: authUser.email, nombre: meta.nombre || authUser.email, rol
+      });
+      if (rol === "repartidor") {
+        await supabase.from("repartidores").insert({
+          user_id: userId, nombre: meta.nombre || authUser.email, telefono: meta.telefono || null,
+          documento: meta.documento || null, vehiculo: meta.vehiculo || null, placa: meta.placa || null, estado: "No disponible"
+        });
+      }
+      setProfile({ id: userId, email: authUser.email!, nombre: meta.nombre || authUser.email!, rol });
+    }
+  }
+
   const login = useCallback(async (email: string, password: string) => {
     setLoading(true);
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setLoading(false); throw error; }
-    if (data.user) await fetchProfile(data.user.id);
     return data.user;
   }, []);
 
@@ -110,8 +106,7 @@ export function useAuth() {
 
   const logout = useCallback(async () => {
     try { await supabase.auth.signOut(); } catch {}
-    const keys = Object.keys(localStorage).filter(k => k.startsWith("sb-"));
-    keys.forEach(k => localStorage.removeItem(k));
+    Object.keys(localStorage).filter(k => k.startsWith("sb-")).forEach(k => localStorage.removeItem(k));
     setUser(null);
     setProfile(null);
     window.location.href = "/login";
