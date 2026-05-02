@@ -417,10 +417,10 @@ export default function AdminApp() {
                       <div><p className="text-slate-500 text-xs">Tarifa</p><p className="text-white font-bold">{fmt(p.precio)}</p></div>
                       <div><p className="text-slate-500 text-xs">Metodo</p><p className="text-white">{p.metodo_pago}</p></div>
                     </div>
-                    <div className="flex gap-2 flex-wrap items-center">
-                      <select key={`${p.id}-${p.estado}`} className="text-xs px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white" defaultValue={p.estado} onChange={(e) => cambiarEstado(p.id, e.target.value)}>
-                        {ESTADOS.map(e => <option key={e} value={e}>{e}</option>)}
-                      </select>
+                    <div className="flex gap-1 flex-wrap items-center">
+                      {ESTADOS.filter(e => e !== p.estado).map(e => (
+                        <button key={e} onClick={() => cambiarEstado(p.id, e)} className="text-[10px] px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition">{e}</button>
+                      ))}
                       <span className="text-xs text-slate-500 ml-auto">{new Date(p.created_at).toLocaleString("es-CO")}</span>
                     </div>
                   </div>
