@@ -81,7 +81,15 @@ export function useAuth() {
 
     initAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") {
+        if (mounted) {
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+        }
+        return;
+      }
       if (mounted) {
         setUser(session?.user ?? null);
         if (session?.user) {
@@ -137,11 +145,12 @@ export function useAuth() {
     return data.user;
   }, []);
 
-  const logout = useCallback(async () => {
-    await supabase.auth.signOut();
+  const logout = useCallback(() => {
+    supabase.auth.signOut({ scope: "global" });
     setUser(null);
     setProfile(null);
     setLoading(false);
+    window.location.href = "/login";
   }, []);
 
   return { user, profile, loading, login, registerAdmin, registerRepartidor, logout };
