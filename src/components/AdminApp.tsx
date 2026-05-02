@@ -15,7 +15,6 @@ import {
   Eye, EyeOff, Truck, Zap, Shield, UserCheck, UserX
 } from "lucide-react";
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 
 /* ======================== RELOJ ======================== */
@@ -353,20 +352,41 @@ export default function AdminApp() {
   };
 
   const exportarPDF = (datos: any[], titulo: string, columnas: { header: string; key: string }[]) => {
-    const doc = new jsPDF();
+    const doc = new jsPDF({ orientation: "landscape" });
     doc.setFontSize(16);
-    doc.text(titulo, 14, 20);
-    doc.setFontSize(10);
+    doc.text(titulo, 14, 15);
+    doc.setFontSize(9);
     doc.setTextColor(100);
-    doc.text(`Generado: ${new Date().toLocaleString("es-CO")}`, 14, 28);
-    autoTable(doc, {
-      startY: 35,
-      head: [columnas.map(c => c.header)],
-      body: datos.map(d => columnas.map(c => String(d[c.key] ?? ""))),
-      theme: "grid",
-      headStyles: { fillColor: [30, 41, 59], textColor: [250, 204, 21] },
-      styles: { fontSize: 8 },
+    doc.text(`Generado: ${new Date().toLocaleString("es-CO")}`, 14, 22);
+
+    const colWidths = columnas.map(() => 240 / columnas.length);
+    const startY = 28;
+
+    doc.setFillColor(15, 23, 42);
+    doc.setTextColor(250, 204, 21);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    let x = 14;
+    columnas.forEach((c, i) => {
+      doc.text(c.header, x, startY);
+      x += colWidths[i];
     });
+    doc.setTextColor(0, 0, 0);
+
+    let y = startY + 7;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    datos.forEach((d, idx) => {
+      x = 14;
+      if (y > 195) { doc.addPage(); y = 15; }
+      if (idx % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(14, y - 4, 240, 6, "F"); }
+      columnas.forEach((c, i) => {
+        doc.text(String(d[c.key] ?? ""), x, y);
+        x += colWidths[i];
+      });
+      y += 6;
+    });
+
     doc.save(`${titulo}_${new Date().toISOString().slice(0, 10)}.pdf`);
     ok("PDF exportado");
   };
@@ -382,54 +402,99 @@ export default function AdminApp() {
     const totalTransferencia = ent.filter((p: any) => p.metodo_pago === "Transferencia").reduce((s: number, p: any) => s + (p.precio || 0), 0);
 
     const doc = new jsPDF();
-    doc.setFontSize(22);
-    doc.setTextColor(15, 23, 42);
-    doc.text("DomiU Magdalena", 14, 20);
-    doc.setFontSize(14);
+    const f = (v: number) => "$" + new Intl.NumberFormat("es-CO").format(v);
+
+    // Encabezado
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 45, "F");
     doc.setTextColor(250, 204, 21);
-    doc.text("Desprendible de Pago", 14, 30);
+    doc.setFontSize(24);
+    doc.text("DomiU", 14, 18);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.text("Magdalena", 14, 26);
+    doc.setFontSize(14);
+    doc.text("Desprendible de Pago", 105, 18, { align: "center" });
+    doc.setFontSize(9);
+    doc.setTextColor(148, 163, 184);
+    doc.text(`Fecha: ${new Date().toLocaleString("es-CO")}`, 105, 26, { align: "center" });
+
+    // Info repartidor
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(12);
+    doc.text(rep.nombre, 14, 55);
     doc.setFontSize(9);
     doc.setTextColor(100, 116, 139);
-    doc.text(`Fecha: ${new Date().toLocaleString("es-CO")}`, 14, 38);
+    doc.text(`Telefono: ${rep.telefono || "N/A"}`, 14, 62);
+    doc.text(`Vehiculo: ${rep.vehiculo || "N/A"} | Placa: ${rep.placa || "N/A"}`, 14, 68);
 
-    doc.setFontSize(11);
-    doc.setTextColor(30, 41, 59);
-    doc.text(`Repartidor: ${rep.nombre}`, 14, 48);
-    doc.text(`Vehiculo: ${rep.vehiculo || "N/A"} - Placa: ${rep.placa || "N/A"}`, 14, 55);
-
+    // Resumen
+    let y = 80;
     doc.setFontSize(10);
-    doc.text(`Domicilios realizados: ${ent.length}`, 14, 65);
-    doc.text(`Total generado: $${totalGenerado.toLocaleString("es-CO")}`, 14, 72);
-    doc.text(`Efectivo recaudado: $${totalEfectivo.toLocaleString("es-CO")}`, 14, 79);
-    doc.text(`Transferencia: $${totalTransferencia.toLocaleString("es-CO")}`, 14, 86);
-    doc.text(`Debe a empresa: $${totalEmpresa.toLocaleString("es-CO")}`, 14, 93);
-    doc.setFontSize(13);
-    doc.setTextColor(16, 185, 129);
-    doc.text(`GANANCIA NET: $${totalRepartidor.toLocaleString("es-CO")}`, 14, 103);
+    doc.setTextColor(30, 41, 59);
+    const resumen = [
+      { label: "Domicilios realizados", val: String(ent.length) },
+      { label: "Total generado", val: f(totalGenerado) },
+      { label: "Efectivo recaudado", val: f(totalEfectivo) },
+      { label: "Transferencia", val: f(totalTransferencia) },
+      { label: "Debe a empresa", val: f(totalEmpresa) },
+    ];
+    resumen.forEach(r => {
+      doc.text(r.label, 14, y);
+      doc.setFont("helvetica", "bold");
+      doc.text(r.val, 120, y);
+      doc.setFont("helvetica", "normal");
+      y += 7;
+    });
 
+    // Ganancia neta
+    doc.setFillColor(236, 253, 245);
+    doc.roundedRect(14, y, 180, 14, 3, 3, "F");
+    doc.setFontSize(14);
+    doc.setTextColor(16, 185, 129);
+    doc.text("GANANCIA NETA", 20, y + 9);
+    doc.text(f(totalRepartidor), 188, y + 9, { align: "right" });
+    y += 22;
+
+    // Detalle pedidos
     if (ent.length > 0) {
-      autoTable(doc, {
-        startY: 110,
-        head: [["Codigo", "Cliente", "Direccion", "Tarifa", "Empresa", "Pago"]],
-        body: ent.map(p => [
-          p.codigo, p.cliente, p.direccion,
-          `$${p.precio?.toLocaleString("es-CO") || 0}`,
-          `$${p.empresa_recibe?.toLocaleString("es-CO") || 0}`,
-          `$${p.pago_repartidor?.toLocaleString("es-CO") || 0}`,
-        ]),
-        theme: "grid",
-        headStyles: { fillColor: [15, 23, 42], textColor: [250, 204, 21] },
-        styles: { fontSize: 7 },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
+      doc.setFontSize(11);
+      doc.setTextColor(30, 41, 59);
+      doc.text("Detalle de pedidos", 14, y);
+      y += 2;
+
+      // Headers
+      const headers = ["Codigo", "Cliente", "Direccion", "Tarifa", "Empresa", "Repartidor"];
+      const colW = [25, 35, 55, 25, 25, 25];
+      y += 8;
+      doc.setFillColor(15, 23, 42);
+      doc.rect(14, y, 182, 8, "F");
+      doc.setTextColor(250, 204, 21);
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "bold");
+      let cx = 16;
+      headers.forEach((h, i) => { doc.text(h, cx, y + 5); cx += colW[i]; });
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(0, 0, 0);
+      y += 11;
+
+      ent.forEach((p, idx) => {
+        if (y > 275) { doc.addPage(); y = 15; }
+        if (idx % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(14, y - 4, 182, 7, "F"); }
+        cx = 16;
+        const vals = [p.codigo, p.cliente, p.direccion, f(p.precio || 0), f(p.empresa_recibe || 0), f(p.pago_repartidor || 0)];
+        vals.forEach((v, i) => { doc.text(String(v), cx, y); cx += colW[i]; });
+        y += 7;
       });
     }
 
-    doc.setFontSize(8);
-    doc.setTextColor(148, 163, 184);
-    const pageCount = (doc as any).internal.getNumberOfPages();
+    // Footer
+    const pageCount = doc.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
-      (doc as any).setPage(i);
-      doc.text(`DomiU Magdalena - Desprendible de Pago - Pagina ${i} de ${pageCount}`, 14, 285);
+      doc.setPage(i);
+      doc.setFontSize(7);
+      doc.setTextColor(148, 163, 184);
+      doc.text(`DomiU Magdalena - Desprendible de Pago - Pagina ${i} de ${pageCount}`, 105, 290, { align: "center" });
     }
 
     doc.save(`Desprendible_${rep.nombre.replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`);
