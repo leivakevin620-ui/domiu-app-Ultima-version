@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import {
   Home, ListOrdered, MapPin, DollarSign, User, Phone,
@@ -22,18 +22,19 @@ type TabType = "inicio" | "pedidos" | "mapa" | "liquidacion" | "perfil";
 export default function RiderAppPage() {
   const { user, loading, profile, logout } = useAuth();
   const router = useRouter();
-  const [redirected, setRedirected] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (!loading) {
       if (!user || profile?.rol !== "repartidor") {
         router.replace("/login");
-        setRedirected(true);
+      } else {
+        setReady(true);
       }
     }
   }, [user, loading, profile, router]);
 
-  if (loading || redirected) {
+  if (!ready) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
         <p style={{ color: "#94a3b8" }}>Cargando...</p>
@@ -45,6 +46,7 @@ export default function RiderAppPage() {
 }
 
 function RiderAppContent({ user, profile, logout }: { user: any; profile: any; logout: () => void }) {
+  const sb = getSupabaseClient();
   const [tab, setTab] = useState<TabType>("inicio");
   const [riderData, setRiderData] = useState<any>(null);
   const [pedidos, setPedidos] = useState<any[]>([]);
@@ -76,14 +78,14 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
   const loadData = useCallback(async () => {
     if (!user) return;
     try {
-      const { data: rider } = await supabase.from("repartidores").select("*").eq("user_id", user.id).single();
+      const { data: rider } = await sb.from("repartidores").select("*").eq("user_id", user.id).single();
       setRiderData(rider);
       if (rider) {
         setEstadoRider(rider.estado || "No disponible");
-        const { data: peds } = await supabase.from("pedidos").select("*").eq("repartidor_id", rider.id).order("created_at", { ascending: false });
+        const { data: peds } = await sb.from("pedidos").select("*").eq("repartidor_id", rider.id).order("created_at", { ascending: false });
         setPedidos(peds || []);
       }
-      const { data: locs } = await supabase.from("locales").select("*");
+      const { data: locs } = await sb.from("locales").select("*");
       setLocales(locs || []);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -94,28 +96,28 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
   // Realtime
   useEffect(() => {
     if (!user || !riderData) return;
-    if (subRef.current) supabase.removeChannel(subRef.current);
-    const channel = supabase.channel("rider_rt")
+    if (subRef.current) sb.removeChannel(subRef.current);
+    const channel = sb.channel("rider_rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "pedidos", filter: `repartidor_id=eq.${riderData.id}` }, () => loadData())
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "repartidores", filter: `id=eq.${riderData.id}` }, (pl: any) => { setRiderData(pl.new); if (pl.new.estado) setEstadoRider(pl.new.estado); })
       .subscribe();
     subRef.current = channel;
-    return () => { supabase.removeChannel(channel); };
+    return () => { sb.removeChannel(channel); };
   }, [user, riderData, loadData]);
 
   async function cambiarEstado(nuevo: string) {
     if (!riderData) return;
-    const { error } = await supabase.from("repartidores").update({ estado: nuevo }).eq("id", riderData.id);
+    const { error } = await sb.from("repartidores").update({ estado: nuevo }).eq("id", riderData.id);
     if (!error) { setEstadoRider(nuevo); ok(`Estado: ${nuevo}`); }
     else fail("Error: " + error.message);
   }
 
   async function cambiarEstadoPedido(id: string, nuevo: string) {
-    const { error } = await supabase.from("pedidos").update({ estado: nuevo }).eq("id", id);
+    const { error } = await sb.from("pedidos").update({ estado: nuevo }).eq("id", id);
     if (error) { fail("Error: " + error.message); return; }
     ok(`Pedido: ${nuevo}`);
     if (nuevo === "Entregado" || nuevo === "Cancelado") {
-      if (riderData) await supabase.from("repartidores").update({ estado: "Disponible" }).eq("id", riderData.id);
+      if (riderData) await sb.from("repartidores").update({ estado: "Disponible" }).eq("id", riderData.id);
     }
     loadData();
   }

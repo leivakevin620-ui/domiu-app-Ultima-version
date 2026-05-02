@@ -1,7 +1,7 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Home, ListOrdered, MapPin, DollarSign, User, LogOut, Phone, MessageCircle, Copy, Loader2 } from "lucide-react";
@@ -18,6 +18,7 @@ function formatearFecha(fecha: string) {
 
 export default function RiderApp() {
   const { user, profile, logout } = useAuth();
+  const sb = getSupabaseClient();
   const [tab, setTab] = useState("inicio");
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [riderData, setRiderData] = useState<any>(null);
@@ -28,11 +29,11 @@ export default function RiderApp() {
   const loadData = useCallback(async () => {
     if (!user) return;
     try {
-      const { data: rider } = await supabase.from("repartidores").select("*").eq("user_id", user.id).single();
+      const { data: rider } = await sb.from("repartidores").select("*").eq("user_id", user.id).single();
       setRiderData(rider);
       if (rider) {
         setEstadoRider(rider.estado || "No disponible");
-        const { data } = await supabase.from("pedidos").select("*").eq("repartidor_id", rider.id).order("created_at", { ascending: false });
+        const { data } = await sb.from("pedidos").select("*").eq("repartidor_id", rider.id).order("created_at", { ascending: false });
         setPedidos(data || []);
       }
     } catch (e) {
@@ -50,7 +51,7 @@ export default function RiderApp() {
     if (!user || !riderData) return;
 
     if (subRef.current) {
-      supabase.removeChannel(subRef.current);
+      sb.removeChannel(subRef.current);
     }
 
     const channel = supabase
@@ -65,17 +66,17 @@ export default function RiderApp() {
     subRef.current = channel;
 
     return () => {
-      supabase.removeChannel(channel);
+      sb.removeChannel(channel);
     };
   }, [user, riderData, loadData]);
 
   async function updateEstado(id: string, nuevo: string) {
-    const { error } = await supabase.from("pedidos").update({ estado: nuevo }).eq("id", id);
+    const { error } = await sb.from("pedidos").update({ estado: nuevo }).eq("id", id);
     if (!error) {
       toast.success(`Estado: ${nuevo}`);
       if (nuevo === "Entregado") {
         setEstadoRider("Disponible");
-        await supabase.from("repartidores").update({ estado: "Disponible" }).eq("id", riderData.id);
+        await sb.from("repartidores").update({ estado: "Disponible" }).eq("id", riderData.id);
       }
       loadData();
     } else toast.error(error.message);
@@ -83,10 +84,10 @@ export default function RiderApp() {
 
   async function cambiarEstadoRider(estado: string) {
     if (!riderData) return;
-    const { error } = await supabase.from("repartidores").update({ estado }).eq("id", riderData.id);
+    const { error } = await sb.from("repartidores").update({ estado }).eq("id", riderData.id);
     if (!error) {
       setEstadoRider(estado);
-      toast.success(`Ahora estás: ${estado}`);
+      toast.success(`Ahora est�s: ${estado}`);
     } else toast.error(error.message);
   }
 
@@ -95,7 +96,7 @@ export default function RiderApp() {
   const ganancia = entregados.reduce((a, b) => a + (b.pago_repartidor || 0), 0);
 
   function copyInfo(p: any) {
-    const text = `Pedido: #${p.codigo}\nCliente: ${p.cliente}\nContacto: ${p.telefono}\nDirección: ${p.direccion}\nBarrio: ${p.barrio}\nTarifa: ${formatMoney(p.precio)}\nTu pago: ${formatMoney(p.pago_repartidor)}\nFecha: ${formatearFecha(p.created_at)}`;
+    const text = `Pedido: #${p.codigo}\nCliente: ${p.cliente}\nContacto: ${p.telefono}\nDirecci�n: ${p.direccion}\nBarrio: ${p.barrio}\nTarifa: ${formatMoney(p.precio)}\nTu pago: ${formatMoney(p.pago_repartidor)}\nFecha: ${formatearFecha(p.created_at)}`;
     navigator.clipboard.writeText(text);
     toast.success("Copiado al portapapeles");
   }
@@ -237,7 +238,7 @@ export default function RiderApp() {
 
         {tab === "liquidacion" && (
           <div className="space-y-4">
-            <h2 className="text-lg font-bold text-white">Mi Liquidación</h2>
+            <h2 className="text-lg font-bold text-white">Mi Liquidaci�n</h2>
             <div className="bg-yellow-400/10 p-6 rounded-xl border border-yellow-400/30 text-center">
               <p className="text-yellow-400 text-sm">Total a Recibir</p>
               <h1 className="text-4xl font-bold text-yellow-400">{formatMoney(ganancia)}</h1>
@@ -255,7 +256,7 @@ export default function RiderApp() {
                   </div>
                 ))}
               </div>
-            ) : <p className="text-slate-500 text-center py-8">Aún no hay entregas</p>}
+            ) : <p className="text-slate-500 text-center py-8">A�n no hay entregas</p>}
           </div>
         )}
 
@@ -268,7 +269,7 @@ export default function RiderApp() {
                 <span className="text-white font-semibold">{profile?.nombre || riderData?.nombre}</span>
               </div>
               <div className="flex justify-between border-b border-slate-800 pb-2">
-                <span className="text-slate-400">Teléfono</span>
+                <span className="text-slate-400">Tel�fono</span>
                 <span className="text-white font-semibold">{riderData?.telefono || "No registrado"}</span>
               </div>
               <div className="flex justify-between border-b border-slate-800 pb-2">
@@ -276,7 +277,7 @@ export default function RiderApp() {
                 <span className="text-white font-semibold">{riderData?.documento || "No registrado"}</span>
               </div>
               <div className="flex justify-between border-b border-slate-800 pb-2">
-                <span className="text-slate-400">Vehículo</span>
+                <span className="text-slate-400">Veh�culo</span>
                 <span className="text-white font-semibold">{riderData?.vehiculo || "No registrado"}</span>
               </div>
               <div className="flex justify-between border-b border-slate-800 pb-2">

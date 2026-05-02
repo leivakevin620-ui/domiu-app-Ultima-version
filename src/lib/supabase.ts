@@ -7,4 +7,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error("Faltan variables de entorno de Supabase. Revisa .env.local");
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+let client = createClient(supabaseUrl, supabaseAnonKey);
+
+export { client as supabase };
+
+export function resetSupabaseClient() {
+  client = createClient(supabaseUrl, supabaseAnonKey);
+}
+
+export function getSupabaseClient() {
+  return client;
+}

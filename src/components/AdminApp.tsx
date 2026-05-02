@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import {
   LayoutDashboard, Plus, Package, Users, Building2, Banknote,
@@ -79,6 +79,7 @@ type Tab = "panel" | "nuevo" | "pedidos" | "repartidores" | "locales" | "turnos"
 /* ======================== COMPONENTE ======================== */
 export default function AdminApp() {
   const { user, profile, logout } = useAuth();
+  const sb = getSupabaseClient();
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("panel");
   const [pedidos, setPedidos] = useState<any[]>([]);
@@ -144,11 +145,11 @@ export default function AdminApp() {
     setLoading(true);
     try {
       const [rP, rR, rL, rT, rTH] = await Promise.all([
-        supabase.from("pedidos").select("*").order("created_at", { ascending: false }),
-        supabase.from("repartidores").select("*").order("created_at", { ascending: false }),
-        supabase.from("locales").select("*").order("created_at", { ascending: false }),
-        supabase.from("turnos").select("*").eq("activo", true).order("created_at", { ascending: false }).limit(1),
-        supabase.from("turnos").select("*").eq("activo", false).order("closed_at", { ascending: false }).limit(20),
+        sb.from("pedidos").select("*").order("created_at", { ascending: false }),
+        sb.from("repartidores").select("*").order("created_at", { ascending: false }),
+        sb.from("locales").select("*").order("created_at", { ascending: false }),
+        sb.from("turnos").select("*").eq("activo", true).order("created_at", { ascending: false }).limit(1),
+        sb.from("turnos").select("*").eq("activo", false).order("closed_at", { ascending: false }).limit(20),
       ]);
       setPedidos(rP.data || []);
       setReps(rR.data || []);
@@ -165,20 +166,20 @@ export default function AdminApp() {
   const subRef = useRef<any>(null);
   useEffect(() => {
     if (!user) return;
-    if (subRef.current) supabase.removeChannel(subRef.current);
-    const channel = supabase.channel("admin_realtime_v2")
+    if (subRef.current) sb.removeChannel(subRef.current);
+    const channel = sb.channel("admin_realtime_v2")
       .on("postgres_changes", { event: "*", schema: "public", table: "pedidos" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "repartidores" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "locales" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "turnos" }, () => load())
       .subscribe();
     subRef.current = channel;
-    return () => { supabase.removeChannel(channel); };
+    return () => { sb.removeChannel(channel); };
   }, [user, load]);
 
   /* ======================== TURNOS ======================== */
   const abrirTurno = async () => {
-    const { error } = await supabase.from("turnos").insert({ user_id: user?.id, activo: true, opened_at: new Date().toISOString() });
+    const { error } = await sb.from("turnos").insert({ user_id: user?.id, activo: true, opened_at: new Date().toISOString() });
     if (error) return fail(error.message);
     ok("Turno abierto"); load();
   };
@@ -186,7 +187,7 @@ export default function AdminApp() {
     if (!turnoActivo) return fail("No hay turno activo");
     const ents = pedidos.filter((p: any) => p.estado === "Entregado");
     const canc = pedidos.filter((p: any) => p.estado === "Cancelado");
-    const { error } = await supabase.from("turnos").update({
+    const { error } = await sb.from("turnos").update({
       activo: false, closed_at: new Date().toISOString(),
       total_turno: pedidos.length, entregados: ents.length, cancelados: canc.length,
       recaudado_total: ents.reduce((s: number, p: any) => s + (p.precio || 0), 0),
@@ -216,8 +217,8 @@ export default function AdminApp() {
     };
     if (!editId) data.estado = "Pendiente";
     const { error } = editId
-      ? await supabase.from("pedidos").update(data).eq("id", editId)
-      : await supabase.from("pedidos").insert(data);
+      ? await sb.from("pedidos").update(data).eq("id", editId)
+      : await sb.from("pedidos").insert(data);
     if (error) return fail(error.message);
     ok(editId ? "Pedido actualizado" : "Pedido creado");
     resetPedidoForm();
@@ -238,15 +239,15 @@ export default function AdminApp() {
     setTab("nuevo");
   };
 
-  const delPedido = async (id: string) => { if (!confirm("Eliminar?")) return; await supabase.from("pedidos").delete().eq("id", id); ok("Eliminado"); load(); };
+  const delPedido = async (id: string) => { if (!confirm("Eliminar?")) return; await sb.from("pedidos").delete().eq("id", id); ok("Eliminado"); load(); };
 
   const cambiarEstado = async (id: string, est: string) => {
     const pedido = pedidos.find((p: any) => p.id === id);
-    const { error } = await supabase.from("pedidos").update({ estado: est }).eq("id", id);
+    const { error } = await sb.from("pedidos").update({ estado: est }).eq("id", id);
     if (error) { fail("Error: " + error.message); return; }
     if (est === "Entregado" || est === "Cancelado") {
       if (pedido?.repartidor_id) {
-        await supabase.from("repartidores").update({ estado: "Disponible" }).eq("id", pedido.repartidor_id);
+        await sb.from("repartidores").update({ estado: "Disponible" }).eq("id", pedido.repartidor_id);
       }
     }
     ok(`Estado: ${est}`);
@@ -254,9 +255,9 @@ export default function AdminApp() {
   };
 
   const asignarRep = async (pedidoId: string, repId: string) => {
-    const { error } = await supabase.from("pedidos").update({ repartidor_id: repId, estado: "Asignado" }).eq("id", pedidoId);
+    const { error } = await sb.from("pedidos").update({ repartidor_id: repId, estado: "Asignado" }).eq("id", pedidoId);
     if (error) return fail(error.message);
-    await supabase.from("repartidores").update({ estado: "Ocupado" }).eq("id", repId);
+    await sb.from("repartidores").update({ estado: "Ocupado" }).eq("id", repId);
     ok("Repartidor asignado"); load();
   };
 
@@ -299,8 +300,8 @@ export default function AdminApp() {
     if (rEdit) {
       const data = { nombre: rNom.trim(), telefono: rTel.trim(), documento: rDoc.trim(), vehiculo: rVeh.trim(), placa: rPla.trim() };
       const rider = reps.find((r: any) => r.id === rEdit);
-      await supabase.from("repartidores").update(data).eq("id", rEdit);
-      if (rider?.user_id) await supabase.from("profiles").update({ nombre: rNom.trim() }).eq("id", rider.user_id);
+      await sb.from("repartidores").update(data).eq("id", rEdit);
+      if (rider?.user_id) await sb.from("profiles").update({ nombre: rNom.trim() }).eq("id", rider.user_id);
       ok("Actualizado"); setREdit(null); setREmail(""); setRPass(""); setRNom(""); setRTel(""); setRDoc(""); setRVeh(""); setRPla(""); load();
     } else {
       if (!rEmail.trim() || !rPass.trim()) return fail("Email y contraseña obligatorios para crear repartidor");
@@ -316,11 +317,11 @@ export default function AdminApp() {
   };
 
   const toggleRepActivo = async (id: string, activo: boolean) => {
-    await supabase.from("repartidores").update({ activo }).eq("id", id);
+    await sb.from("repartidores").update({ activo }).eq("id", id);
     ok(activo ? "Repartidor activado" : "Repartidor desactivado"); load();
   };
 
-  const delRep = async (id: string) => { if (!confirm("Eliminar?")) return; await supabase.from("repartidores").update({ activo: false }).eq("id", id); ok("Eliminado"); load(); };
+  const delRep = async (id: string) => { if (!confirm("Eliminar?")) return; await sb.from("repartidores").update({ activo: false }).eq("id", id); ok("Eliminado"); load(); };
 
   /* ======================== LOCALES ======================== */
   const saveLoc = async (e: any) => {
@@ -328,16 +329,16 @@ export default function AdminApp() {
     if (!lNom.trim()) return fail("Nombre obligatorio");
     const data = { nombre: lNom.trim(), direccion: lDir.trim(), telefono: lTel.trim() };
     const { error } = lEdit
-      ? await supabase.from("locales").update(data).eq("id", lEdit)
-      : await supabase.from("locales").insert({ ...data, user_id: user?.id });
+      ? await sb.from("locales").update(data).eq("id", lEdit)
+      : await sb.from("locales").insert({ ...data, user_id: user?.id });
     if (error) return fail(error.message);
     ok(lEdit ? "Actualizado" : "Creado"); setLEdit(null); setLNom(""); setLDir(""); setLTel(""); load();
   };
-  const delLoc = async (id: string) => { if (!confirm("Eliminar?")) return; await supabase.from("locales").update({ activo: false }).eq("id", id); ok("Eliminado"); load(); };
+  const delLoc = async (id: string) => { if (!confirm("Eliminar?")) return; await sb.from("locales").update({ activo: false }).eq("id", id); ok("Eliminado"); load(); };
 
   /* ======================== LIQUIDACION ======================== */
   const liquidar = async (repId: string) => {
-    await supabase.from("pedidos").update({ liquidado: true }).eq("repartidor_id", repId).eq("estado", "Entregado").eq("liquidado", false);
+    await sb.from("pedidos").update({ liquidado: true }).eq("repartidor_id", repId).eq("estado", "Entregado").eq("liquidado", false);
     ok("Liquidado"); load();
   };
 
