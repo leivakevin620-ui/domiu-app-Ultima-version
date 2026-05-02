@@ -77,10 +77,16 @@ export function useAuth() {
       },
     });
     if (error) throw error;
+    if (!data.user) throw new Error("No se pudo crear el usuario");
     return data.user;
   }, []);
 
-  const registerAdmin = useCallback(async (email: string, password: string, nombre: string) => {
+  const registerAdmin = useCallback(async (email: string, password: string, nombre: string, accessCode: string) => {
+    const validCode = process.env.NEXT_PUBLIC_ADMIN_ACCESS_CODE;
+    if (!validCode || accessCode !== validCode) {
+      throw new Error("Código de acceso inválido. Solo administradores autorizados pueden crear cuentas.");
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email, password,
       options: {
@@ -88,6 +94,7 @@ export function useAuth() {
       },
     });
     if (error) throw error;
+    if (!data.user) throw new Error("No se pudo crear el usuario");
     return data.user;
   }, []);
 

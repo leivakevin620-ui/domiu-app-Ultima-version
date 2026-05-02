@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [vehiculo, setVehiculo] = useState("");
   const [placa, setPlaca] = useState("");
   const [documento, setDocumento] = useState("");
+  const [accessCode, setAccessCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -37,7 +38,12 @@ export default function LoginPage() {
           await registerRepartidor(email, password, nombre, telefono, documento, vehiculo, placa);
           setError("Repartidor creado. Ahora inicia sesión con tu email y contraseña.");
         } else {
-          await registerAdmin(email, password, nombre);
+          if (!accessCode.trim()) {
+            setError("Se requiere código de acceso para crear cuenta de administrador.");
+            setLoading(false);
+            return;
+          }
+          await registerAdmin(email, password, nombre, accessCode);
           setError("Cuenta de admin creada. Ahora inicia sesión con tu email y contraseña.");
         }
       } else {
@@ -81,6 +87,9 @@ export default function LoginPage() {
                   </div>
                 </>
               )}
+              {rol === "admin" && (
+                <div><label style={{ display: "block", color: "#94a3b8", fontSize: 14, marginBottom: 6 }}>Código de acceso *</label><input type="text" value={accessCode} onChange={(e) => setAccessCode(e.target.value)} placeholder="Código requerido para admin" required style={{ width: "100%", padding: "14px 18px", borderRadius: 14, border: "1px solid rgba(255,255,255,0.12)", background: "#09111d", color: "#f8fafc", fontSize: 16, boxSizing: "border-box" }} /></div>
+              )}
             </>
           )}
           <div><label style={{ display: "block", color: "#94a3b8", fontSize: 14, marginBottom: 6 }}>Email</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="correo@ejemplo.com" required style={{ width: "100%", padding: "14px 18px", borderRadius: 14, border: "1px solid rgba(255,255,255,0.12)", background: "#09111d", color: "#f8fafc", fontSize: 16, boxSizing: "border-box" }} /></div>
@@ -89,7 +98,7 @@ export default function LoginPage() {
         </form>
         <p style={{ textAlign: "center", marginTop: 24, color: "#94a3b8", fontSize: 14 }}>
           {isRegister ? "¿Ya tienes cuenta? " : "¿No tienes cuenta? "}
-          <button type="button" onClick={() => { setIsRegister(!isRegister); setError(""); setTelefono(""); setVehiculo(""); setPlaca(""); setDocumento(""); }} style={{ background: "none", border: "none", color: "#facc15", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
+          <button type="button" onClick={() => { setIsRegister(!isRegister); setError(""); setTelefono(""); setVehiculo(""); setPlaca(""); setDocumento(""); setAccessCode(""); }} style={{ background: "none", border: "none", color: "#facc15", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
             {isRegister ? "Inicia sesión" : "Regístrate"}
           </button>
         </p>

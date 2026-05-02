@@ -1,10 +1,32 @@
 -- ============================================
--- FIX: Registro y separación de roles
+-- FIX: Registro, separación de roles y limpieza
 -- Ejecuta TODO en SQL Editor de Supabase
 -- ============================================
 
--- 1. REEMPLAZAR TRIGGER handle_new_user para que lea el rol de metadata
--- y cree automáticamente el repartidor si el rol es "repartidor"
+-- 1. ELIMINAR cuentas admin que NO sean leivakevin620@gmail.com
+-- Primero eliminar de repartidores (si existen)
+DELETE FROM repartidores
+WHERE user_id IN (
+  SELECT id FROM auth.users
+  WHERE email != 'leivakevin620@gmail.com'
+  AND raw_user_meta_data->>'rol' = 'admin'
+);
+
+-- Eliminar de profiles
+DELETE FROM profiles
+WHERE id IN (
+  SELECT id FROM auth.users
+  WHERE email != 'leivakevin620@gmail.com'
+  AND raw_user_meta_data->>'rol' = 'admin'
+);
+
+-- Eliminar usuarios auth (esto requiere ser superadmin en Supabase)
+-- NOTA: Si esto falla por permisos, elimina manualmente desde Authentication > Users en el dashboard
+-- DELETE FROM auth.users
+-- WHERE email != 'leivakevin620@gmail.com'
+-- AND raw_user_meta_data->>'rol' = 'admin';
+
+-- 2. REEMPLAZAR TRIGGER handle_new_user
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -52,33 +74,37 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 2. Asegurar que el trigger exista
+-- 3. Asegurar que el trigger exista
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
--- 3. Política RLS: permitir INSERT en repartidores para usuarios autenticados
+-- 4. Políticas RLS
 DROP POLICY IF EXISTS "Repartidores insert authenticated" ON repartidores;
 CREATE POLICY "Repartidores insert authenticated" ON repartidores
   FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
--- 4. Política RLS: permitir INSERT en profiles para el propio usuario
-DROP POLICY IF EXISTS "Profile insert own" ON profiles;
-CREATE POLICY "Profile insert own" ON profiles
-  FOR INSERT WITH CHECK (auth.uid() = id);
+DROP POLICY IF EXISTS "Repartidores select any" ON repartidores;
+CREATE POLICY "Repartidores select any" ON repartidores
+  FOR SELECT USING (true);
 
--- 5. Política RLS: permitir UPDATE en profiles para el propio usuario (ya existe pero asegurar)
-DROP POLICY IF EXISTS "Own profile update" ON profiles;
-CREATE POLICY "Own profile update" ON profiles
-  FOR UPDATE USING (auth.uid() = id);
-
--- 6. Política RLS: permitir UPDATE en repartidores para el propio repartidor
 DROP POLICY IF EXISTS "Repartidor update own" ON repartidores;
 CREATE POLICY "Repartidor update own" ON repartidores
   FOR UPDATE USING (auth.uid() = user_id);
 
--- 7. Política RLS: permitir SELECT en profiles para el propio usuario
+DROP POLICY IF EXISTS "Repartidores all own" ON repartidores;
+CREATE POLICY "Repartidores all own" ON repartidores
+  FOR ALL USING (auth.uid() = user_id);
+
 DROP POLICY IF EXISTS "Profile select own" ON profiles;
 CREATE POLICY "Profile select own" ON profiles
   FOR SELECT USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Own profile update" ON profiles;
+CREATE POLICY "Own profile update" ON profiles
+  FOR UPDATE USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Profile insert own" ON profiles;
+CREATE POLICY "Profile insert own" ON profiles
+  FOR INSERT WITH CHECK (auth.uid() = id);
