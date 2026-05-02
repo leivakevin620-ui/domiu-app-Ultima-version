@@ -150,6 +150,15 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // Polling cada 10 segundos (respaldo del realtime)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log("Polling: refrescando datos...");
+      loadData();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [loadData]);
+
   // Realtime
   useEffect(() => {
     if (!user || !riderData) return;
