@@ -19,8 +19,6 @@ async function fetchProfile(userId: string, sessionUser: User): Promise<UserProf
       .eq("id", userId)
       .maybeSingle();
 
-    if (pError) console.log("Profile query failed, using metadata:", pError.message);
-
     if (pData) {
       return {
         id: pData.id,
@@ -30,7 +28,6 @@ async function fetchProfile(userId: string, sessionUser: User): Promise<UserProf
       };
     }
 
-    console.log("No profile row, using metadata");
     const meta = sessionUser.user_metadata || {};
     return {
       id: userId,
@@ -39,7 +36,6 @@ async function fetchProfile(userId: string, sessionUser: User): Promise<UserProf
       rol: (meta.rol === "repartidor" ? "repartidor" : "admin") as "admin" | "repartidor",
     };
   } catch (e) {
-    console.log("fetchProfile error, using metadata:", e);
     const meta = sessionUser.user_metadata || {};
     return {
       id: userId,
@@ -58,17 +54,16 @@ export function useAuth() {
 
   useEffect(() => {
     let cancelled = false;
-    let processedUserId: string | null = null;
 
     async function processSession(session: any) {
       if (cancelled) return;
-      if (session && session.user.id === processedUserId) return;
-      processedUserId = session?.user?.id || null;
-
       if (session) {
         setUser(session.user);
         const p = await fetchProfile(session.user.id, session.user);
         if (!cancelled && p) setProfile(p);
+      } else {
+        setUser(null);
+        setProfile(null);
       }
       if (!cancelled) setInitialized(true);
     }
