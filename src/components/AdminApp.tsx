@@ -15,7 +15,7 @@ import {
   Eye, EyeOff, Truck, Zap, Shield, UserCheck, UserX
 } from "lucide-react";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 
 /* ======================== RELOJ ======================== */
@@ -359,7 +359,7 @@ export default function AdminApp() {
     doc.setFontSize(10);
     doc.setTextColor(100);
     doc.text(`Generado: ${new Date().toLocaleString("es-CO")}`, 14, 28);
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 35,
       head: [columnas.map(c => c.header)],
       body: datos.map(d => columnas.map(c => String(d[c.key] ?? ""))),
@@ -369,6 +369,71 @@ export default function AdminApp() {
     });
     doc.save(`${titulo}_${new Date().toISOString().slice(0, 10)}.pdf`);
     ok("PDF exportado");
+  };
+
+  const descargarDesprendible = async (repId: string) => {
+    const rep = reps.find((r: any) => r.id === repId);
+    if (!rep) return fail("Repartidor no encontrado");
+    const ent = pedidos.filter((p: any) => p.repartidor_id === repId && p.estado === "Entregado");
+    const totalGenerado = ent.reduce((s: number, p: any) => s + (p.precio || 0), 0);
+    const totalEmpresa = ent.reduce((s: number, p: any) => s + (p.empresa_recibe || 0), 0);
+    const totalRepartidor = ent.reduce((s: number, p: any) => s + (p.pago_repartidor || 0), 0);
+    const totalEfectivo = ent.filter((p: any) => p.metodo_pago === "Efectivo").reduce((s: number, p: any) => s + (p.precio || 0), 0);
+    const totalTransferencia = ent.filter((p: any) => p.metodo_pago === "Transferencia").reduce((s: number, p: any) => s + (p.precio || 0), 0);
+
+    const doc = new jsPDF();
+    doc.setFontSize(22);
+    doc.setTextColor(15, 23, 42);
+    doc.text("DomiU Magdalena", 14, 20);
+    doc.setFontSize(14);
+    doc.setTextColor(250, 204, 21);
+    doc.text("Desprendible de Pago", 14, 30);
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Fecha: ${new Date().toLocaleString("es-CO")}`, 14, 38);
+
+    doc.setFontSize(11);
+    doc.setTextColor(30, 41, 59);
+    doc.text(`Repartidor: ${rep.nombre}`, 14, 48);
+    doc.text(`Vehiculo: ${rep.vehiculo || "N/A"} - Placa: ${rep.placa || "N/A"}`, 14, 55);
+
+    doc.setFontSize(10);
+    doc.text(`Domicilios realizados: ${ent.length}`, 14, 65);
+    doc.text(`Total generado: $${totalGenerado.toLocaleString("es-CO")}`, 14, 72);
+    doc.text(`Efectivo recaudado: $${totalEfectivo.toLocaleString("es-CO")}`, 14, 79);
+    doc.text(`Transferencia: $${totalTransferencia.toLocaleString("es-CO")}`, 14, 86);
+    doc.text(`Debe a empresa: $${totalEmpresa.toLocaleString("es-CO")}`, 14, 93);
+    doc.setFontSize(13);
+    doc.setTextColor(16, 185, 129);
+    doc.text(`GANANCIA NET: $${totalRepartidor.toLocaleString("es-CO")}`, 14, 103);
+
+    if (ent.length > 0) {
+      autoTable(doc, {
+        startY: 110,
+        head: [["Codigo", "Cliente", "Direccion", "Tarifa", "Empresa", "Pago"]],
+        body: ent.map(p => [
+          p.codigo, p.cliente, p.direccion,
+          `$${p.precio?.toLocaleString("es-CO") || 0}`,
+          `$${p.empresa_recibe?.toLocaleString("es-CO") || 0}`,
+          `$${p.pago_repartidor?.toLocaleString("es-CO") || 0}`,
+        ]),
+        theme: "grid",
+        headStyles: { fillColor: [15, 23, 42], textColor: [250, 204, 21] },
+        styles: { fontSize: 7 },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+      });
+    }
+
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      (doc as any).setPage(i);
+      doc.text(`DomiU Magdalena - Desprendible de Pago - Pagina ${i} de ${pageCount}`, 14, 285);
+    }
+
+    doc.save(`Desprendible_${rep.nombre.replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`);
+    ok("Desprendible descargado");
   };
 
   const colPedidos = [
@@ -873,6 +938,7 @@ export default function AdminApp() {
                           </td>
                           <td className="py-3 px-4 text-center space-x-2">
                             <button onClick={() => liquidar(l.rep.id)} disabled={l.liquidado || l.count === 0} className="px-3 py-1.5 bg-yellow-400 text-slate-900 rounded-lg text-xs font-bold disabled:opacity-30 hover:bg-yellow-300">Liquidar</button>
+                            <button onClick={() => descargarDesprendible(l.rep.id)} disabled={l.count === 0} className="px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold disabled:opacity-30 hover:bg-red-500/20 border border-red-500/20"><FileDown size={14} /></button>
                             {l.rep.telefono && <button onClick={() => {
                               const msg = `Liquidacion ${l.rep.nombre}:\nPedidos: ${l.count}\nEmpresa: ${fmt(l.debe)}\nTu ganancia: ${fmt(l.gana)}`;
                               window.open(waLink(l.rep.telefono, msg), "_blank");
