@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -99,6 +99,23 @@ export default function AdminApp() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Realtime para pedidos y repartidores
+  const subRef = useRef<any>(null);
+  useEffect(() => {
+    if (!user) return;
+    if (subRef.current) supabase.removeChannel(subRef.current);
+
+    const channel = supabase.channel("admin_realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "pedidos" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "repartidores" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "locales" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "turnos" }, () => load())
+      .subscribe();
+
+    subRef.current = channel;
+    return () => { supabase.removeChannel(channel); };
+  }, [user, load]);
+
   const abrirTurno = async () => {
     const { error } = await supabase.from("turnos").insert({ user_id: user?.id, activo: true, opened_at: new Date().toISOString() });
     if (error) return fail(error.message);
@@ -145,7 +162,21 @@ export default function AdminApp() {
 
   const editPedido = (p: any) => { setEditId(p.id); setFCliente(p.cliente); setFTel(p.telefono); setFDir(p.direccion); setFBarrio(p.barrio); setFLocal(p.local_id || ""); setFRep(p.repartidor_id || ""); setFKm(String(p.km)); setFPrecio(String(p.precio)); setTab("nuevo"); };
   const delPedido = async (id: string) => { if (!confirm("Eliminar?")) return; await supabase.from("pedidos").delete().eq("id", id); ok("Eliminado"); load(); };
-  const cambiarEstado = async (id: string, est: string) => { await supabase.from("pedidos").update({ estado: est }).eq("id", id); load(); };
+  const cambiarEstado = async (id: string, est: string) => {
+    const pedido = pedidos.find((p: any) => p.id === id);
+    const { error } = await supabase.from("pedidos").update({ estado: est }).eq("id", id);
+    if (error) {
+      fail("Error: " + error.message);
+      return;
+    }
+    if (est === "Entregado" || est === "Cancelado") {
+      if (pedido?.repartidor_id) {
+        await supabase.from("repartidores").update({ estado: "Disponible" }).eq("id", pedido.repartidor_id);
+      }
+    }
+    ok(`Estado cambiado a: ${est}`);
+    load();
+  };
   const copiarPedido = (p: any) => {
     const loc = locs.find((l: any) => l.id === p.local_id)?.nombre || "Sin local";
     const f = new Date(p.created_at).toLocaleString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -387,7 +418,7 @@ export default function AdminApp() {
                       <div><p className="text-slate-500 text-xs">Metodo</p><p className="text-white">{p.metodo_pago}</p></div>
                     </div>
                     <div className="flex gap-2 flex-wrap items-center">
-                      <select className="text-xs px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white" value={p.estado} onChange={(e) => cambiarEstado(p.id, e.target.value)}>
+                      <select key={`${p.id}-${p.estado}`} className="text-xs px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white" defaultValue={p.estado} onChange={(e) => cambiarEstado(p.id, e.target.value)}>
                         {ESTADOS.map(e => <option key={e} value={e}>{e}</option>)}
                       </select>
                       <span className="text-xs text-slate-500 ml-auto">{new Date(p.created_at).toLocaleString("es-CO")}</span>
