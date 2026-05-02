@@ -87,14 +87,14 @@ export function useAuth() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
-      if (event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
-        if (!session) {
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
-        }
+
+      if (event === "SIGNED_OUT") {
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
         return;
       }
+
       if (session) {
         setUser(session.user);
         fetchProfile(session.user.id);
@@ -155,7 +155,6 @@ export function useAuth() {
     } catch {
       // ignore errors during signout
     }
-    // Limpiar manualmente tokens de localStorage
     const keys = Object.keys(localStorage).filter(k => k.startsWith("sb-"));
     keys.forEach(k => localStorage.removeItem(k));
     setUser(null);
