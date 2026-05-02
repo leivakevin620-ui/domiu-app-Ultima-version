@@ -57,6 +57,19 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
   const [currentDate, setCurrentDate] = useState("");
   const subRef = useRef<any>(null);
 
+  // Solicitar permiso de notificaciones
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  function enviarNotificacion(titulo: string, cuerpo: string) {
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification(titulo, { body: cuerpo, icon: "/favicon.ico" });
+    }
+  }
+
   // Clock
   useEffect(() => {
     const tick = () => {
@@ -104,7 +117,18 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
     if (!user || !riderData) return;
     if (subRef.current) sb.removeChannel(subRef.current);
     const channel = sb.channel("rider_rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "pedidos", filter: `repartidor_id=eq.${riderData.id}` }, () => loadData())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "pedidos", filter: `repartidor_id=eq.${riderData.id}` }, (payload: any) => {
+        const p = payload.new;
+        enviarNotificacion("Nuevo pedido asignado", `${p.codigo} - ${p.cliente} - ${p.direccion}`);
+        loadData();
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "pedidos", filter: `repartidor_id=eq.${riderData.id}` }, (payload: any) => {
+        const p = payload.new;
+        if (p.estado && p.estado !== payload.old.estado) {
+          enviarNotificacion("Pedido actualizado", `${p.codigo} - Estado: ${p.estado}`);
+        }
+        loadData();
+      })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "repartidores", filter: `id=eq.${riderData.id}` }, (pl: any) => { setRiderData(pl.new); if (pl.new.estado) setEstadoRider(pl.new.estado); })
       .subscribe();
     subRef.current = channel;
