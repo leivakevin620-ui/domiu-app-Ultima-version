@@ -92,9 +92,11 @@ export function useAuth() {
     if (data.user) {
       const p = await getProfile(data.user.id, data.user);
       if (p) setProfile(p);
+      setLoading(false);
+      return { user: data.user, profile: p };
     }
     setLoading(false);
-    return data.user;
+    return { user: data.user, profile: null };
   }, []);
 
   const registerRepartidor = useCallback(async (

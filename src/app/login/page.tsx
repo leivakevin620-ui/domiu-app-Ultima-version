@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, FormEvent, useEffect } from "react";
+import { useState, FormEvent } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const { login, registerAdmin, registerRepartidor, loading, user, profile } = useAuth();
+  const { login, registerAdmin, registerRepartidor, loading, profile } = useAuth();
   const router = useRouter();
   const [isRegister, setIsRegister] = useState(false);
   const [rol, setRol] = useState<"admin" | "repartidor">("admin");
@@ -19,13 +19,6 @@ export default function LoginPage() {
   const [accessCode, setAccessCode] = useState("");
   const [error, setError] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
-
-  useEffect(() => {
-    if (user && profile) {
-      if (profile.rol === "admin") router.replace("/admin");
-      else if (profile.rol === "repartidor") router.replace("/repartidor");
-    }
-  }, [user, profile, router]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -43,7 +36,14 @@ export default function LoginPage() {
         }
       } else {
         setSubmitLoading(true);
-        await login(email, password);
+        const result = await login(email, password);
+        if (result?.profile?.rol === "admin") {
+          window.location.href = "/admin";
+        } else if (result?.profile?.rol === "repartidor") {
+          window.location.href = "/repartidor";
+        } else {
+          setError("No se pudo determinar el rol del usuario.");
+        }
       }
     } catch (err: any) {
       setError(err.message || "Error al autenticar");
