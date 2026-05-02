@@ -75,16 +75,21 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
   const loadData = useCallback(async () => {
     if (!user) return;
     try {
-      const { data: rider } = await sb.from("repartidores").select("*").eq("user_id", user.id).single();
-      setRiderData(rider);
-      if (rider) {
-        setEstadoRider(rider.estado || "No disponible");
-        const { data: peds } = await sb.from("pedidos").select("*").eq("repartidor_id", rider.id).order("created_at", { ascending: false });
+      const { data: rider, error: riderError } = await sb.from("repartidores").select("*").eq("user_id", user.id).single();
+      if (riderError) {
+        setRiderData({ id: "temp", user_id: user.id, nombre: profile?.nombre || user.email || "Repartidor", telefono: "", documento: "", vehiculo: "", placa: "", estado: "No disponible", activo: true });
+      } else {
+        setRiderData(rider);
+      }
+      const currentRider = rider || { id: null };
+      if (currentRider.id) {
+        setEstadoRider(currentRider.estado || "No disponible");
+        const { data: peds } = await sb.from("pedidos").select("*").eq("repartidor_id", currentRider.id).order("created_at", { ascending: false });
         setPedidos(peds || []);
       }
       const { data: locs } = await sb.from("locales").select("*");
       setLocales(locs || []);
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); setRiderData({ id: "temp", user_id: user.id, nombre: profile?.nombre || user.email || "Repartidor", telefono: "", documento: "", vehiculo: "", placa: "", estado: "No disponible", activo: true }); }
     finally { setLoading(false); }
   }, [user]);
 
