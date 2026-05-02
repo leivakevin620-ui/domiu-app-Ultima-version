@@ -55,6 +55,7 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
   const [toastType, setToastType] = useState<"ok" | "err">("ok");
   const [currentTime, setCurrentTime] = useState("");
   const [currentDate, setCurrentDate] = useState("");
+  const [activeTurnoId, setActiveTurnoId] = useState<string | null>(null);
   const subRef = useRef<any>(null);
 
   // Solicitar permiso de notificaciones
@@ -137,7 +138,16 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
       if (rider) {
         setRiderData(rider);
         setEstadoRider(rider.estado || "No disponible");
-        const { data: peds } = await sb.from("pedidos").select("*").eq("repartidor_id", rider.id).order("created_at", { ascending: false });
+
+        // Obtener turno activo
+        const { data: turnosActivos } = await sb.from("turnos").select("id").eq("activo", true).limit(1);
+        const turnoId = turnosActivos?.[0]?.id || null;
+        setActiveTurnoId(turnoId);
+
+        // Filtrar pedidos por turno activo
+        const pedsQuery = sb.from("pedidos").select("*").eq("repartidor_id", rider.id);
+        const pedsFinal = turnoId ? pedsQuery.eq("turno_id", turnoId) : pedsQuery;
+        const { data: peds } = await pedsFinal.order("created_at", { ascending: false });
         setPedidos(peds || []);
       }
       const { data: locs } = await sb.from("locales").select("*");
@@ -174,6 +184,10 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
         if (p.estado && p.estado !== payload.old.estado) {
           enviarNotificacion("Pedido actualizado", `${p.codigo} - Estado: ${p.estado}`);
         }
+        loadData();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "turnos" }, () => {
+        console.log("Turno cambiado, recargando...");
         loadData();
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "repartidores", filter: `id=eq.${riderData.id}` }, (pl: any) => { setRiderData(pl.new); if (pl.new.estado) setEstadoRider(pl.new.estado); })
