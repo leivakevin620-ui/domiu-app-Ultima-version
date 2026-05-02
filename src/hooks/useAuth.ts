@@ -13,23 +13,7 @@ export type UserProfile = {
 
 async function fetchProfile(userId: string, sessionUser: User): Promise<UserProfile> {
   try {
-    // Primero verificar si existe en repartidores
-    const { data: riderData } = await supabase
-      .from("repartidores")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (riderData) {
-      return {
-        id: riderData.id,
-        email: sessionUser.email || "",
-        nombre: riderData.nombre || sessionUser.email || "",
-        rol: "repartidor",
-      };
-    }
-
-    // Segundo verificar profiles
+    // Primero verificar profiles (tiene el rol correcto)
     const { data: pData } = await supabase
       .from("profiles")
       .select("id, email, nombre, rol")
@@ -45,13 +29,39 @@ async function fetchProfile(userId: string, sessionUser: User): Promise<UserProf
       };
     }
 
-    // Fallback: metadata
+    // Segundo verificar metadata del auth
     const meta = sessionUser.user_metadata || {};
+    if (meta.rol) {
+      return {
+        id: userId,
+        email: sessionUser.email || "",
+        nombre: meta.nombre || sessionUser.email || "",
+        rol: (meta.rol === "repartidor" ? "repartidor" : "admin") as "admin" | "repartidor",
+      };
+    }
+
+    // Tercero: si existe en repartidores, es repartidor
+    const { data: riderData } = await supabase
+      .from("repartidores")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (riderData) {
+      return {
+        id: riderData.id,
+        email: sessionUser.email || "",
+        nombre: riderData.nombre || sessionUser.email || "",
+        rol: "repartidor",
+      };
+    }
+
+    // Fallback: por defecto admin
     return {
       id: userId,
       email: sessionUser.email || "",
-      nombre: meta.nombre || sessionUser.email || "",
-      rol: (meta.rol === "repartidor" ? "repartidor" : "admin") as "admin" | "repartidor",
+      nombre: sessionUser.email || "",
+      rol: "admin",
     };
   } catch (e) {
     const meta = sessionUser.user_metadata || {};
