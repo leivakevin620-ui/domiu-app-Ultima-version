@@ -129,10 +129,8 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
-    setInitialized(false);
+    try { await supabase.auth.signOut({ scope: 'global' }); } catch {}
+    Object.keys(localStorage).filter(k => k.startsWith("sb-")).forEach(k => localStorage.removeItem(k));
     window.location.href = "/login";
   }, []);
 
