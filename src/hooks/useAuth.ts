@@ -69,20 +69,7 @@ export function useAuth() {
 
     const initAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (mounted) {
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          fetchProfile(session.user.id);
-        } else {
-          setLoading(false);
-        }
-      }
-    };
-
-    initAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT") {
+      if (!session) {
         if (mounted) {
           setUser(null);
           setProfile(null);
@@ -91,13 +78,30 @@ export function useAuth() {
         return;
       }
       if (mounted) {
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          fetchProfile(session.user.id);
-        } else {
+        setUser(session.user);
+        fetchProfile(session.user.id);
+      }
+    };
+
+    initAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+      if (event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
+        if (!session) {
+          setUser(null);
           setProfile(null);
           setLoading(false);
         }
+        return;
+      }
+      if (session) {
+        setUser(session.user);
+        fetchProfile(session.user.id);
+      } else {
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
       }
     });
 
@@ -145,12 +149,18 @@ export function useAuth() {
     return data.user;
   }, []);
 
-  const logout = useCallback(() => {
-    supabase.auth.signOut({ scope: "global" });
+  const logout = useCallback(async () => {
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } catch {
+      // ignore errors during signout
+    }
+    // Limpiar manualmente tokens de localStorage
+    const keys = Object.keys(localStorage).filter(k => k.startsWith("sb-"));
+    keys.forEach(k => localStorage.removeItem(k));
     setUser(null);
     setProfile(null);
-    setLoading(false);
-    window.location.href = "/login";
+    window.location.replace("/login");
   }, []);
 
   return { user, profile, loading, login, registerAdmin, registerRepartidor, logout };
