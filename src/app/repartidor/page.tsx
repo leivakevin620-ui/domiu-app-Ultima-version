@@ -19,9 +19,32 @@ const EMPRESA_PHONE = "3113748405";
 type TabType = "inicio" | "pedidos" | "mapa" | "liquidacion" | "perfil";
 
 /* ======================== COMPONENTE ======================== */
-export default function RiderApp() {
-  const { user, profile, logout } = useAuth();
+export default function RiderAppPage() {
+  const { user, loading, profile, logout } = useAuth();
   const router = useRouter();
+  const [redirected, setRedirected] = useState(false);
+
+  useEffect(() => {
+    if (!loading) {
+      if (!user || profile?.rol !== "repartidor") {
+        router.replace("/login");
+        setRedirected(true);
+      }
+    }
+  }, [user, loading, profile, router]);
+
+  if (loading || redirected) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
+        <p style={{ color: "#94a3b8" }}>Cargando...</p>
+      </div>
+    );
+  }
+
+  return <RiderAppContent user={user} profile={profile} logout={logout} />;
+}
+
+function RiderAppContent({ user, profile, logout }: { user: any; profile: any; logout: () => void }) {
   const [tab, setTab] = useState<TabType>("inicio");
   const [riderData, setRiderData] = useState<any>(null);
   const [pedidos, setPedidos] = useState<any[]>([]);
