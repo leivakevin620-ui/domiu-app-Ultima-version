@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -21,14 +20,6 @@ type TabType = "inicio" | "pedidos" | "mapa" | "liquidacion" | "perfil";
 /* ======================== COMPONENTE ======================== */
 export default function RiderAppPage() {
   const { user, profile, initialized, logout } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!initialized) return;
-    if (!user || profile?.rol !== "repartidor") {
-      router.replace("/login");
-    }
-  }, [user, profile, initialized, router]);
 
   if (!initialized) {
     return (
@@ -39,6 +30,7 @@ export default function RiderAppPage() {
   }
 
   if (!user || profile?.rol !== "repartidor") {
+    window.location.href = "/login";
     return null;
   }
 

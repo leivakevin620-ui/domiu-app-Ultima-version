@@ -2,11 +2,9 @@
 
 import { useState, FormEvent } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const { login, registerAdmin, registerRepartidor, loading, profile } = useAuth();
-  const router = useRouter();
+  const { login, registerAdmin, registerRepartidor, loading } = useAuth();
   const [isRegister, setIsRegister] = useState(false);
   const [rol, setRol] = useState<"admin" | "repartidor">("admin");
   const [email, setEmail] = useState("");
@@ -23,6 +21,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
+    setSubmitLoading(true);
 
     try {
       if (isRegister) {
@@ -30,19 +29,20 @@ export default function LoginPage() {
           await registerRepartidor(email, password, nombre, telefono, documento, vehiculo, placa);
           setError("Repartidor creado. Ahora inicia sesion.");
         } else {
-          if (!accessCode.trim()) { setError("Se requiere codigo de acceso."); return; }
+          if (!accessCode.trim()) { setError("Se requiere codigo de acceso."); setSubmitLoading(false); return; }
           await registerAdmin(email, password, nombre, accessCode);
           setError("Cuenta creada. Ahora inicia sesion.");
         }
+        setSubmitLoading(false);
       } else {
-        setSubmitLoading(true);
         const result = await login(email, password);
-        if (result?.profile?.rol === "admin") {
+        if (result.profile?.rol === "admin") {
           window.location.href = "/admin";
-        } else if (result?.profile?.rol === "repartidor") {
+        } else if (result.profile?.rol === "repartidor") {
           window.location.href = "/repartidor";
         } else {
-          setError("No se pudo determinar el rol del usuario.");
+          setError("No se encontro perfil para este usuario.");
+          setSubmitLoading(false);
         }
       }
     } catch (err: any) {

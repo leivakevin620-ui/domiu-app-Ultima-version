@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
@@ -11,97 +11,99 @@ export type UserProfile = {
   rol: "admin" | "repartidor";
 };
 
-const profileCache = new Map<string, Promise<UserProfile | null>>();
-
-async function getProfile(userId: string, authUser: User): Promise<UserProfile | null> {
-  const cached = profileCache.get(userId);
-  if (cached) return cached;
-
-  const promise = (async () => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, email, nombre, rol")
-      .eq("id", userId);
-
-    if (data && data.length > 0) {
-      const p = data[0];
-      return { id: p.id, email: p.email, nombre: p.nombre, rol: p.rol === "repartidor" ? "repartidor" : "admin" };
-    }
-
-    const meta = authUser.user_metadata || {};
-    const rol = meta.rol || "admin";
-    await supabase.from("profiles").insert({
-      id: userId, email: authUser.email, nombre: meta.nombre || authUser.email, rol
-    });
-    if (rol === "repartidor") {
-      await supabase.from("repartidores").insert({
-        user_id: userId, nombre: meta.nombre || authUser.email, estado: "No disponible"
-      });
-    }
-    return { id: userId, email: authUser.email!, nombre: meta.nombre || authUser.email!, rol };
-  })();
-
-  profileCache.set(userId, promise);
-  promise.finally(() => profileCache.delete(userId));
-  return promise;
-}
-
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [initialized, setInitialized] = useState(false);
-  const isProcessing = useRef(false);
 
   useEffect(() => {
-    let mounted = true;
-    let resolved = false;
+    let cancelled = false;
 
-    async function processSession(sessionUser: User) {
-      if (isProcessing.current) return;
-      isProcessing.current = true;
-      setUser(sessionUser);
-      const p = await getProfile(sessionUser.id, sessionUser);
-      if (mounted && p) setProfile(p);
-      isProcessing.current = false;
+    async function init() {
+      const { data } = await supabase.auth.getSession();
+      if (cancelled) return;
+
+      if (data.session) {
+        setUser(data.session.user);
+        const { data: pData } = await supabase
+          .from("profiles")
+          .select("id, email, nombre, rol")
+          .eq("id", data.session.user.id)
+          .maybeSingle();
+
+        if (!cancelled && pData) {
+          setProfile({
+            id: pData.id,
+            email: pData.email || data.session.user.email || "",
+            nombre: pData.nombre || data.session.user.email || "",
+            rol: (pData.rol === "repartidor" ? "repartidor" : "admin") as "admin" | "repartidor",
+          });
+        }
+      }
+
+      if (!cancelled) setInitialized(true);
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      resolved = true;
-      if (mounted && session) {
-        processSession(session.user);
-      }
-      setInitialized(true);
-    });
+    init();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!mounted) return;
-      if (!session) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (cancelled) return;
+
+      if (event === "SIGNED_OUT") {
         setUser(null);
         setProfile(null);
-        isProcessing.current = false;
-        if (!resolved) {
-          resolved = true;
-          setInitialized(true);
-        }
+        setInitialized(true);
         return;
       }
-      if (profile?.id === session.user.id) return;
-      processSession(session.user);
+
+      if (session) {
+        setUser(session.user);
+        const { data: pData } = await supabase
+          .from("profiles")
+          .select("id, email, nombre, rol")
+          .eq("id", session.user.id)
+          .maybeSingle();
+
+        if (!cancelled && pData) {
+          setProfile({
+            id: pData.id,
+            email: pData.email || session.user.email || "",
+            nombre: pData.nombre || session.user.email || "",
+            rol: (pData.rol === "repartidor" ? "repartidor" : "admin") as "admin" | "repartidor",
+          });
+        }
+      } else {
+        setUser(null);
+        setProfile(null);
+      }
+      if (!cancelled) setInitialized(true);
     });
 
-    return () => { mounted = false; subscription.unsubscribe(); };
-  }, [profile]);
+    return () => { cancelled = true; subscription.unsubscribe(); };
+  }, []);
 
   const login = useCallback(async (email: string, password: string) => {
     setLoading(true);
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setLoading(false); throw error; }
     if (data.user) {
-      const p = await getProfile(data.user.id, data.user);
-      if (p) setProfile(p);
+      const { data: pData } = await supabase
+        .from("profiles")
+        .select("id, email, nombre, rol")
+        .eq("id", data.user.id)
+        .maybeSingle();
+
       setLoading(false);
-      return { user: data.user, profile: p };
+      return {
+        user: data.user,
+        profile: pData ? {
+          id: pData.id,
+          email: pData.email || data.user.email || "",
+          nombre: pData.nombre || data.user.email || "",
+          rol: (pData.rol === "repartidor" ? "repartidor" : "admin") as "admin" | "repartidor",
+        } : null,
+      };
     }
     setLoading(false);
     return { user: data.user, profile: null };
@@ -137,10 +139,10 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(async () => {
-    try { await supabase.auth.signOut(); } catch {}
-    Object.keys(localStorage).filter(k => k.startsWith("sb-")).forEach(k => localStorage.removeItem(k));
+    await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
+    setInitialized(false);
     window.location.href = "/login";
   }, []);
 

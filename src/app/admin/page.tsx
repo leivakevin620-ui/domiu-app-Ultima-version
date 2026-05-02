@@ -1,20 +1,10 @@
 ﻿"use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import AdminApp from "@/components/AdminApp";
 
 export default function AdminPage() {
-  const { user, profile, initialized, logout } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!initialized) return;
-    if (!user || profile?.rol !== "admin") {
-      router.replace("/login");
-    }
-  }, [user, profile, initialized, router]);
+  const { profile, initialized, logout } = useAuth();
 
   if (!initialized) {
     return (
@@ -24,7 +14,8 @@ export default function AdminPage() {
     );
   }
 
-  if (!user || profile?.rol !== "admin") {
+  if (!profile || profile.rol !== "admin") {
+    window.location.href = "/login";
     return null;
   }
 
