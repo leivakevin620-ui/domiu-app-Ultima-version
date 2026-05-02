@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -78,6 +79,7 @@ type Tab = "panel" | "nuevo" | "pedidos" | "repartidores" | "locales" | "turnos"
 /* ======================== COMPONENTE ======================== */
 export default function AdminApp() {
   const { user, profile, logout } = useAuth();
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("panel");
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [reps, setReps] = useState<any[]>([]);
@@ -473,7 +475,7 @@ export default function AdminApp() {
             <div className="w-8 h-8 rounded-full bg-yellow-400/20 flex items-center justify-center text-xs font-bold text-yellow-400">{profile?.nombre?.charAt(0).toUpperCase()}</div>
             <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-white truncate">{profile?.nombre}</p><p className="text-[10px] text-slate-500 truncate">{profile?.email}</p></div>
           </div>
-          <button onClick={() => logout()} className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-800 text-slate-400 text-xs font-semibold hover:bg-red-500/10 hover:text-red-400 transition-all">
+          <button onClick={() => { logout(); router.push("/login"); }} className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-800 text-slate-400 text-xs font-semibold hover:bg-red-500/10 hover:text-red-400 transition-all">
             <LogOut size={14} /> Cerrar Sesion
           </button>
         </div>

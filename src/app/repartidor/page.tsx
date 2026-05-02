@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -20,6 +21,7 @@ type TabType = "inicio" | "pedidos" | "mapa" | "liquidacion" | "perfil";
 /* ======================== COMPONENTE ======================== */
 export default function RiderApp() {
   const { user, profile, logout } = useAuth();
+  const router = useRouter();
   const [tab, setTab] = useState<TabType>("inicio");
   const [riderData, setRiderData] = useState<any>(null);
   const [pedidos, setPedidos] = useState<any[]>([]);
@@ -674,7 +676,7 @@ export default function RiderApp() {
               ...btnOutline, width: "100%", color: colors.red, borderColor: colors.red,
               padding: 16, fontSize: 15, marginTop: 8,
             }}
-            onClick={async () => { await logout(); }}
+            onClick={async () => { await logout(); router.push("/login"); }}
           >
             <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
               <LogOut size={18} /> Cerrar sesión
