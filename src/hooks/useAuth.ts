@@ -50,24 +50,28 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
-  const isAuthenticating = useRef(false);
+  const [initialized, setInitialized] = useState(false);
+  const isProcessing = useRef(false);
 
   useEffect(() => {
     let mounted = true;
+    let resolved = false;
 
     async function processSession(sessionUser: User) {
-      if (isAuthenticating.current) return;
-      isAuthenticating.current = true;
+      if (isProcessing.current) return;
+      isProcessing.current = true;
       setUser(sessionUser);
       const p = await getProfile(sessionUser.id, sessionUser);
       if (mounted && p) setProfile(p);
-      isAuthenticating.current = false;
+      isProcessing.current = false;
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (mounted && session && !profile) {
+      resolved = true;
+      if (mounted && session) {
         processSession(session.user);
       }
+      setInitialized(true);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -75,7 +79,11 @@ export function useAuth() {
       if (!session) {
         setUser(null);
         setProfile(null);
-        isAuthenticating.current = false;
+        isProcessing.current = false;
+        if (!resolved) {
+          resolved = true;
+          setInitialized(true);
+        }
         return;
       }
       if (profile?.id === session.user.id) return;
@@ -136,5 +144,5 @@ export function useAuth() {
     window.location.href = "/login";
   }, []);
 
-  return { user, profile, loading, login, registerAdmin, registerRepartidor, logout };
+  return { user, profile, loading, initialized, login, registerAdmin, registerRepartidor, logout };
 }

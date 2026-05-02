@@ -20,13 +20,23 @@ type TabType = "inicio" | "pedidos" | "mapa" | "liquidacion" | "perfil";
 
 /* ======================== COMPONENTE ======================== */
 export default function RiderAppPage() {
-  const { user, profile, logout } = useAuth();
+  const { user, profile, initialized, logout } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (user && profile?.rol === "repartidor") return;
-    router.replace("/login");
-  }, [user, profile, router]);
+    if (!initialized) return;
+    if (!user || profile?.rol !== "repartidor") {
+      router.replace("/login");
+    }
+  }, [user, profile, initialized, router]);
+
+  if (!initialized) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
+        <p style={{ color: "#94a3b8", fontSize: 18 }}>Cargando...</p>
+      </div>
+    );
+  }
 
   if (!user || profile?.rol !== "repartidor") {
     return null;
