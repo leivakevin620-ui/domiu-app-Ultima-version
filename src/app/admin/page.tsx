@@ -6,20 +6,24 @@ import { useAuth } from "@/hooks/useAuth";
 import AdminApp from "@/components/AdminApp";
 
 export default function AdminPage() {
-  const { user, loading, profile } = useAuth();
+  const { user, loading, profile, logout } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!loading) {
-      if (!user) router.push("/login");
-      else if (profile?.rol !== "admin") router.push("/repartidor");
+      if (!user) {
+        router.push("/login");
+      } else if (profile?.rol !== "admin") {
+        logout();
+        router.push("/login");
+      }
     }
-  }, [user, loading, profile, router]);
+  }, [user, loading, profile, router, logout]);
 
   if (loading || !user || profile?.rol !== "admin") {
     return (
-      <div className="h-screen flex items-center justify-center bg-slate-950">
-        <p className="text-slate-400">Cargando...</p>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#02060d" }}>
+        <p style={{ color: "#94a3b8" }}>Cargando...</p>
       </div>
     );
   }

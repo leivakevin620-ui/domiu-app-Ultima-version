@@ -22,7 +22,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (user && profile) {
       if (profile.rol === "admin") router.push("/admin");
-      else if (profile.rol === "repartidor" || profile.rol === "rider") router.push("/repartidor");
+      else if (profile.rol === "repartidor") router.push("/repartidor");
     }
   }, [user, profile, router]);
 
@@ -35,10 +35,10 @@ export default function LoginPage() {
       if (isRegister) {
         if (rol === "repartidor") {
           await registerRepartidor(email, password, nombre, telefono, documento, vehiculo, placa);
-          setError("Repartidor creado exitosamente. Inicia sesión.");
+          setError("Repartidor creado. Ahora inicia sesión con tu email y contraseña.");
         } else {
-          await registerAdmin(email, password, nombre, "");
-          setError("Cuenta de admin creada exitosamente. Inicia sesión.");
+          await registerAdmin(email, password, nombre);
+          setError("Cuenta de admin creada. Ahora inicia sesión con tu email y contraseña.");
         }
       } else {
         await login(email, password);
@@ -59,7 +59,7 @@ export default function LoginPage() {
         </div>
         <h2 style={{ color: "#f8fafc", marginBottom: 24, fontSize: 20 }}>{isRegister ? "Crear cuenta" : "Iniciar sesión"}</h2>
         {error && (
-          <div style={{ padding: "12px 16px", borderRadius: 12, background: error.includes("exitosamente") || error.includes("creada") ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", border: `1px solid ${error.includes("exitosamente") || error.includes("creada") ? "#22c55e" : "#ef4444"}`, color: error.includes("exitosamente") || error.includes("creada") ? "#86efac" : "#fca5a5", marginBottom: 20, fontSize: 14 }}>
+          <div style={{ padding: "12px 16px", borderRadius: 12, background: error.includes("creado") || error.includes("creada") ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", border: `1px solid ${error.includes("creado") || error.includes("creada") ? "#22c55e" : "#ef4444"}`, color: error.includes("creado") || error.includes("creada") ? "#86efac" : "#fca5a5", marginBottom: 20, fontSize: 14 }}>
             {error}
           </div>
         )}
@@ -83,7 +83,6 @@ export default function LoginPage() {
               )}
             </>
           )}
-          {!isRegister && <div><label style={{ display: "block", color: "#94a3b8", fontSize: 14, marginBottom: 6 }}>Nombre</label><input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Tu nombre" required style={{ width: "100%", padding: "14px 18px", borderRadius: 14, border: "1px solid rgba(255,255,255,0.12)", background: "#09111d", color: "#f8fafc", fontSize: 16, boxSizing: "border-box" }} /></div>}
           <div><label style={{ display: "block", color: "#94a3b8", fontSize: 14, marginBottom: 6 }}>Email</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="correo@ejemplo.com" required style={{ width: "100%", padding: "14px 18px", borderRadius: 14, border: "1px solid rgba(255,255,255,0.12)", background: "#09111d", color: "#f8fafc", fontSize: 16, boxSizing: "border-box" }} /></div>
           <div><label style={{ display: "block", color: "#94a3b8", fontSize: 14, marginBottom: 6 }}>Contraseña</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" required minLength={6} style={{ width: "100%", padding: "14px 18px", borderRadius: 14, border: "1px solid rgba(255,255,255,0.12)", background: "#09111d", color: "#f8fafc", fontSize: 16, boxSizing: "border-box" }} /></div>
           <button type="submit" disabled={loading || authLoading} style={{ padding: "16px 24px", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #facc15 0%, #f59e0b 100%)", color: "#0f172a", fontWeight: 700, fontSize: 16, cursor: loading ? "wait" : "pointer", marginTop: 8 }}>{loading ? "Procesando..." : isRegister ? "Crear cuenta" : "Iniciar sesión"}</button>
