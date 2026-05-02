@@ -73,7 +73,7 @@ function extraerDatos(texto: string) {
 }
 
 /* ======================== TIPOS ======================== */
-type Tab = "panel" | "nuevo" | "pedidos" | "repartidores" | "locales" | "turnos" | "liquidaciones" | "reportes";
+type Tab = "panel" | "nuevo" | "pedidos" | "repartidores" | "locales" | "turnos" | "liquidaciones" | "reportes" | "cuentas";
 
 /* ======================== COMPONENTE ======================== */
 export default function AdminApp() {
@@ -83,6 +83,7 @@ export default function AdminApp() {
   const [tab, setTab] = useState<Tab>("panel");
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [reps, setReps] = useState<any[]>([]);
+  const [cuentas, setCuentas] = useState<any[]>([]);
   const [locs, setLocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
@@ -153,14 +154,16 @@ export default function AdminApp() {
         ? sb.from("pedidos").select("*").eq("turno_id", turnoAct.id).order("created_at", { ascending: false })
         : sb.from("pedidos").select("*").order("created_at", { ascending: false });
 
-      const [rP, rR, rL, rTH] = await Promise.all([
+      const [rP, rR, rC, rL, rTH] = await Promise.all([
         pedidosQuery,
         sb.from("repartidores").select("*").order("created_at", { ascending: false }),
+        sb.from("profiles").select("id, email, nombre, rol, created_at").order("created_at", { ascending: false }),
         sb.from("locales").select("*").order("created_at", { ascending: false }),
         sb.from("turnos").select("*").eq("activo", false).order("closed_at", { ascending: false }).limit(20),
       ]);
       setPedidos(rP.data || []);
       setReps(rR.data || []);
+      setCuentas(rC.data || []);
       setLocs(rL.data || []);
       setTurnosHistorial(rTH.data || []);
     } catch (e: any) { fail("Error: " + e.message); }
@@ -344,7 +347,28 @@ export default function AdminApp() {
     ok(activo ? "Repartidor activado" : "Repartidor desactivado"); load();
   };
 
-  const delRep = async (id: string) => { if (!confirm("Eliminar?")) return; await sb.from("repartidores").update({ activo: false }).eq("id", id); ok("Eliminado"); load(); };
+  const delRep = async (id: string) => {
+    if (!confirm("Eliminar este repartidor permanentemente? Se borrara su cuenta de acceso y todos sus datos.")) return;
+    const rider = reps.find((r: any) => r.id === id);
+    if (rider?.user_id) {
+      try {
+        await fetch("/api/delete-user", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: rider.user_id }) });
+      } catch (e) { /* ignore */ }
+    }
+    await sb.from("pedidos").update({ repartidor_id: null }).eq("repartidor_id", id);
+    await sb.from("repartidores").delete().eq("id", id);
+    ok("Repartidor eliminado"); load();
+  };
+
+  const delAdmin = async (id: string, email: string) => {
+    if (email === "leivakevin620@gmail.com") return fail("No se puede eliminar la cuenta principal");
+    if (!confirm(`Eliminar la cuenta de ${email}?`)) return;
+    try {
+      await fetch("/api/delete-user", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: id }) });
+    } catch (e) { /* ignore */ }
+    await sb.from("profiles").delete().eq("id", id);
+    ok("Cuenta eliminada"); load();
+  };
 
   /* ======================== LOCALES ======================== */
   const saveLoc = async (e: any) => {
@@ -578,6 +602,7 @@ export default function AdminApp() {
     { key: "nuevo", icon: Plus, label: "Crear Pedido" },
     { key: "pedidos", icon: Package, label: "Pedidos" },
     { key: "repartidores", icon: Users, label: "Repartidores" },
+    { key: "cuentas", icon: Shield, label: "Cuentas" },
     { key: "turnos", icon: Clock, label: "Turnos" },
     { key: "liquidaciones", icon: Banknote, label: "Liquidaciones" },
     { key: "reportes", icon: FileText, label: "Reportes" },
@@ -901,6 +926,7 @@ export default function AdminApp() {
                         <button onClick={() => toggleRepActivo(r.id, r.activo !== false ? false : true)} className={`px-3 py-2 rounded-lg text-xs font-semibold ${r.activo !== false ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "bg-green-500/10 text-green-400 hover:bg-green-500/20"}`}>
                           {r.activo !== false ? <UserX size={14} /> : <UserCheck size={14} />}
                         </button>
+                        <button onClick={() => delRep(r.id)} className="px-3 py-2 bg-red-600/20 text-red-400 rounded-lg text-xs font-semibold hover:bg-red-600/30 flex items-center gap-1"><Trash2 size={14} /> Eliminar</button>
                       </div>
 
                       {/* Detalle repartidor */}
@@ -930,6 +956,52 @@ export default function AdminApp() {
                 })}
               </div>
               {reps.filter((r: any) => r.activo !== false).length === 0 && <div className="text-center py-12 text-slate-500"><Users size={48} className="mx-auto mb-3 opacity-20" /><p>No hay repartidores</p></div>}
+            </div>
+          )}
+
+          {/* ======================== CUENTAS ======================== */}
+          {tab === "cuentas" && (
+            <div className="space-y-6">
+              <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6">
+                <h3 className="font-bold text-white text-lg mb-4 flex items-center gap-2"><Shield size={20} className="text-yellow-400" /> Gestion de Cuentas</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-500">
+                        <th className="text-left py-3 px-4 font-semibold">Nombre</th>
+                        <th className="text-left py-3 px-4 font-semibold">Email</th>
+                        <th className="text-center py-3 px-4 font-semibold">Rol</th>
+                        <th className="text-center py-3 px-4 font-semibold">Tipo</th>
+                        <th className="text-right py-3 px-4 font-semibold">Accion</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cuentas.map(c => {
+                        const esRep = reps.find(r => r.user_id === c.id);
+                        const esPrincipal = c.email === "leivakevin620@gmail.com";
+                        return (
+                          <tr key={c.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                            <td className="py-3 px-4 text-white font-semibold">{c.nombre || "Sin nombre"}</td>
+                            <td className="py-3 px-4 text-slate-300 text-xs">{c.email}</td>
+                            <td className="py-3 px-4 text-center">
+                              <span className={`text-xs px-2 py-1 rounded-full font-bold ${c.rol === "admin" ? "bg-blue-500/20 text-blue-400" : "bg-yellow-500/20 text-yellow-400"}`}>{c.rol}</span>
+                            </td>
+                            <td className="py-3 px-4 text-center text-slate-400 text-xs">{esRep ? "Repartidor" : c.rol}</td>
+                            <td className="py-3 px-4 text-right">
+                              {esPrincipal ? (
+                                <span className="text-xs text-slate-600 italic">Cuenta principal</span>
+                              ) : (
+                                <button onClick={() => delAdmin(c.id, c.email)} className="px-3 py-1.5 bg-red-600/20 text-red-400 rounded-lg text-xs font-semibold hover:bg-red-600/30 flex items-center gap-1 ml-auto"><Trash2 size={12} /> Eliminar</button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {cuentas.length === 0 && <tr><td colSpan={5} className="text-center py-8 text-slate-500">No hay cuentas registradas</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 
