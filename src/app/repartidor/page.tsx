@@ -60,6 +60,7 @@ export default function RiderApp() {
     loadData();
   }, [loadData]);
 
+  // Realtime: escuchar cambios en repartidores Y pedidos
   useEffect(() => {
     if (!user || !riderData) return;
 
@@ -68,11 +69,19 @@ export default function RiderApp() {
     }
 
     const channel = supabase
-      .channel("rider_pedidos")
+      .channel("rider_realtime")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "pedidos", filter: `repartidor_id=eq.${riderData.id}` },
         () => loadData()
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "repartidores", filter: `id=eq.${riderData.id}` },
+        (payload) => {
+          setRiderData(payload.new);
+          if (payload.new.estado) setEstadoRider(payload.new.estado);
+        }
       )
       .subscribe();
 
@@ -110,7 +119,7 @@ export default function RiderApp() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
           <div>
             <h1 style={{ fontSize: 28, fontWeight: 900, color: "#f8fafc", margin: 0 }}>Domi<span style={{ color: "#facc15" }}>U</span> — Repartidor</h1>
-            <p style={{ color: "#94a3b8", margin: "4px 0 0" }}>{profile?.nombre}</p>
+            <p style={{ color: "#94a3b8", margin: "4px 0 0" }}>{riderData?.nombre || profile?.nombre}</p>
             <p style={{ color: "#64748b", fontSize: 14, margin: "2px 0 0" }}>{profile?.email}</p>
           </div>
           <div style={{ textAlign: "right" }}>
@@ -138,6 +147,34 @@ export default function RiderApp() {
             </button>
           </div>
         </div>
+
+        {riderData && (
+          <div style={{ padding: 24, borderRadius: 20, background: "#0f172a", border: "1px solid rgba(255,255,255,0.08)", marginBottom: 24 }}>
+            <h2 style={{ margin: "0 0 16px", fontSize: 18, fontWeight: 700, color: "#f8fafc" }}>Tu información</h2>
+            <div style={{ display: "grid", gap: 12, fontSize: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", paddingBottom: 12, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <span style={{ color: "#64748b" }}>Nombre</span>
+                <span style={{ color: "#f8fafc", fontWeight: 600 }}>{riderData.nombre}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", paddingBottom: 12, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <span style={{ color: "#64748b" }}>Teléfono</span>
+                <span style={{ color: "#f8fafc", fontWeight: 600 }}>{riderData.telefono || "—"}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", paddingBottom: 12, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <span style={{ color: "#64748b" }}>Documento</span>
+                <span style={{ color: "#f8fafc", fontWeight: 600 }}>{riderData.documento || "—"}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", paddingBottom: 12, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <span style={{ color: "#64748b" }}>Vehículo</span>
+                <span style={{ color: "#f8fafc", fontWeight: 600 }}>{riderData.vehiculo || "—"}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: "#64748b" }}>Placa</span>
+                <span style={{ color: "#f8fafc", fontWeight: 600 }}>{riderData.placa || "—"}</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div style={{ padding: 24, borderRadius: 20, background: "#0f172a", border: "1px solid rgba(255,255,255,0.08)" }}>
           <h2 style={{ margin: "0 0 16px", fontSize: 18, fontWeight: 700, color: "#f8fafc" }}>Pedidos asignados ({pedidos.length})</h2>

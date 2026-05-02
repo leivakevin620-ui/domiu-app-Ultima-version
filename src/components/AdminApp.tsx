@@ -157,10 +157,15 @@ export default function AdminApp() {
     e.preventDefault();
     if (!rNom.trim()) return fail("Nombre obligatorio");
     const data = { nombre: rNom.trim(), telefono: rTel.trim(), documento: rDoc.trim(), vehiculo: rVeh.trim(), placa: rPla.trim() };
-    const { error } = rEdit
-      ? await supabase.from("repartidores").update(data).eq("id", rEdit)
-      : await supabase.from("repartidores").insert({ ...data, user_id: null });
-    if (error) return fail(error.message);
+    if (rEdit) {
+      const rider = reps.find((r: any) => r.id === rEdit);
+      await supabase.from("repartidores").update(data).eq("id", rEdit);
+      if (rider?.user_id) {
+        await supabase.from("profiles").update({ nombre: rNom.trim() }).eq("id", rider.user_id);
+      }
+    } else {
+      await supabase.from("repartidores").insert({ ...data, user_id: null, estado: "Disponible" });
+    }
     ok(rEdit ? "Actualizado" : "Creado"); setREdit(null); setRNom(""); setRTel(""); setRDoc(""); setRVeh(""); setRPla(""); load();
   };
   const delRep = async (id: string) => { if (!confirm("Eliminar?")) return; await supabase.from("repartidores").update({ activo: false }).eq("id", id); ok("Eliminado"); load(); };
