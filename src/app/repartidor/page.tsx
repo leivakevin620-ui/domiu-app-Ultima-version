@@ -22,7 +22,6 @@ type TabType = "inicio" | "pedidos" | "mapa" | "liquidacion" | "perfil";
 export default function RiderApp() {
   const { user, profile, logout, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [redirecting, setRedirecting] = useState(false);
   const [tab, setTab] = useState<TabType>("inicio");
   const [riderData, setRiderData] = useState<any>(null);
   const [pedidos, setPedidos] = useState<any[]>([]);
@@ -37,15 +36,11 @@ export default function RiderApp() {
 
   // Route protection
   useEffect(() => {
-    if (!authLoading) {
-      if (!user) {
-        setRedirecting(true);
-        router.push("/login");
-      } else if (profile?.rol !== "repartidor") {
-        logout();
-        setRedirecting(true);
-        router.push("/login");
-      }
+    if (!authLoading && !user) {
+      router.replace("/login");
+    } else if (!authLoading && user && profile?.rol !== "repartidor") {
+      logout();
+      router.replace("/login");
     }
   }, [user, authLoading, profile, router, logout]);
 
@@ -209,8 +204,8 @@ export default function RiderApp() {
     Cancelado: { padding: "4px 10px", borderRadius: 999, background: colors.gray600, color: "#fff", fontSize: 11, fontWeight: 700 },
   };
 
-  if (authLoading || dataLoading || redirecting) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: colors.bg }}><p style={{ color: colors.gray400 }}>Cargando...</p></div>;
-  if (!user || !riderData) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: colors.bg }}><p style={{ color: colors.gray400 }}>Sin sesión.</p></div>;
+  if (authLoading || dataLoading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: colors.bg }}><p style={{ color: colors.gray400 }}>Cargando...</p></div>;
+  if (!user || !riderData) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: colors.bg }}><p style={{ color: colors.gray400 }}>Redirigiendo...</p></div>;
 
   /* ======================== RENDER ======================== */
   return (
@@ -235,7 +230,6 @@ export default function RiderApp() {
         borderBottomLeftRadius: 24,
         borderBottomRightRadius: 24,
       }}>
-        {/* Top bar */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 16, paddingBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{
@@ -262,8 +256,6 @@ export default function RiderApp() {
             </p>
           </div>
         </div>
-
-        {/* Status badge */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={badgeEstado[estadoRider]}>{estadoRider}</span>
           <span style={{ fontSize: 11, color: colors.gray400 }}>
@@ -306,7 +298,6 @@ export default function RiderApp() {
       {/* INICIO */}
       {tab === "inicio" && (
         <div style={{ padding: "16px 16px 0" }}>
-          {/* Stats grid */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
             <div style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -345,8 +336,6 @@ export default function RiderApp() {
               <p style={{ margin: 0, fontSize: 16, fontWeight: 900, color: colors.primaryDark }}>{fmt(totalEmpresa)}</p>
             </div>
           </div>
-
-          {/* Estado del turno */}
           <div style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <p style={{ margin: "0 0 2px", fontSize: 12, fontWeight: 700, color: colors.gray500 }}>Estado del turno</p>
@@ -362,8 +351,6 @@ export default function RiderApp() {
               <Truck size={20} color={activos.length > 0 ? colors.green : colors.gray400} />
             </div>
           </div>
-
-          {/* Último pedido */}
           {ultimo && (
             <div style={card}>
               <p style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 700, color: colors.gray500, textTransform: "uppercase", letterSpacing: 0.5, display: "flex", alignItems: "center", gap: 6 }}>
@@ -410,7 +397,6 @@ export default function RiderApp() {
           ) : (
             pedidos.map((p: any) => (
               <div key={p.id} style={card}>
-                {/* Header del pedido */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{ width: 36, height: 36, borderRadius: 10, background: colors.amberLight, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -420,8 +406,6 @@ export default function RiderApp() {
                   </div>
                   <span style={estPedido[p.estado]}>{p.estado}</span>
                 </div>
-
-                {/* Info del pedido */}
                 <div style={{ display: "grid", gap: 10, marginBottom: 16 }}>
                   {[
                     { label: "Cliente", val: p.cliente, icon: User },
@@ -446,8 +430,6 @@ export default function RiderApp() {
                     </div>
                   ))}
                 </div>
-
-                {/* Acciones de flujo */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
                   {p.estado === "Pendiente" && (
                     <button style={btnPrimary} onClick={() => cambiarEstadoPedido(p.id, "Aceptado")}>
@@ -485,8 +467,6 @@ export default function RiderApp() {
                     </button>
                   )}
                 </div>
-
-                {/* Acciones extras */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                   <button style={btnOutline} onClick={() => abrirMapa(p.direccion)}>
                     <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
@@ -548,7 +528,6 @@ export default function RiderApp() {
                   </span>
                 </button>
               </div>
-
               {activos.map((p: any, idx: number) => {
                 const loc = locales.find((l: any) => l.id === p.local_id);
                 return (
@@ -567,7 +546,6 @@ export default function RiderApp() {
                       </div>
                       <span style={estPedido[p.estado]}>{p.estado}</span>
                     </div>
-
                     {loc && (
                       <div style={{ marginBottom: 10, padding: 12, borderRadius: 10, background: colors.gray50 }}>
                         <p style={{ margin: "0 0 4px", fontSize: 11, color: colors.gray500, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
@@ -577,7 +555,6 @@ export default function RiderApp() {
                         <p style={{ margin: 0, fontSize: 12, color: colors.gray500 }}>{loc.direccion}</p>
                       </div>
                     )}
-
                     <div style={{ padding: 12, borderRadius: 10, background: colors.gray50 }}>
                       <p style={{ margin: "0 0 4px", fontSize: 11, color: colors.gray500, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
                         <div style={{ width: 8, height: 8, borderRadius: "50%", background: colors.red }} /> Destino
@@ -585,7 +562,6 @@ export default function RiderApp() {
                       <p style={{ margin: "0 0 2px", fontSize: 14, color: colors.darkBlue, fontWeight: 600 }}>{p.cliente}</p>
                       <p style={{ margin: 0, fontSize: 12, color: colors.gray500 }}>{p.direccion}</p>
                     </div>
-
                     <button
                       style={{ ...btnPrimary, marginTop: 12, background: `linear-gradient(135deg, ${colors.blue}, #2563eb)`, color: "#fff" }}
                       onClick={() => abrirMapa(p.direccion)}
@@ -605,7 +581,6 @@ export default function RiderApp() {
       {/* LIQUIDACIÓN */}
       {tab === "liquidacion" && (
         <div style={{ padding: "16px 16px 0" }}>
-          {/* Total card */}
           <div style={{
             ...card,
             background: `linear-gradient(135deg, ${colors.darkerBlue} 0%, ${colors.darkBlue} 100%)`,
@@ -619,8 +594,6 @@ export default function RiderApp() {
             </h1>
             <p style={{ margin: 0, fontSize: 13, color: colors.gray400 }}>{entregados.length} pedidos entregados</p>
           </div>
-
-          {/* Resumen */}
           <div style={card}>
             <p style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 700, color: colors.darkBlue }}>Resumen del turno</p>
             <div style={{ display: "grid", gap: 0 }}>
@@ -643,8 +616,6 @@ export default function RiderApp() {
               ))}
             </div>
           </div>
-
-          {/* Estado de liquidación */}
           <div style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ color: colors.gray500, fontSize: 14, fontWeight: 600 }}>Estado de liquidación</span>
             <span style={{
@@ -656,8 +627,6 @@ export default function RiderApp() {
               {todosLiquidados ? "Liquidado" : "Pendiente"}
             </span>
           </div>
-
-          {/* Lista de entregados */}
           {entregados.map((p: any) => (
             <div key={p.id} style={card}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -675,7 +644,6 @@ export default function RiderApp() {
       {/* PERFIL */}
       {tab === "perfil" && (
         <div style={{ padding: "16px 16px 0" }}>
-          {/* Profile card */}
           <div style={{ ...card, textAlign: "center", marginBottom: 16 }}>
             <div style={{
               width: 72, height: 72, borderRadius: 20,
@@ -691,8 +659,6 @@ export default function RiderApp() {
             </h2>
             <p style={{ margin: 0, color: colors.gray500, fontSize: 14 }}>{profile?.email}</p>
           </div>
-
-          {/* Info fields */}
           <div style={card}>
             {[
               { label: "Teléfono", val: riderData.telefono || "No registrado", icon: Phone },
@@ -715,8 +681,6 @@ export default function RiderApp() {
               </div>
             ))}
           </div>
-
-          {/* Logout */}
           <button
             style={{
               ...btnOutline, width: "100%", color: colors.red, borderColor: colors.red,
