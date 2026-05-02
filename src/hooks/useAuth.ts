@@ -54,9 +54,11 @@ export function useAuth() {
 
   useEffect(() => {
     let cancelled = false;
+    let processedEvent = false;
 
     async function processSession(session: any) {
-      if (cancelled) return;
+      if (cancelled || processedEvent) return;
+      processedEvent = true;
       if (session) {
         setUser(session.user);
         const p = await fetchProfile(session.user.id, session.user);
@@ -70,10 +72,19 @@ export function useAuth() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
+      console.log("auth event:", event, "user:", session?.user?.email, "rol:", session?.user?.user_metadata?.rol);
       processSession(session);
     });
 
-    return () => { cancelled = true; subscription.unsubscribe(); };
+    const timeout = setTimeout(() => {
+      if (!cancelled && !processedEvent) {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (!cancelled) processSession(session);
+        });
+      }
+    }, 3000);
+
+    return () => { cancelled = true; subscription.unsubscribe(); clearTimeout(timeout); };
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
