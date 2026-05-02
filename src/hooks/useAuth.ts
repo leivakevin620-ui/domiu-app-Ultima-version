@@ -11,47 +11,65 @@ export type UserProfile = {
   rol: "admin" | "repartidor";
 };
 
+async function handleProfile(userId: string, authUser: User): Promise<UserProfile | null> {
+  console.log("handleProfile called for", userId);
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, email, nombre, rol")
+    .eq("id", userId);
+
+  console.log("profiles query:", data, error);
+
+  if (data && data.length > 0) {
+    const p = data[0];
+    const profile = { id: p.id, email: p.email, nombre: p.nombre, rol: p.rol === "repartidor" ? "repartidor" : "admin" };
+    console.log("existing profile found:", profile);
+    return profile;
+  }
+
+  console.log("no profile found, creating one...");
+  const meta = authUser.user_metadata || {};
+  const rol = meta.rol || "admin";
+  console.log("metadata:", meta, "rol:", rol);
+
+  const { error: insertErr } = await supabase.from("profiles").insert({
+    id: userId, email: authUser.email, nombre: meta.nombre || authUser.email, rol
+  });
+  console.log("profile insert error:", insertErr);
+
+  if (rol === "repartidor") {
+    await supabase.from("repartidores").insert({
+      user_id: userId, nombre: meta.nombre || authUser.email, estado: "No disponible"
+    });
+  }
+
+  const profile = { id: userId, email: authUser.email!, nombre: meta.nombre || authUser.email!, rol };
+  console.log("created profile:", profile);
+  return profile;
+}
+
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function fetchProfile(userId: string, authUser: User) {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, email, nombre, rol")
-      .eq("id", userId);
-
-    if (data && data.length > 0) {
-      const p = data[0];
-      setProfile({ id: p.id, email: p.email, nombre: p.nombre, rol: p.rol === "repartidor" ? "repartidor" : "admin" });
-      return;
-    }
-
-    const meta = authUser.user_metadata || {};
-    const rol = meta.rol || "admin";
-    await supabase.from("profiles").insert({
-      id: userId, email: authUser.email, nombre: meta.nombre || authUser.email, rol
-    });
-    if (rol === "repartidor") {
-      await supabase.from("repartidores").insert({
-        user_id: userId, nombre: meta.nombre || authUser.email, estado: "No disponible"
-      });
-    }
-    setProfile({ id: userId, email: authUser.email!, nombre: meta.nombre || authUser.email!, rol });
-  }
-
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      console.log("initAuth session:", session ? session.user.id : "no session");
       if (mounted && session) {
         setUser(session.user);
-        fetchProfile(session.user.id, session.user);
+        const p = await handleProfile(session.user.id, session.user);
+        if (mounted && p) {
+          console.log("setting profile:", p);
+          setProfile(p);
+        }
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("onAuthStateChange:", event, session ? session.user.id : "no session");
       if (!mounted) return;
       if (event === "SIGNED_OUT") {
         setUser(null);
@@ -60,7 +78,11 @@ export function useAuth() {
       }
       if (session) {
         setUser(session.user);
-        fetchProfile(session.user.id, session.user);
+        const p = await handleProfile(session.user.id, session.user);
+        if (mounted && p) {
+          console.log("setting profile from event:", p);
+          setProfile(p);
+        }
       } else {
         setUser(null);
         setProfile(null);
@@ -73,6 +95,7 @@ export function useAuth() {
   const login = useCallback(async (email: string, password: string) => {
     setLoading(true);
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    console.log("login result:", data ? data.user.id : "error", error);
     if (error) { setLoading(false); throw error; }
     return data.user;
   }, []);
