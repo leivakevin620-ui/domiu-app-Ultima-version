@@ -17,12 +17,43 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = useCallback(async (userId: string) => {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("profiles")
       .select("id, email, nombre, rol")
       .eq("id", userId)
       .single();
-    if (data && !error) {
+
+    if (error) {
+      const session = await supabase.auth.getSession();
+      const u = session.data.session?.user;
+      if (u) {
+        const meta = u.user_metadata || {};
+        const rol = meta.rol || "admin";
+
+        await supabase.from("profiles").insert({
+          id: userId,
+          email: u.email,
+          nombre: meta.nombre || u.email,
+          rol,
+        });
+
+        if (rol === "repartidor") {
+          await supabase.from("repartidores").insert({
+            user_id: userId,
+            nombre: meta.nombre || u.email,
+            telefono: meta.telefono || null,
+            documento: meta.documento || null,
+            vehiculo: meta.vehiculo || null,
+            placa: meta.placa || null,
+            estado: "No disponible",
+          });
+        }
+
+        data = { id: userId, email: u.email, nombre: meta.nombre || u.email, rol };
+      }
+    }
+
+    if (data) {
       setProfile({
         id: data.id,
         email: data.email,
@@ -63,38 +94,31 @@ export function useAuth() {
     email: string, password: string, nombre: string,
     telefono: string, documento: string, vehiculo: string, placa: string
   ) => {
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error: signUpError } = await supabase.auth.signUp({
       email, password,
       options: {
-        data: {
-          nombre,
-          rol: "repartidor",
-          telefono,
-          documento,
-          vehiculo,
-          placa,
-        },
+        data: { nombre, rol: "repartidor", telefono, documento, vehiculo, placa },
       },
     });
-    if (error) throw error;
+    if (signUpError) throw signUpError;
     if (!data.user) throw new Error("No se pudo crear el usuario");
+
     return data.user;
   }, []);
 
   const registerAdmin = useCallback(async (email: string, password: string, nombre: string, accessCode: string) => {
     const validCode = process.env.NEXT_PUBLIC_ADMIN_ACCESS_CODE;
     if (!validCode || accessCode !== validCode) {
-      throw new Error("Código de acceso inválido. Solo administradores autorizados pueden crear cuentas.");
+      throw new Error("Código de acceso inválido.");
     }
 
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error: signUpError } = await supabase.auth.signUp({
       email, password,
-      options: {
-        data: { nombre, rol: "admin" },
-      },
+      options: { data: { nombre, rol: "admin" } },
     });
-    if (error) throw error;
+    if (signUpError) throw signUpError;
     if (!data.user) throw new Error("No se pudo crear el usuario");
+
     return data.user;
   }, []);
 
