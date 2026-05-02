@@ -38,15 +38,7 @@ export async function POST(req: Request) {
 
     const userId = authData.user.id;
 
-    // 2. Crear perfil
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .insert({ id: userId, email, nombre, rol: "repartidor" });
-
-    if (profileError) {
-      await supabase.auth.admin.deleteUser(userId);
-      return NextResponse.json({ error: "Error creando perfil: " + profileError.message }, { status: 500 });
-    }
+    // 2. El trigger handle_new_user ya crea el perfil automaticamente
 
     // 3. Crear repartidor
     const { error: riderError } = await supabase
@@ -63,7 +55,6 @@ export async function POST(req: Request) {
 
     if (riderError) {
       await supabase.auth.admin.deleteUser(userId);
-      await supabase.from("profiles").delete().eq("id", userId);
       return NextResponse.json({ error: "Error creando repartidor: " + riderError.message }, { status: 500 });
     }
 
