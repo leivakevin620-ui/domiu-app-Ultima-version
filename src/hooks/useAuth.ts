@@ -58,28 +58,23 @@ export function useAuth() {
 
   useEffect(() => {
     let cancelled = false;
-    let hasProcessed = false;
+    let processedUserId: string | null = null;
 
     async function processSession(session: any) {
-      if (cancelled || hasProcessed) return;
-      hasProcessed = true;
+      if (cancelled) return;
+      if (session && session.user.id === processedUserId) return;
+      processedUserId = session?.user?.id || null;
 
       if (session) {
-        console.log("Processing session for:", session.user.email);
         setUser(session.user);
         const p = await fetchProfile(session.user.id, session.user);
-        console.log("Profile result:", p);
         if (!cancelled && p) setProfile(p);
       }
-      if (!cancelled) {
-        setInitialized(true);
-        console.log("initialized = true");
-      }
+      if (!cancelled) setInitialized(true);
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
-      console.log("onAuthStateChange:", event, session?.user?.email);
       processSession(session);
     });
 
