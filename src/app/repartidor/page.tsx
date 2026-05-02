@@ -49,6 +49,7 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [locales, setLocales] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [estadoRider, setEstadoRider] = useState("No disponible");
   const [toast, setToast] = useState("");
   const [toastType, setToastType] = useState<"ok" | "err">("ok");
@@ -75,23 +76,26 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
   const loadData = useCallback(async () => {
     if (!user) return;
     try {
-      const { data: rider, error: riderError } = await sb.from("repartidores").select("*").eq("user_id", user.id).single();
+      let { data: rider, error: riderError } = await sb.from("repartidores").select("*").eq("user_id", user.id).single();
       if (riderError) {
-        setRiderData({ id: "temp", user_id: user.id, nombre: profile?.nombre || user.email || "Repartidor", telefono: "", documento: "", vehiculo: "", placa: "", estado: "No disponible", activo: true });
-      } else {
-        setRiderData(rider);
+        const { data: newRider } = await sb.from("repartidores").insert({
+          user_id: user.id, nombre: profile?.nombre || user.email || "Repartidor", estado: "No disponible"
+        }).select().single();
+        rider = newRider;
       }
-      const currentRider = rider || { id: null };
-      if (currentRider.id) {
-        setEstadoRider(currentRider.estado || "No disponible");
-        const { data: peds } = await sb.from("pedidos").select("*").eq("repartidor_id", currentRider.id).order("created_at", { ascending: false });
+      if (rider) {
+        setRiderData(rider);
+        setEstadoRider(rider.estado || "No disponible");
+        const { data: peds } = await sb.from("pedidos").select("*").eq("repartidor_id", rider.id).order("created_at", { ascending: false });
         setPedidos(peds || []);
       }
       const { data: locs } = await sb.from("locales").select("*");
       setLocales(locs || []);
-    } catch (e) { console.error(e); setRiderData({ id: "temp", user_id: user.id, nombre: profile?.nombre || user.email || "Repartidor", telefono: "", documento: "", vehiculo: "", placa: "", estado: "No disponible", activo: true }); }
+    } catch (e: any) { console.error(e); setLoadError(e?.message || "Error cargando datos"); }
     finally { setLoading(false); }
   }, [user]);
+
+  useEffect(() => { const t = setTimeout(() => setLoading(false), 8000); return () => clearTimeout(t); }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -222,7 +226,7 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
   };
 
   if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: colors.bg }}><p style={{ color: colors.gray400 }}>Cargando...</p></div>;
-  if (!user || !riderData) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: colors.bg }}><p style={{ color: colors.gray400 }}>Cargando...</p></div>;
+  if (!riderData) return <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: colors.bg, gap: 16 }}><p style={{ color: colors.red, fontSize: 16 }}>Error: No se pudo cargar el perfil de repartidor</p><p style={{ color: colors.gray400, fontSize: 13 }}>{loadError}</p></div>;
 
   /* ======================== RENDER ======================== */
   return (
