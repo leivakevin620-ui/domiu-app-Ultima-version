@@ -19,13 +19,7 @@ export function useAuth() {
 
   useEffect(() => {
     let cancelled = false;
-
-    const timeout = setTimeout(() => {
-      if (!cancelled) {
-        console.log("Auth init timeout - forcing initialized");
-        setInitialized(true);
-      }
-    }, 5000);
+    let hasProcessed = false;
 
     async function fetchProfile(userId: string, sessionUser: User) {
       const { data: pData, error: pError } = await supabase
@@ -46,57 +40,24 @@ export function useAuth() {
       }
     }
 
-    async function init() {
-      try {
-        console.log("Auth init starting...");
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-        console.log("getSession done:", sessionData?.session?.user?.email, sessionError?.message);
-        if (sessionError) console.error("getSession error:", sessionError.message);
-        if (cancelled) return;
-
-        if (sessionData.session) {
-          setUser(sessionData.session.user);
-          console.log("Fetching profile for:", sessionData.session.user.id);
-          await fetchProfile(sessionData.session.user.id, sessionData.session.user);
-          console.log("Profile done");
-        } else {
-          console.log("No session found");
-        }
-      } catch (e) {
-        console.error("init error:", e);
-      } finally {
-        if (!cancelled) {
-          console.log("Setting initialized = true");
-          setInitialized(true);
-        }
-        clearTimeout(timeout);
-      }
-    }
-
-    init();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (cancelled) return;
-      console.log("onAuthStateChange:", event);
-
-      if (event === "SIGNED_OUT") {
-        setUser(null);
-        setProfile(null);
-        if (!cancelled) setInitialized(true);
-        return;
-      }
+    function processSession(session: any) {
+      if (cancelled || hasProcessed) return;
+      hasProcessed = true;
 
       if (session) {
         setUser(session.user);
-        await fetchProfile(session.user.id, session.user);
-      } else {
-        setUser(null);
-        setProfile(null);
+        fetchProfile(session.user.id, session.user);
       }
-      if (!cancelled) setInitialized(true);
+      setInitialized(true);
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return;
+      console.log("onAuthStateChange:", event, session?.user?.email);
+      processSession(session);
     });
 
-    return () => { cancelled = true; subscription.unsubscribe(); clearTimeout(timeout); };
+    return () => { cancelled = true; subscription.unsubscribe(); };
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
