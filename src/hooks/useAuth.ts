@@ -20,59 +20,58 @@ export function useAuth() {
   useEffect(() => {
     let cancelled = false;
 
-    async function init() {
-      const { data } = await supabase.auth.getSession();
-      if (cancelled) return;
+    async function fetchProfile(userId: string, sessionUser: User) {
+      const { data: pData, error: pError } = await supabase
+        .from("profiles")
+        .select("id, email, nombre, rol")
+        .eq("id", userId)
+        .maybeSingle();
 
-      if (data.session) {
-        setUser(data.session.user);
-        const { data: pData } = await supabase
-          .from("profiles")
-          .select("id, email, nombre, rol")
-          .eq("id", data.session.user.id)
-          .maybeSingle();
+      if (pError) console.error("Profile query error:", pError.message);
 
-        if (!cancelled && pData) {
-          setProfile({
-            id: pData.id,
-            email: pData.email || data.session.user.email || "",
-            nombre: pData.nombre || data.session.user.email || "",
-            rol: (pData.rol === "repartidor" ? "repartidor" : "admin") as "admin" | "repartidor",
-          });
-        }
+      if (!cancelled && pData) {
+        setProfile({
+          id: pData.id,
+          email: pData.email || sessionUser.email || "",
+          nombre: pData.nombre || sessionUser.email || "",
+          rol: (pData.rol === "repartidor" ? "repartidor" : "admin") as "admin" | "repartidor",
+        });
       }
+    }
 
-      if (!cancelled) setInitialized(true);
+    async function init() {
+      try {
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) console.error("getSession error:", sessionError.message);
+        if (cancelled) return;
+
+        if (sessionData.session) {
+          setUser(sessionData.session.user);
+          await fetchProfile(sessionData.session.user.id, sessionData.session.user);
+        }
+      } catch (e) {
+        console.error("init error:", e);
+      } finally {
+        if (!cancelled) setInitialized(true);
+      }
     }
 
     init();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (cancelled) return;
+      console.log("onAuthStateChange:", event);
 
       if (event === "SIGNED_OUT") {
         setUser(null);
         setProfile(null);
-        setInitialized(true);
+        if (!cancelled) setInitialized(true);
         return;
       }
 
       if (session) {
         setUser(session.user);
-        const { data: pData } = await supabase
-          .from("profiles")
-          .select("id, email, nombre, rol")
-          .eq("id", session.user.id)
-          .maybeSingle();
-
-        if (!cancelled && pData) {
-          setProfile({
-            id: pData.id,
-            email: pData.email || session.user.email || "",
-            nombre: pData.nombre || session.user.email || "",
-            rol: (pData.rol === "repartidor" ? "repartidor" : "admin") as "admin" | "repartidor",
-          });
-        }
+        await fetchProfile(session.user.id, session.user);
       } else {
         setUser(null);
         setProfile(null);
