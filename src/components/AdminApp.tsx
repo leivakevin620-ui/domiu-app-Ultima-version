@@ -63,7 +63,6 @@ function extraerDatos(texto: string) {
     else if (lower.includes("dir") || lower.includes("ubicacion")) result.direccion = linea.replace(/.*?:/, "").trim();
     else if (lower.includes("barrio")) result.barrio = linea.replace(/.*?:/, "").trim();
     else if (lower.includes("local") || lower.includes("restaurante") || lower.includes("tienda")) result.local = linea.replace(/.*?:/, "").trim();
-    else if (lower.includes("obs") || lower.includes("nota") || lower.includes("comentario")) result.observaciones = linea.replace(/.*?:/, "").trim();
   }
   if (!result.cliente && lineas[0]) result.cliente = lineas[0].trim();
   if (!result.telefono) {
@@ -100,7 +99,6 @@ export default function AdminApp() {
   const [fRep, setFRep] = useState("");
   const [fKm, setFKm] = useState("");
   const [fPrecio, setFPrecio] = useState("");
-  const [fObs, setFObs] = useState("");
   const [fMetodoPago, setFMetodoPago] = useState("Efectivo");
   const [fPegarTexto, setFPegarTexto] = useState("");
 
@@ -212,8 +210,7 @@ export default function AdminApp() {
       direccion: fDir.trim(), barrio: fBarrio.trim() || "N/A",
       local_id: fLocal || null, repartidor_id: fRep || null,
       km, precio, pago_repartidor: pr, empresa_recibe: er,
-      metodo_pago: fMetodoPago, observaciones: fObs.trim() || null,
-      user_id: user?.id,
+      metodo_pago: fMetodoPago, user_id: user?.id,
     };
     if (!editId) data.estado = "Pendiente";
     const { error } = editId
@@ -227,14 +224,14 @@ export default function AdminApp() {
 
   const resetPedidoForm = () => {
     setEditId(null); setFCliente(""); setFTel(""); setFDir(""); setFBarrio("");
-    setFLocal(""); setFRep(""); setFKm(""); setFPrecio(""); setFObs("");
+    setFLocal(""); setFRep(""); setFKm(""); setFPrecio("");
     setFMetodoPago("Efectivo"); setFPegarTexto("");
   };
 
   const editPedido = (p: any) => {
     setEditId(p.id); setFCliente(p.cliente); setFTel(p.telefono); setFDir(p.direccion);
     setFBarrio(p.barrio); setFLocal(p.local_id || ""); setFRep(p.repartidor_id || "");
-    setFKm(String(p.km)); setFPrecio(String(p.precio)); setFObs(p.observaciones || "");
+    setFKm(String(p.km)); setFPrecio(String(p.precio));
     setFMetodoPago(p.metodo_pago || "Efectivo");
     setTab("nuevo");
   };
@@ -290,7 +287,6 @@ export default function AdminApp() {
       const locEncontrado = locs.find((l: any) => l.nombre.toLowerCase().includes(datos.local.toLowerCase()));
       if (locEncontrado) setFLocal(locEncontrado.id);
     }
-    if (datos.observaciones) setFObs(datos.observaciones);
     ok("Datos extraidos");
   };
 
@@ -609,7 +605,6 @@ export default function AdminApp() {
                     <div><label className={lblC}>Metodo de pago</label><select className={inpC} value={fMetodoPago} onChange={(e) => setFMetodoPago(e.target.value)}><option>Efectivo</option><option>Transferencia</option></select></div>
                     <div><label className={lblC}>Precio manual (opcional)</label><input className={inpC} type="number" value={fPrecio} onChange={(e) => setFPrecio(e.target.value)} placeholder="Dejar vacio para automatico" /></div>
                   </div>
-                  <div><label className={lblC}>Observaciones</label><textarea className={inpC} rows={2} value={fObs} onChange={(e) => setFObs(e.target.value)} placeholder="Notas adicionales..." /></div>
                   {tarifPrev && !fPrecio && (
                     <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700 space-y-1">
                       <p className="text-sm font-bold text-yellow-400">Tarifa sugerida ({Number(fKm).toFixed(1)} km): {fmt(tarifPrev.precio)}</p>
@@ -659,7 +654,6 @@ export default function AdminApp() {
                       <div><p className="text-slate-500 text-xs">Tarifa</p><p className="text-green-400 font-bold">{fmt(p.precio)}</p></div>
                       <div><p className="text-slate-500 text-xs">Metodo</p><p className="text-white">{p.metodo_pago || "Efectivo"}</p></div>
                     </div>
-                    {p.observaciones && <p className="text-xs text-slate-500 mb-3 bg-slate-800/50 p-2 rounded-lg">Obs: {p.observaciones}</p>}
                     {/* Acciones rapidas */}
                     <div className="flex gap-2 flex-wrap mb-3">
                       <button onClick={() => waCliente(p.telefono)} className="flex items-center gap-1 px-3 py-1.5 bg-green-500/10 text-green-400 rounded-lg text-xs font-semibold border border-green-500/20 hover:bg-green-500/20"><MessageCircle size={12} /> WA cliente</button>
