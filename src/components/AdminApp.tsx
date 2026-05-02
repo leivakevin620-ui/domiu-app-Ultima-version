@@ -110,6 +110,8 @@ export default function AdminApp() {
 
   /* Repartidor form */
   const [rEdit, setREdit] = useState<string | null>(null);
+  const [rEmail, setREmail] = useState("");
+  const [rPass, setRPass] = useState("");
   const [rNom, setRNom] = useState("");
   const [rTel, setRTel] = useState("");
   const [rDoc, setRDoc] = useState("");
@@ -296,15 +298,23 @@ export default function AdminApp() {
   const saveRep = async (e: any) => {
     e.preventDefault();
     if (!rNom.trim()) return fail("Nombre obligatorio");
-    const data = { nombre: rNom.trim(), telefono: rTel.trim(), documento: rDoc.trim(), vehiculo: rVeh.trim(), placa: rPla.trim() };
     if (rEdit) {
+      const data = { nombre: rNom.trim(), telefono: rTel.trim(), documento: rDoc.trim(), vehiculo: rVeh.trim(), placa: rPla.trim() };
       const rider = reps.find((r: any) => r.id === rEdit);
       await supabase.from("repartidores").update(data).eq("id", rEdit);
       if (rider?.user_id) await supabase.from("profiles").update({ nombre: rNom.trim() }).eq("id", rider.user_id);
+      ok("Actualizado"); setREdit(null); setREmail(""); setRPass(""); setRNom(""); setRTel(""); setRDoc(""); setRVeh(""); setRPla(""); load();
     } else {
-      await supabase.from("repartidores").insert({ ...data, user_id: null, estado: "Disponible" });
+      if (!rEmail.trim() || !rPass.trim()) return fail("Email y contraseña obligatorios para crear repartidor");
+      const res = await fetch("/api/create-rider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: rEmail.trim(), password: rPass, nombre: rNom.trim(), telefono: rTel.trim(), documento: rDoc.trim(), vehiculo: rVeh.trim(), placa: rPla.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) return fail(data.error || "Error creando repartidor");
+      ok("Repartidor creado con cuenta de acceso"); setREdit(null); setREmail(""); setRPass(""); setRNom(""); setRTel(""); setRDoc(""); setRVeh(""); setRPla(""); load();
     }
-    ok(rEdit ? "Actualizado" : "Creado"); setREdit(null); setRNom(""); setRTel(""); setRDoc(""); setRVeh(""); setRPla(""); load();
   };
 
   const toggleRepActivo = async (id: string, activo: boolean) => {
@@ -683,6 +693,15 @@ export default function AdminApp() {
               <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6">
                 <h3 className="font-bold text-white mb-4">{rEdit ? "Editar Repartidor" : "Nuevo Repartidor"}</h3>
                 <form onSubmit={saveRep} className="space-y-4">
+                  {!rEdit && (
+                    <div className="p-4 rounded-xl bg-yellow-400/5 border border-yellow-400/20 mb-2">
+                      <p className="text-xs text-yellow-400 font-semibold mb-2">Cuenta de acceso para el repartidor</p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div><label className={lblC}>Email</label><input className={inpC} type="email" value={rEmail} onChange={(e) => setREmail(e.target.value)} placeholder="repartidor@email.com" required /></div>
+                        <div><label className={lblC}>Contraseña</label><input className={inpC} type="password" value={rPass} onChange={(e) => setRPass(e.target.value)} placeholder="Contraseña" required /></div>
+                      </div>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                     <div><label className={lblC}>Nombre</label><input className={inpC} value={rNom} onChange={(e) => setRNom(e.target.value)} placeholder="Nombre" required /></div>
                     <div><label className={lblC}>Telefono</label><input className={inpC} value={rTel} onChange={(e) => setRTel(e.target.value)} placeholder="300..." /></div>
@@ -692,7 +711,7 @@ export default function AdminApp() {
                   </div>
                   <div className="flex gap-3">
                     <button type="submit" className="px-6 py-3 bg-yellow-400 text-slate-900 font-bold rounded-xl">{rEdit ? "Actualizar" : "Crear"}</button>
-                    {rEdit && <button type="button" onClick={() => { setREdit(null); setRNom(""); setRTel(""); setRDoc(""); setRVeh(""); setRPla(""); }} className="px-6 py-3 bg-slate-800 text-slate-300 rounded-xl">Cancelar</button>}
+                    {rEdit && <button type="button" onClick={() => { setREdit(null); setREmail(""); setRPass(""); setRNom(""); setRTel(""); setRDoc(""); setRVeh(""); setRPla(""); }} className="px-6 py-3 bg-slate-800 text-slate-300 rounded-xl">Cancelar</button>}
                   </div>
                 </form>
               </div>
