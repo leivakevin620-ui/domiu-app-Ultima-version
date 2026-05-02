@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -19,18 +20,34 @@ type TabType = "inicio" | "pedidos" | "mapa" | "liquidacion" | "perfil";
 
 /* ======================== COMPONENTE ======================== */
 export default function RiderApp() {
-  const { user, profile, logout } = useAuth();
+  const { user, profile, logout, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const [redirecting, setRedirecting] = useState(false);
   const [tab, setTab] = useState<TabType>("inicio");
   const [riderData, setRiderData] = useState<any>(null);
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [locales, setLocales] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [estadoRider, setEstadoRider] = useState("No disponible");
   const [toast, setToast] = useState("");
   const [toastType, setToastType] = useState<"ok" | "err">("ok");
   const [currentTime, setCurrentTime] = useState("");
   const [currentDate, setCurrentDate] = useState("");
   const subRef = useRef<any>(null);
+
+  // Route protection
+  useEffect(() => {
+    if (!authLoading) {
+      if (!user) {
+        setRedirecting(true);
+        router.push("/login");
+      } else if (profile?.rol !== "repartidor") {
+        logout();
+        setRedirecting(true);
+        router.push("/login");
+      }
+    }
+  }, [user, authLoading, profile, router, logout]);
 
   // Clock
   useEffect(() => {
@@ -61,7 +78,7 @@ export default function RiderApp() {
       const { data: locs } = await supabase.from("locales").select("*");
       setLocales(locs || []);
     } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+    finally { setDataLoading(false); }
   }, [user]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -192,7 +209,7 @@ export default function RiderApp() {
     Cancelado: { padding: "4px 10px", borderRadius: 999, background: colors.gray600, color: "#fff", fontSize: 11, fontWeight: 700 },
   };
 
-  if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: colors.bg }}><p style={{ color: colors.gray400 }}>Cargando...</p></div>;
+  if (authLoading || dataLoading || redirecting) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: colors.bg }}><p style={{ color: colors.gray400 }}>Cargando...</p></div>;
   if (!user || !riderData) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: colors.bg }}><p style={{ color: colors.gray400 }}>Sin sesión.</p></div>;
 
   /* ======================== RENDER ======================== */
