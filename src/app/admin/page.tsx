@@ -15,8 +15,13 @@ export default function AdminPage() {
   }
 
   if (!profile || profile.rol !== "admin") {
-    window.location.href = "/login";
-    return null;
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#0f172a", gap: 16 }}>
+        <p style={{ color: "#fca5a5", fontSize: 16 }}>Acceso no autorizado</p>
+        <p style={{ color: "#94a3b8", fontSize: 14 }}>Profile: {JSON.stringify(profile)}</p>
+        <a href="/login" style={{ color: "#facc15", fontSize: 14 }}>Volver al login</a>
+      </div>
+    );
   }
 
   return <AdminApp />;

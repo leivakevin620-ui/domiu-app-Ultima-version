@@ -11,6 +11,45 @@ export type UserProfile = {
   rol: "admin" | "repartidor";
 };
 
+async function fetchProfile(userId: string, sessionUser: User): Promise<UserProfile> {
+  try {
+    const { data: pData, error: pError } = await supabase
+      .from("profiles")
+      .select("id, email, nombre, rol")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (pError) console.log("Profile query failed, using metadata:", pError.message);
+
+    if (pData) {
+      return {
+        id: pData.id,
+        email: pData.email || sessionUser.email || "",
+        nombre: pData.nombre || sessionUser.email || "",
+        rol: (pData.rol === "repartidor" ? "repartidor" : "admin") as "admin" | "repartidor",
+      };
+    }
+
+    console.log("No profile row, using metadata");
+    const meta = sessionUser.user_metadata || {};
+    return {
+      id: userId,
+      email: sessionUser.email || "",
+      nombre: meta.nombre || sessionUser.email || "",
+      rol: (meta.rol === "repartidor" ? "repartidor" : "admin") as "admin" | "repartidor",
+    };
+  } catch (e) {
+    console.log("fetchProfile error, using metadata:", e);
+    const meta = sessionUser.user_metadata || {};
+    return {
+      id: userId,
+      email: sessionUser.email || "",
+      nombre: meta.nombre || sessionUser.email || "",
+      rol: (meta.rol === "repartidor" ? "repartidor" : "admin") as "admin" | "repartidor",
+    };
+  }
+}
+
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -21,34 +60,21 @@ export function useAuth() {
     let cancelled = false;
     let hasProcessed = false;
 
-    async function fetchProfile(userId: string, sessionUser: User) {
-      const { data: pData, error: pError } = await supabase
-        .from("profiles")
-        .select("id, email, nombre, rol")
-        .eq("id", userId)
-        .maybeSingle();
-
-      if (pError) console.error("Profile query error:", pError.message);
-
-      if (!cancelled && pData) {
-        setProfile({
-          id: pData.id,
-          email: pData.email || sessionUser.email || "",
-          nombre: pData.nombre || sessionUser.email || "",
-          rol: (pData.rol === "repartidor" ? "repartidor" : "admin") as "admin" | "repartidor",
-        });
-      }
-    }
-
-    function processSession(session: any) {
+    async function processSession(session: any) {
       if (cancelled || hasProcessed) return;
       hasProcessed = true;
 
       if (session) {
+        console.log("Processing session for:", session.user.email);
         setUser(session.user);
-        fetchProfile(session.user.id, session.user);
+        const p = await fetchProfile(session.user.id, session.user);
+        console.log("Profile result:", p);
+        if (!cancelled && p) setProfile(p);
       }
-      setInitialized(true);
+      if (!cancelled) {
+        setInitialized(true);
+        console.log("initialized = true");
+      }
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -65,22 +91,9 @@ export function useAuth() {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setLoading(false); throw error; }
     if (data.user) {
-      const { data: pData } = await supabase
-        .from("profiles")
-        .select("id, email, nombre, rol")
-        .eq("id", data.user.id)
-        .maybeSingle();
-
+      const p = await fetchProfile(data.user.id, data.user);
       setLoading(false);
-      return {
-        user: data.user,
-        profile: pData ? {
-          id: pData.id,
-          email: pData.email || data.user.email || "",
-          nombre: pData.nombre || data.user.email || "",
-          rol: (pData.rol === "repartidor" ? "repartidor" : "admin") as "admin" | "repartidor",
-        } : null,
-      };
+      return { user: data.user, profile: p };
     }
     setLoading(false);
     return { user: data.user, profile: null };
