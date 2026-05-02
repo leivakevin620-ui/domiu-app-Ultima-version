@@ -135,7 +135,7 @@ export default function RiderApp() {
             </span>
           </div>
         </div>
-        <button onClick={() => { supabase.auth.signOut(); logout(); }} className="text-slate-400 hover:text-white"><LogOut size={20} /></button>
+        <button onClick={() => { logout(); }} className="text-slate-400 hover:text-white"><LogOut size={20} /></button>
       </header>
 
       <main className="flex-1 overflow-y-auto p-4 pb-24">

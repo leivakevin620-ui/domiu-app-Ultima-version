@@ -676,7 +676,7 @@ export default function RiderApp() {
               ...btnOutline, width: "100%", color: colors.red, borderColor: colors.red,
               padding: 16, fontSize: 15, marginTop: 8,
             }}
-            onClick={async () => { await logout(); router.push("/login"); }}
+            onClick={() => { logout(); }}
           >
             <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
               <LogOut size={18} /> Cerrar sesión
