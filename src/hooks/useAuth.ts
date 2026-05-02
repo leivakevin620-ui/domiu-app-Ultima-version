@@ -16,13 +16,38 @@ export function useAuth() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
 
+  async function fetchProfile(userId: string, authUser: User) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, email, nombre, rol")
+      .eq("id", userId);
+
+    if (data && data.length > 0) {
+      const p = data[0];
+      setProfile({ id: p.id, email: p.email, nombre: p.nombre, rol: p.rol === "repartidor" ? "repartidor" : "admin" });
+      return;
+    }
+
+    const meta = authUser.user_metadata || {};
+    const rol = meta.rol || "admin";
+    await supabase.from("profiles").insert({
+      id: userId, email: authUser.email, nombre: meta.nombre || authUser.email, rol
+    });
+    if (rol === "repartidor") {
+      await supabase.from("repartidores").insert({
+        user_id: userId, nombre: meta.nombre || authUser.email, estado: "No disponible"
+      });
+    }
+    setProfile({ id: userId, email: authUser.email!, nombre: meta.nombre || authUser.email!, rol });
+  }
+
   useEffect(() => {
     let mounted = true;
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (mounted && session) {
         setUser(session.user);
-        getOrCreateProfile(session.user.id, session.user);
+        fetchProfile(session.user.id, session.user);
       }
     });
 
@@ -35,7 +60,7 @@ export function useAuth() {
       }
       if (session) {
         setUser(session.user);
-        getOrCreateProfile(session.user.id, session.user);
+        fetchProfile(session.user.id, session.user);
       } else {
         setUser(null);
         setProfile(null);
@@ -44,31 +69,6 @@ export function useAuth() {
 
     return () => { mounted = false; subscription.unsubscribe(); };
   }, []);
-
-  async function getOrCreateProfile(userId: string, authUser: User) {
-    const { data: existing } = await supabase
-      .from("profiles")
-      .select("id, email, nombre, rol")
-      .eq("id", userId)
-      .single();
-
-    if (existing) {
-      setProfile({ id: existing.id, email: existing.email, nombre: existing.nombre, rol: existing.rol === "repartidor" ? "repartidor" : "admin" });
-    } else {
-      const meta = authUser.user_metadata || {};
-      const rol = meta.rol || "admin";
-      await supabase.from("profiles").insert({
-        id: userId, email: authUser.email, nombre: meta.nombre || authUser.email, rol
-      });
-      if (rol === "repartidor") {
-        await supabase.from("repartidores").insert({
-          user_id: userId, nombre: meta.nombre || authUser.email, telefono: meta.telefono || null,
-          documento: meta.documento || null, vehiculo: meta.vehiculo || null, placa: meta.placa || null, estado: "No disponible"
-        });
-      }
-      setProfile({ id: userId, email: authUser.email!, nombre: meta.nombre || authUser.email!, rol });
-    }
-  }
 
   const login = useCallback(async (email: string, password: string) => {
     setLoading(true);
@@ -94,7 +94,7 @@ export function useAuth() {
   const registerAdmin = useCallback(async (email: string, password: string, nombre: string, accessCode: string) => {
     setLoading(true);
     const validCode = process.env.NEXT_PUBLIC_ADMIN_ACCESS_CODE;
-    if (!validCode || accessCode !== validCode) { setLoading(false); throw new Error("Código de acceso inválido."); }
+    if (!validCode || accessCode !== validCode) { setLoading(false); throw new Error("Codigo de acceso invalido."); }
     const { data, error } = await supabase.auth.signUp({
       email, password,
       options: { data: { nombre, rol: "admin" } },
