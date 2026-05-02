@@ -37,9 +37,9 @@ export default function LoginPage() {
       } else {
         const result = await login(email, password);
         if (result.profile?.rol === "admin") {
-          window.location.href = "/admin";
+          setTimeout(() => { window.location.href = "/admin"; }, 500);
         } else if (result.profile?.rol === "repartidor") {
-          window.location.href = "/repartidor";
+          setTimeout(() => { window.location.href = "/repartidor"; }, 500);
         } else {
           setError("No se encontro perfil para este usuario.");
           setSubmitLoading(false);
