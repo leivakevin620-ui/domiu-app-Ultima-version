@@ -143,17 +143,25 @@ export default function AdminApp() {
     if (!user) return;
     setLoading(true);
     try {
-      const [rP, rR, rL, rT, rTH] = await Promise.all([
-        sb.from("pedidos").select("*").order("created_at", { ascending: false }),
+      // Obtener turno activo primero
+      const { data: turnosActivos } = await sb.from("turnos").select("*").eq("activo", true).order("created_at", { ascending: false }).limit(1);
+      const turnoAct = turnosActivos?.[0] || null;
+      setTurnoActivo(turnoAct);
+
+      // Cargar pedidos del turno activo o todos si no hay turno
+      const pedidosQuery = turnoAct
+        ? sb.from("pedidos").select("*").eq("turno_id", turnoAct.id).order("created_at", { ascending: false })
+        : sb.from("pedidos").select("*").order("created_at", { ascending: false });
+
+      const [rP, rR, rL, rTH] = await Promise.all([
+        pedidosQuery,
         sb.from("repartidores").select("*").order("created_at", { ascending: false }),
         sb.from("locales").select("*").order("created_at", { ascending: false }),
-        sb.from("turnos").select("*").eq("activo", true).order("created_at", { ascending: false }).limit(1),
         sb.from("turnos").select("*").eq("activo", false).order("closed_at", { ascending: false }).limit(20),
       ]);
       setPedidos(rP.data || []);
       setReps(rR.data || []);
       setLocs(rL.data || []);
-      setTurnoActivo(rT.data?.[0] || null);
       setTurnosHistorial(rTH.data || []);
     } catch (e: any) { fail("Error: " + e.message); }
     finally { setLoading(false); }
@@ -192,15 +200,24 @@ export default function AdminApp() {
     if (!turnoActivo) return fail("No hay turno activo");
     const ents = pedidos.filter((p: any) => p.estado === "Entregado");
     const canc = pedidos.filter((p: any) => p.estado === "Cancelado");
-    const { error } = await sb.from("turnos").update({
+
+    // Actualizar turno con resumen
+    const { error: turnoError } = await sb.from("turnos").update({
       activo: false, closed_at: new Date().toISOString(),
       total_turno: pedidos.length, entregados: ents.length, cancelados: canc.length,
       recaudado_total: ents.reduce((s: number, p: any) => s + (p.precio || 0), 0),
       empresa_recibe_total: ents.reduce((s: number, p: any) => s + (p.empresa_recibe || 0), 0),
       liquidado_total: ents.filter((p: any) => p.liquidado).length,
     }).eq("id", turnoActivo.id);
-    if (error) return fail(error.message);
-    ok("Turno cerrado"); setTurnoActivo(null); load();
+    if (turnoError) return fail(turnoError.message);
+
+    // Marcar repartidores como "No disponible"
+    await sb.from("repartidores").update({ estado: "No disponible" }).eq("estado", "Ocupado");
+
+    ok("Turno cerrado");
+    setTurnoActivo(null);
+    setPedidos([]);
+    load();
   };
 
   /* ======================== PEDIDOS ======================== */
@@ -219,6 +236,7 @@ export default function AdminApp() {
       local_id: fLocal || null, repartidor_id: fRep || null,
       km, precio, pago_repartidor: pr, empresa_recibe: er,
       metodo_pago: fMetodoPago, user_id: user?.id,
+      turno_id: turnoActivo?.id || null,
     };
     if (!editId) data.estado = "Pendiente";
     const { error } = editId
