@@ -20,6 +20,13 @@ export function useAuth() {
   useEffect(() => {
     let cancelled = false;
 
+    const timeout = setTimeout(() => {
+      if (!cancelled) {
+        console.log("Auth init timeout - forcing initialized");
+        setInitialized(true);
+      }
+    }, 5000);
+
     async function fetchProfile(userId: string, sessionUser: User) {
       const { data: pData, error: pError } = await supabase
         .from("profiles")
@@ -41,18 +48,28 @@ export function useAuth() {
 
     async function init() {
       try {
+        console.log("Auth init starting...");
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        console.log("getSession done:", sessionData?.session?.user?.email, sessionError?.message);
         if (sessionError) console.error("getSession error:", sessionError.message);
         if (cancelled) return;
 
         if (sessionData.session) {
           setUser(sessionData.session.user);
+          console.log("Fetching profile for:", sessionData.session.user.id);
           await fetchProfile(sessionData.session.user.id, sessionData.session.user);
+          console.log("Profile done");
+        } else {
+          console.log("No session found");
         }
       } catch (e) {
         console.error("init error:", e);
       } finally {
-        if (!cancelled) setInitialized(true);
+        if (!cancelled) {
+          console.log("Setting initialized = true");
+          setInitialized(true);
+        }
+        clearTimeout(timeout);
       }
     }
 
@@ -79,7 +96,7 @@ export function useAuth() {
       if (!cancelled) setInitialized(true);
     });
 
-    return () => { cancelled = true; subscription.unsubscribe(); };
+    return () => { cancelled = true; subscription.unsubscribe(); clearTimeout(timeout); };
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
