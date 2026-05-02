@@ -59,14 +59,52 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
 
   // Solicitar permiso de notificaciones
   useEffect(() => {
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
+    if ("Notification" in window) {
+      console.log("Notification permission:", Notification.permission);
+      if (Notification.permission === "default") {
+        Notification.requestPermission().then(perm => console.log("Notification result:", perm));
+      }
+    } else {
+      console.log("Notifications not supported");
     }
   }, []);
 
   function enviarNotificacion(titulo: string, cuerpo: string) {
+    console.log("Notificacion intentada:", titulo, cuerpo);
+    // Sonido de alerta
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.frequency.value = 800;
+      gain.gain.value = 0.3;
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.15);
+      setTimeout(() => {
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.connect(gain2);
+        gain2.connect(audioCtx.destination);
+        osc2.frequency.value = 1000;
+        gain2.gain.value = 0.3;
+        osc2.start();
+        osc2.stop(audioCtx.currentTime + 0.15);
+      }, 200);
+    } catch (e) { console.log("Audio error:", e); }
+
+    // Notificacion visual toast
+    setToast(`Nuevo pedido: ${cuerpo}`);
+    setToastType("ok");
+    setTimeout(() => setToast(""), 5000);
+
+    // Notificacion del navegador
     if ("Notification" in window && Notification.permission === "granted") {
-      new Notification(titulo, { body: cuerpo, icon: "/favicon.ico" });
+      new Notification(titulo, { body: cuerpo });
+      console.log("Notificacion enviada al navegador");
+    } else {
+      console.log("Notificacion no enviada - permission:", Notification.permission);
     }
   }
 
