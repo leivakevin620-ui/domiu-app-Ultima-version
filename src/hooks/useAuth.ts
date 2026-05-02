@@ -13,7 +13,24 @@ export type UserProfile = {
 
 async function fetchProfile(userId: string, sessionUser: User): Promise<UserProfile> {
   try {
-    const { data: pData, error: pError } = await supabase
+    // Primero verificar si existe en repartidores
+    const { data: riderData } = await supabase
+      .from("repartidores")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (riderData) {
+      return {
+        id: riderData.id,
+        email: sessionUser.email || "",
+        nombre: riderData.nombre || sessionUser.email || "",
+        rol: "repartidor",
+      };
+    }
+
+    // Segundo verificar profiles
+    const { data: pData } = await supabase
       .from("profiles")
       .select("id, email, nombre, rol")
       .eq("id", userId)
@@ -28,6 +45,7 @@ async function fetchProfile(userId: string, sessionUser: User): Promise<UserProf
       };
     }
 
+    // Fallback: metadata
     const meta = sessionUser.user_metadata || {};
     return {
       id: userId,
@@ -70,19 +88,32 @@ export function useAuth() {
       if (!cancelled) setInitialized(true);
     }
 
+    // Primero intentar obtener sesión inmediatamente
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!cancelled && !processedEvent) processSession(session);
+    });
+
+    // Suscribirse a cambios de auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
       console.log("auth event:", event, "user:", session?.user?.email, "rol:", session?.user?.user_metadata?.rol);
       processSession(session);
     });
 
+    // Timeout de seguridad
     const timeout = setTimeout(() => {
       if (!cancelled && !processedEvent) {
         supabase.auth.getSession().then(({ data: { session } }) => {
           if (!cancelled) processSession(session);
+        }).catch(() => {
+          if (!cancelled) {
+            setUser(null);
+            setProfile(null);
+            setInitialized(true);
+          }
         });
       }
-    }, 3000);
+    }, 1500);
 
     return () => { cancelled = true; subscription.unsubscribe(); clearTimeout(timeout); };
   }, []);

@@ -29,11 +29,10 @@ export default function RiderAppPage() {
     );
   }
 
-  if (!user || profile?.rol !== "repartidor") {
+  if (!user) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#f8fafc", gap: 16 }}>
-        <p style={{ color: "#fca5a5", fontSize: 16 }}>Acceso no autorizado</p>
-        <p style={{ color: "#94a3b8", fontSize: 14 }}>Rol: {profile?.rol || "sin perfil"}</p>
+        <p style={{ color: "#fca5a5", fontSize: 16 }}>No hay sesión activa</p>
         <a href="/login" style={{ color: "#f59e0b", fontSize: 14 }}>Volver al login</a>
       </div>
     );
