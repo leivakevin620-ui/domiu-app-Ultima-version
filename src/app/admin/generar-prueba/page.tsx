@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { getSupabaseClient } from "@/lib/supabase";
 
+export const dynamic = 'force-dynamic';
+
 const clientes = [
   "Carlos Mendoza", "Ana Rodriguez", "Luis Garcia", "Maria Torres", "Pedro Sanchez",
   "Laura Martinez", "Diego Ramirez", "Camila Herrera", "Andres Lopez", "Sofia Castro",
