@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
+import dynamic from "next/dynamic";
+const GPSMapClient = dynamic(() => import("@/components/GPSMap"), { ssr: false });
 
 /* ======================== RELOJ ======================== */
 function RealTimeClock() {
@@ -73,7 +75,7 @@ function extraerDatos(texto: string) {
 }
 
 /* ======================== TIPOS ======================== */
-type Tab = "panel" | "nuevo" | "pedidos" | "repartidores" | "locales" | "turnos" | "liquidaciones" | "reportes";
+type Tab = "panel" | "nuevo" | "pedidos" | "repartidores" | "locales" | "turnos" | "gps" | "liquidaciones" | "reportes";
 
 /* ======================== COMPONENTE ======================== */
 export default function AdminApp() {
@@ -579,6 +581,7 @@ export default function AdminApp() {
     { key: "pedidos", icon: Package, label: "Pedidos" },
     { key: "repartidores", icon: Users, label: "Repartidores" },
     { key: "turnos", icon: Clock, label: "Turnos" },
+    { key: "gps", icon: Navigation, label: "GPS" },
     { key: "liquidaciones", icon: Banknote, label: "Liquidaciones" },
     { key: "reportes", icon: FileText, label: "Reportes" },
     { key: "locales", icon: Building2, label: "Locales" },
@@ -1065,6 +1068,20 @@ export default function AdminApp() {
                   { header: "Empresa", key: "empresa" }, { header: "Ganancia", key: "ganancia" },
                   { header: "Estado", key: "estado" },
                 ])} className="px-4 py-2 bg-red-500/10 text-red-400 rounded-xl text-sm font-semibold border border-red-500/20 flex items-center gap-2"><FileDown size={16} /> PDF</button>
+              </div>
+            </div>
+          )}
+
+          {/* ======================== GPS ======================== */}
+          {tab === "gps" && (
+            <div className="space-y-6">
+              <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6">
+                <h3 className="font-bold text-white mb-4 flex items-center gap-2">
+                  <Navigation size={20} className="text-yellow-400" /> Mapa GPS en Tiempo Real
+                </h3>
+                <div suppressHydrationWarning>
+                  <GPSMapClient />
+                </div>
               </div>
             </div>
           )}

@@ -15,7 +15,7 @@ function fmt(v: number) { return new Intl.NumberFormat("es-CO", { style: "curren
 function fechaCorta(f: string) { return new Date(f).toLocaleString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
 const EMPRESA_PHONE = "3113748405";
 
-type TabType = "inicio" | "pedidos" | "mapa" | "liquidacion" | "perfil";
+type TabType = "inicio" | "pedidos" | "mapa" | "liquidacion" | "turnos" | "gps" | "perfil";
 
 /* ======================== COMPONENTE ======================== */
 export default function RiderAppPage() {
@@ -57,6 +57,13 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
   const [currentDate, setCurrentDate] = useState("");
   const [activeTurnoId, setActiveTurnoId] = useState<string | null>(null);
   const subRef = useRef<any>(null);
+
+  // GPS state
+  const [gpsActivo, setGpsActivo] = useState(false);
+  const [gpsStatus, setGpsStatus] = useState<"esperando" | "activo" | "detenido" | "error">("esperando");
+  const [gpsLat, setGpsLat] = useState<number | null>(null);
+  const [gpsLng, setGpsLng] = useState<number | null>(null);
+  const gpsWatchRef = useRef<number | null>(null);
 
   // Solicitar permiso de notificaciones
   useEffect(() => {
@@ -747,6 +754,100 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
         </div>
       )}
 
+      {/* GPS */}
+      {tab === "gps" && (
+        <div style={{ padding: "16px 16px 0" }}>
+          <div style={{ ...card, textAlign: "center", marginBottom: 16 }}>
+            <div style={{
+              width: 72, height: 72, borderRadius: 20,
+              background: gpsActivo ? `linear-gradient(135deg, #22c55e 0%, #16a34a 100%)` : `linear-gradient(135deg, #facc15 0%, #eab308 100%)`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              margin: "0 auto 16px",
+            }}>
+              <Navigation size={32} color="white" />
+            </div>
+            <h2 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: colors.darkBlue }}>
+              GPS {gpsActivo ? "Activo" : "Inactivo"}
+            </h2>
+            <p style={{ margin: 0, color: colors.gray500, fontSize: 14 }}>
+              {gpsStatus === "esperando" && "Presiona activar para comenzar"}
+              {gpsStatus === "activo" && `Lat: ${gpsLat?.toFixed(6)}, Lng: ${gpsLng?.toFixed(6)}`}
+              {gpsStatus === "detenido" && "GPS detenido"}
+              {gpsStatus === "error" && "Error al obtener ubicación"}
+            </p>
+          </div>
+
+          <button
+            onClick={() => {
+              if (gpsActivo) {
+                // Detener GPS
+                if (gpsWatchRef.current !== null) {
+                  navigator.geolocation.clearWatch(gpsWatchRef.current);
+                  gpsWatchRef.current = null;
+                }
+                setGpsActivo(false);
+                setGpsStatus("detenido");
+                ok("GPS detenido");
+              } else {
+                // Activar GPS
+                if (!navigator.geolocation) {
+                  fail("Tu navegador no soporta GPS");
+                  return;
+                }
+                setGpsStatus("esperando");
+                const watchId = navigator.geolocation.watchPosition(
+                  (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    setGpsLat(lat);
+                    setGpsLng(lng);
+                    setGpsActivo(true);
+                    setGpsStatus("activo");
+                    // Guardar en Supabase
+                    if (riderData?.id) {
+                      sb.from("ubicaciones_repartidores").upsert({
+                        repartidor_id: riderData.id,
+                        nombre_repartidor: riderData.nombre,
+                        latitud: lat,
+                        longitud: lng,
+                        estado: estadoRider === "Disponible" ? "disponible" : "ocupado",
+                        ultima_actualizacion: new Date().toISOString(),
+                      }).then(() => console.log("GPS guardado"));
+                    }
+                  },
+                  (error) => {
+                    console.error("GPS error:", error);
+                    setGpsStatus("error");
+                    fail("Error GPS: " + error.message);
+                  },
+                  { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+                gpsWatchRef.current = watchId;
+                ok("GPS activando...");
+              }
+            }}
+            style={{
+              ...btnPrimary,
+              width: "100%",
+              background: gpsActivo ? colors.red : colors.green,
+              marginBottom: 12,
+            }}
+          >
+            {gpsActivo ? "DETENER GPS" : "ACTIVAR GPS"}
+          </button>
+
+          {gpsActivo && (
+            <div style={card}>
+              <p style={{ margin: "0 0 8px", fontSize: 14, fontWeight: 700, color: colors.gray500 }}>Ubicación actual:</p>
+              <p style={{ margin: 0, fontSize: 13, color: colors.darkBlue }}>
+                Latitud: {gpsLat?.toFixed(8)}<br/>
+                Longitud: {gpsLng?.toFixed(8)}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* PERFIL */}
       {tab === "perfil" && (
         <div style={{ padding: "16px 16px 0" }}>
@@ -816,6 +917,8 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
           { id: "pedidos" as TabType, icon: ListOrdered, label: "Pedidos" },
           { id: "mapa" as TabType, icon: MapPin, label: "Mapa" },
           { id: "liquidacion" as TabType, icon: DollarSign, label: "Liquidación" },
+          { id: "turnos" as TabType, icon: Clock, label: "Turnos" },
+          { id: "gps" as TabType, icon: Navigation, label: "GPS" },
           { id: "perfil" as TabType, icon: User, label: "Perfil" },
         ]).map((t) => (
           <button
