@@ -14,19 +14,36 @@ interface RepartidorUbicacion {
 }
 
 export default function GPSMap() {
-  const mapRef = useRef<any>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<{ [key: string]: any }>({});
   const [repartidores, setRepartidores] = useState<RepartidorUbicacion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const channelRef = useRef<any>(null);
 
   useEffect(() => {
     let mounted = true;
-    let channel: any = null;
+    let initialized = false;
 
     async function initMap() {
+      if (initialized) return;
+      initialized = true;
+
       try {
+        // Esperar a que el div exista
+        let attempts = 0;
+        while (!mapRef.current && attempts < 50) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+
+        if (!mapRef.current) {
+          setError("No se encontró el contenedor del mapa");
+          setLoading(false);
+          return;
+        }
+
         // Importar Leaflet solo del lado cliente
         const L = await import("leaflet");
         await import("leaflet/dist/leaflet.css");
@@ -41,7 +58,7 @@ export default function GPSMap() {
 
         // Crear mapa
         const map = L.map(mapRef.current, {
-          center: [10.4, -75.5], // Magdalena, Colombia
+          center: [10.4, -75.5],
           zoom: 12,
           zoomControl: true,
         });
@@ -56,13 +73,13 @@ export default function GPSMap() {
 
         // Cargar ubicaciones iniciales
         const sb = getSupabaseClient();
-        const { data, error } = await sb
+        const { data, error: sbError } = await sb
           .from("ubicaciones_repartidores")
           .select("*")
           .order("ultima_actualizacion", { ascending: false });
 
-        if (error) {
-          console.error("Error cargando ubicaciones:", error);
+        if (sbError) {
+          console.error("Error cargando ubicaciones:", sbError);
           setError("Error cargando ubicaciones");
         } else if (data && mounted) {
           setRepartidores(data);
@@ -70,7 +87,7 @@ export default function GPSMap() {
         }
 
         // Suscripción a Realtime
-        channel = sb
+        const channel = sb
           .channel("gps_realtime")
           .on("postgres_changes", {
             event: "*",
@@ -81,6 +98,8 @@ export default function GPSMap() {
             cargarUbicaciones();
           })
           .subscribe();
+
+        channelRef.current = channel;
 
         setLoading(false);
       } catch (err: any) {
@@ -93,7 +112,9 @@ export default function GPSMap() {
     function actualizarMarcadores(L: any, map: any, ubicaciones: RepartidorUbicacion[]) {
       // Limpiar marcadores anteriores
       Object.values(markersRef.current).forEach((marker: any) => {
-        map.removeLayer(marker);
+        if (map.hasLayer(marker)) {
+          map.removeLayer(marker);
+        }
       });
       markersRef.current = {};
 
@@ -147,13 +168,13 @@ export default function GPSMap() {
     async function cargarUbicaciones() {
       try {
         const sb = getSupabaseClient();
-        const { data, error } = await sb
+        const { data, error: sbError } = await sb
           .from("ubicaciones_repartidores")
           .select("*")
           .order("ultima_actualizacion", { ascending: false });
 
-        if (error) {
-          console.error("Error recargando:", error);
+        if (sbError) {
+          console.error("Error recargando:", sbError);
           return;
         }
 
@@ -173,9 +194,10 @@ export default function GPSMap() {
 
     return () => {
       mounted = false;
-      if (channel) {
+      if (channelRef.current) {
         const sb = getSupabaseClient();
-        sb.removeChannel(channel);
+        sb.removeChannel(channelRef.current);
+        channelRef.current = null;
       }
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
