@@ -17,7 +17,7 @@ import {
 import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
 import dynamic from "next/dynamic";
-const GPSMapClient = dynamic(() => import("@/components/GPSMap"), { ssr: false });
+import GoogleMapView from "@/components/GoogleMapView";
 
 /* ======================== RELOJ ======================== */
 function RealTimeClock() {
@@ -91,6 +91,7 @@ export default function AdminApp() {
   const [err, setErr] = useState("");
   const [turnoActivo, setTurnoActivo] = useState<any>(null);
   const [turnosHistorial, setTurnosHistorial] = useState<any[]>([]);
+  const [ubicacionesRepartidores, setUbicacionesRepartidores] = useState<any[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   /* Pedido form */
@@ -155,16 +156,18 @@ export default function AdminApp() {
         ? sb.from("pedidos").select("*").eq("turno_id", turnoAct.id).order("created_at", { ascending: false })
         : sb.from("pedidos").select("*").order("created_at", { ascending: false });
 
-      const [rP, rR, rL, rTH] = await Promise.all([
+      const [rP, rR, rL, rTH, rU] = await Promise.all([
         pedidosQuery,
         sb.from("repartidores").select("*").order("created_at", { ascending: false }),
         sb.from("locales").select("*").order("created_at", { ascending: false }),
         sb.from("turnos").select("*").eq("activo", false).order("closed_at", { ascending: false }).limit(20),
+        sb.from("ubicaciones_repartidores").select("*").order("ultima_actualizacion", { ascending: false }),
       ]);
       setPedidos(rP.data || []);
       setReps(rR.data || []);
       setLocs(rL.data || []);
       setTurnosHistorial(rTH.data || []);
+      setUbicacionesRepartidores(rU.data || []);
     } catch (e: any) { fail("Error: " + e.message); }
     finally { setLoading(false); }
   }, [user]);
@@ -406,10 +409,10 @@ export default function AdminApp() {
       x = 14;
       if (y > 195) { doc.addPage(); y = 15; }
       if (idx % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(14, y - 4, 240, 6, "F"); }
-      columnas.forEach((c, i) => {
-        doc.text(String(d[c.key] ?? ""), x, y);
-        x += colWidths[i];
-      });
+       columnas.forEach((c, i) => {
+         doc.text(String(d[c.key] ?? ""), x, y);
+         x += colWidths[i];
+       });
       y += 6;
     });
 
@@ -1079,9 +1082,9 @@ export default function AdminApp() {
                 <h3 className="font-bold text-white mb-4 flex items-center gap-2">
                   <Navigation size={20} className="text-yellow-400" /> Mapa GPS en Tiempo Real
                 </h3>
-                <div suppressHydrationWarning>
-                  <GPSMapClient />
-                </div>
+              <div suppressHydrationWarning>
+                <GoogleMapView repartidores={ubicacionesRepartidores} />
+              </div>
               </div>
             </div>
           )}

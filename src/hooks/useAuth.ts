@@ -117,6 +117,7 @@ export function useAuth() {
 
   const registerAdmin = useCallback(async (email: string, password: string, nombre: string, accessCode: string) => {
     setLoading(true);
+    // Validar código localmente solo como primera capa (la validación real debe ser en servidor)
     const validCode = process.env.NEXT_PUBLIC_ADMIN_ACCESS_CODE;
     if (!validCode || accessCode !== validCode) { setLoading(false); throw new Error("Codigo de acceso invalido."); }
     const { data, error } = await supabase.auth.signUp({

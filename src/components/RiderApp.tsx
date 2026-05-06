@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { Home, ListOrdered, MapPin, DollarSign, User, LogOut, Phone, MessageCircle, Copy, Loader2 } from "lucide-react";
+import { Home, ListOrdered, MapPin, DollarSign, User, LogOut, Phone, MessageCircle, Copy, Loader2, Navigation, Truck, Clock, Package, TrendingUp, Wallet, ChevronRight, Shield, FileText, Check } from "lucide-react";
 
 const ESTADOS_FLUJO = ["Pendiente", "Asignado", "Aceptado", "Recogido", "En camino", "Entregado"];
 
@@ -16,14 +16,26 @@ function formatearFecha(fecha: string) {
   return new Date(fecha).toLocaleString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+const EMPRESA_PHONE = "3113748405";
+
+type TabType = "inicio" | "pedidos" | "mapa" | "liquidacion" | "gps" | "perfil";
+
 export default function RiderApp() {
   const { user, profile, logout } = useAuth();
   const sb = getSupabaseClient();
-  const [tab, setTab] = useState("inicio");
+  const [tab, setTab] = useState<TabType>("inicio");
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [riderData, setRiderData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [estadoRider, setEstadoRider] = useState("No disponible");
+  
+  // GPS state
+  const [gpsActivo, setGpsActivo] = useState(false);
+  const [gpsStatus, setGpsStatus] = useState<"esperando" | "activo" | "detenido" | "error">("esperando");
+  const [gpsLat, setGpsLat] = useState<number | null>(null);
+  const [gpsLng, setGpsLng] = useState<number | null>(null);
+  const gpsWatchRef = useRef<number | null>(null);
+  
   const subRef = useRef<any>(null);
 
   const loadData = useCallback(async () => {
@@ -43,32 +55,71 @@ export default function RiderApp() {
     }
   }, [user]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   useEffect(() => {
     if (!user || !riderData) return;
+    if (subRef.current) sb.removeChannel(subRef.current);
+    
+    const channel = sb
+      .channel("rider_pedidos")
+      .on("postgres_changes", { event: "*", schema: "public", table: "pedidos", filter: `repartidor_id=eq.${riderData.id}` }, () => loadData())
+      .subscribe();
+    
+    subRef.current = channel;
+    return () => { sb.removeChannel(channel); };
+  }, [user, riderData, loadData]);
 
-    if (subRef.current) {
-      sb.removeChannel(subRef.current);
+  // GPS Functions
+  useEffect(() => {
+    if (!gpsActivo) return;
+    
+    if (!navigator.geolocation) {
+      toast.error("Tu navegador no soporta GPS");
+      setGpsStatus("error");
+      setGpsActivo(false);
+      return;
     }
 
-    const channel = supabase
-      .channel("rider_pedidos")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "pedidos", filter: `repartidor_id=eq.${riderData.id}` },
-        () => loadData()
-      )
-      .subscribe();
-
-    subRef.current = channel;
-
+    setGpsStatus("esperando");
+    
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        setGpsLat(lat);
+        setGpsLng(lng);
+        setGpsStatus("activo");
+        
+        // Guardar en Supabase
+        if (riderData?.id) {
+          sb.from("ubicaciones_repartidores").upsert({
+            repartidor_id: riderData.id,
+            nombre_repartidor: riderData.nombre,
+            latitud: lat,
+            longitud: lng,
+            estado: estadoRider === "Disponible" ? "disponible" : "ocupado",
+            ultima_actualizacion: new Date().toISOString(),
+          }).then(() => console.log("GPS guardado"));
+        }
+      },
+      (error) => {
+        console.error("GPS error:", error);
+        setGpsStatus("error");
+        toast.error("Error GPS: " + error.message);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+    
+    gpsWatchRef.current = watchId;
+    
     return () => {
-      sb.removeChannel(channel);
+      if (gpsWatchRef.current !== null) {
+        navigator.geolocation.clearWatch(gpsWatchRef.current);
+        gpsWatchRef.current = null;
+      }
     };
-  }, [user, riderData, loadData]);
+  }, [gpsActivo, riderData, estadoRider]);
 
   async function updateEstado(id: string, nuevo: string) {
     const { error } = await sb.from("pedidos").update({ estado: nuevo }).eq("id", id);
@@ -87,7 +138,7 @@ export default function RiderApp() {
     const { error } = await sb.from("repartidores").update({ estado }).eq("id", riderData.id);
     if (!error) {
       setEstadoRider(estado);
-      toast.success(`Ahora est�s: ${estado}`);
+      toast.success(`Ahora estás: ${estado}`);
     } else toast.error(error.message);
   }
 
@@ -96,7 +147,7 @@ export default function RiderApp() {
   const ganancia = entregados.reduce((a, b) => a + (b.pago_repartidor || 0), 0);
 
   function copyInfo(p: any) {
-    const text = `Pedido: #${p.codigo}\nCliente: ${p.cliente}\nContacto: ${p.telefono}\nDirecci�n: ${p.direccion}\nBarrio: ${p.barrio}\nTarifa: ${formatMoney(p.precio)}\nTu pago: ${formatMoney(p.pago_repartidor)}\nFecha: ${formatearFecha(p.created_at)}`;
+    const text = `Pedido: #${p.codigo}\nCliente: ${p.cliente}\nContacto: ${p.telefono}\nDirección: ${p.direccion}\nBarrio: ${p.barrio}\nTarifa: ${formatMoney(p.precio)}\nTu pago: ${formatMoney(p.pago_repartidor)}\nFecha: ${formatearFecha(p.created_at)}`;
     navigator.clipboard.writeText(text);
     toast.success("Copiado al portapapeles");
   }
@@ -182,8 +233,8 @@ export default function RiderApp() {
         {tab === "pedidos" && (
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-white">Mis Pedidos</h2>
-            {activos.length === 0 ? <p className="text-slate-500 text-center py-8">No hay pedidos activos</p> :
-              activos.map((p) => (
+            {pedidos.length === 0 ? <p className="text-slate-500 text-center py-8">No hay pedidos</p> :
+              pedidos.map((p) => (
                 <div key={p.id} className="bg-slate-900 p-5 rounded-xl border border-slate-800">
                   <div className="flex justify-between items-start mb-2">
                     <div>
@@ -203,8 +254,6 @@ export default function RiderApp() {
                     <button onClick={() => window.open(`https://maps.google.com/?q=${encodeURIComponent(p.direccion)}`, "_blank")} className="flex items-center justify-center gap-2 py-2 bg-blue-500/20 text-blue-400 rounded-lg text-sm font-semibold hover:bg-blue-500/30 transition"><MapPin size={16} /> Mapa</button>
                     <button onClick={() => copyInfo(p)} className="flex items-center justify-center gap-2 py-2 bg-slate-800 text-slate-300 rounded-lg text-sm font-semibold hover:bg-slate-700 transition"><Copy size={16} /> Copiar</button>
                   </div>
-
-                  {p.notas && <p className="text-sm text-yellow-400/80 bg-yellow-400/10 p-2 rounded-lg mb-3">Nota: {p.notas}</p>}
 
                   <div className="space-y-2">
                     {(p.estado === "Pendiente" || p.estado === "Asignado") && <button onClick={() => updateEstado(p.id, "Aceptado")} className="w-full py-3 bg-yellow-400 text-slate-900 font-bold rounded-lg hover:bg-yellow-300 transition">Aceptar Pedido</button>}
@@ -236,9 +285,64 @@ export default function RiderApp() {
           </div>
         )}
 
+        {tab === "gps" && (
+          <div className="space-y-4">
+            <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 text-center">
+              <div className={`w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center ${gpsActivo ? "bg-green-500/20" : "bg-yellow-500/20"}`}>
+                <Navigation size={32} className={gpsActivo ? "text-green-400" : "text-yellow-400"} />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">GPS {gpsActivo ? "Activo" : "Inactivo"}</h2>
+              <p className="text-slate-400 text-sm mb-4">
+                {gpsStatus === "esperando" && "Presiona activar para comenzar"}
+                {gpsStatus === "activo" && `Lat: ${gpsLat?.toFixed(6)}, Lng: ${gpsLng?.toFixed(6)}`}
+                {gpsStatus === "detenido" && "GPS detenido"}
+                {gpsStatus === "error" && "Error al obtener ubicación"}
+              </p>
+              
+              <button
+                onClick={() => {
+                  if (gpsActivo) {
+                    if (gpsWatchRef.current !== null) {
+                      navigator.geolocation.clearWatch(gpsWatchRef.current);
+                      gpsWatchRef.current = null;
+                    }
+                    setGpsActivo(false);
+                    setGpsStatus("detenido");
+                    toast.success("GPS detenido");
+                  } else {
+                    setGpsActivo(true);
+                    toast.success("GPS activando...");
+                  }
+                }}
+                className={`w-full py-3 rounded-lg font-bold text-sm transition ${gpsActivo ? "bg-red-500 hover:bg-red-400 text-white" : "bg-green-500 hover:bg-green-400 text-white"}`}
+              >
+                {gpsActivo ? "DETENER GPS" : "ACTIVAR GPS"}
+              </button>
+
+              {gpsActivo && gpsLat && gpsLng && (
+                <div className="mt-4 bg-slate-800 p-3 rounded-lg text-left">
+                  <p className="text-xs text-slate-400">Ubicación actual:</p>
+                  <p className="text-sm text-white">Latitud: {gpsLat.toFixed(8)}</p>
+                  <p className="text-sm text-white">Longitud: {gpsLng.toFixed(8)}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+              <h3 className="text-white font-bold mb-2">Instrucciones</h3>
+              <ul className="text-sm text-slate-400 space-y-1">
+                <li>• Activa el GPS cuando inicies tu turno</li>
+                <li>• Mantén el GPS activo durante tus entregas</li>
+                <li>• El admin podrá ver tu ubicación en tiempo real</li>
+                <li>• Asegúrate de tener activado el GPS del dispositivo</li>
+              </ul>
+            </div>
+          </div>
+        )}
+
         {tab === "liquidacion" && (
           <div className="space-y-4">
-            <h2 className="text-lg font-bold text-white">Mi Liquidaci�n</h2>
+            <h2 className="text-lg font-bold text-white">Mi Liquidación</h2>
             <div className="bg-yellow-400/10 p-6 rounded-xl border border-yellow-400/30 text-center">
               <p className="text-yellow-400 text-sm">Total a Recibir</p>
               <h1 className="text-4xl font-bold text-yellow-400">{formatMoney(ganancia)}</h1>
@@ -256,7 +360,7 @@ export default function RiderApp() {
                   </div>
                 ))}
               </div>
-            ) : <p className="text-slate-500 text-center py-8">A�n no hay entregas</p>}
+            ) : <p className="text-slate-500 text-center py-8">Aún no hay entregas</p>}
           </div>
         )}
 
@@ -269,7 +373,7 @@ export default function RiderApp() {
                 <span className="text-white font-semibold">{profile?.nombre || riderData?.nombre}</span>
               </div>
               <div className="flex justify-between border-b border-slate-800 pb-2">
-                <span className="text-slate-400">Tel�fono</span>
+                <span className="text-slate-400">Teléfono</span>
                 <span className="text-white font-semibold">{riderData?.telefono || "No registrado"}</span>
               </div>
               <div className="flex justify-between border-b border-slate-800 pb-2">
@@ -277,7 +381,7 @@ export default function RiderApp() {
                 <span className="text-white font-semibold">{riderData?.documento || "No registrado"}</span>
               </div>
               <div className="flex justify-between border-b border-slate-800 pb-2">
-                <span className="text-slate-400">Veh�culo</span>
+                <span className="text-slate-400">Vehículo</span>
                 <span className="text-white font-semibold">{riderData?.vehiculo || "No registrado"}</span>
               </div>
               <div className="flex justify-between border-b border-slate-800 pb-2">
@@ -294,7 +398,14 @@ export default function RiderApp() {
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 flex justify-around items-center p-2 z-50">
-        {[{ id: "inicio", icon: Home }, { id: "pedidos", icon: ListOrdered }, { id: "mapa", icon: MapPin }, { id: "liquidacion", icon: DollarSign }, { id: "perfil", icon: User }].map((t) => (
+        {[
+          { id: "inicio" as TabType, icon: Home },
+          { id: "pedidos" as TabType, icon: ListOrdered },
+          { id: "mapa" as TabType, icon: MapPin },
+          { id: "liquidacion" as TabType, icon: DollarSign },
+          { id: "gps" as TabType, icon: Navigation },
+          { id: "perfil" as TabType, icon: User }
+        ].map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)} className={`flex flex-col items-center p-2 rounded transition ${tab === t.id ? "text-yellow-400" : "text-slate-500 hover:text-slate-300"}`}>
             <t.icon size={20} />
             <span className="text-[9px] mt-1 capitalize">{t.id}</span>
