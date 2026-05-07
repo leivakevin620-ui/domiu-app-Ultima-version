@@ -13,11 +13,10 @@ interface Location {
   ultima_actualizacion: string;
 }
 
-// Global singleton to persist map and markers across remounts
+// Global singleton
 let globalMap: any = null;
 let globalMarkers: Record<string, any> = {};
 let globalChannel: any = null;
-let globalInitialized = false;
 
 export default function GoogleMapsLive() {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -86,7 +85,7 @@ export default function GoogleMapsLive() {
         if (!globalChannel) {
           const sb = getSupabaseClient();
           globalChannel = sb
-            .channel("live_riders_map")
+            .channel("live_riders_map_v2")
             .on("postgres_changes", {
               event: "*",
               schema: "public",
@@ -129,7 +128,6 @@ export default function GoogleMapsLive() {
     const updateMarkers = (locs: Location[]) => {
       if (!globalMap) return;
 
-      const bounds = new (window as any).google.maps.LatLngBounds();
       const currentIds = new Set<string>();
       let hasValid = false;
 
@@ -155,12 +153,18 @@ export default function GoogleMapsLive() {
             strokeWeight: 2,
             scale: 8,
           });
+          // Update label
+          marker.setLabel({
+            text: loc.nombre_repartidor || "Repartidor",
+            color: "#fff",
+            fontSize: "12px",
+            fontWeight: "bold",
+          });
         } else {
-          // Create new marker
+          // Create new marker with label
           const marker = new (window as any).google.maps.Marker({
             position,
             map: globalMap,
-            title: loc.nombre_repartidor || "Repartidor",
             icon: {
               path: (window as any).google.maps.SymbolPath.CIRCLE,
               fillColor: color,
@@ -169,18 +173,17 @@ export default function GoogleMapsLive() {
               strokeWeight: 2,
               scale: 8,
             },
+            label: {
+              text: loc.nombre_repartidor || "Repartidor",
+              color: "#fff",
+              fontSize: "12px",
+              fontWeight: "bold",
+            },
           });
 
-          const info = new (window as any).google.maps.InfoWindow({
-            content: `<div style="padding:8px"><strong>${loc.nombre_repartidor || "Repartidor"}</strong><br/>Estado: ${loc.estado}<br/>${new Date(loc.ultima_actualizacion).toLocaleTimeString()}</div>`,
-          });
-
-          marker.addListener("click", () => info.open(globalMap, marker));
           globalMarkers[loc.repartidor_id] = marker;
           console.log("📍 Marker created:", loc.nombre_repartidor);
         }
-
-        bounds.extend(new (window as any).google.maps.LatLng(loc.latitud, loc.longitud));
       });
 
       // Remove old markers
@@ -191,10 +194,9 @@ export default function GoogleMapsLive() {
         }
       });
 
-      // Fit bounds only if no previous bounds set (optional)
-      if (hasValid) {
-        // Optionally fit bounds on first load only
-        // globalMap.fitBounds(bounds);
+      // Optionally fit bounds if needed
+      if (hasValid && Object.keys(globalMarkers).length > 0) {
+        // Maybe fit bounds once? Not needed for live updates.
       }
     };
 
@@ -203,7 +205,6 @@ export default function GoogleMapsLive() {
     return () => {
       mountedRef.current = false;
       // Do NOT clear globalMap, globalMarkers, or globalChannel
-      // This ensures persistence across remounts
     };
   }, []);
 
