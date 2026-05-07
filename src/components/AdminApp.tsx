@@ -17,7 +17,7 @@ import {
 import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
 import dynamic from "next/dynamic";
-import GoogleMapView from "@/components/GoogleMapView";
+import GoogleMapsLive from "@/components/GoogleMapsLive";
 
 /* ======================== RELOJ ======================== */
 function RealTimeClock() {
@@ -209,15 +209,10 @@ export default function AdminApp() {
   useEffect(() => {
     if (!user) return;
     if (subRef.current) sb.removeChannel(subRef.current);
-    const channel = sb.channel("admin_realtime_v2")
-      .on("postgres_changes", { event: "*", schema: "public", table: "pedidos" }, () => load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "repartidores" }, () => load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "locales" }, () => load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "turnos" }, () => load())
-      .subscribe();
-    subRef.current = channel;
-    return () => { sb.removeChannel(channel); };
-  }, [user, load]);
+    // Only listen for changes to refresh data every 60 seconds, not on every change
+    // We'll rely on manual refresh or longer polling
+    return () => { if (subRef.current) sb.removeChannel(subRef.current); };
+  }, [user]);
 
   /* ======================== TURNOS ======================== */
   const abrirTurno = async () => {
@@ -1102,13 +1097,13 @@ export default function AdminApp() {
             </div>
           )}
 
-          {/* ======================== GPS (MAPA GOOGLE MAPS) ======================== */}
+          {/* ======================== GPS (MAPA INTERACTIVO) ======================== */}
           <div className="space-y-6" style={{ display: tab === "gps" ? "block" : "none" }}>
             <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6">
               <h3 className="font-bold text-white mb-4 flex items-center gap-2">
-                <Navigation size={20} className="text-yellow-400" /> GPS en Tiempo Real
+                <Navigation size={20} className="text-yellow-400" /> GPS en Vivo - Repartidores
               </h3>
-              <GoogleMapView />
+              <GoogleMapsLive />
             </div>
           </div>
 
