@@ -18,6 +18,7 @@ import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
 import dynamic from "next/dynamic";
 import GoogleMapsLive from "@/components/GoogleMapsLive";
+import MarketplaceAdmin from "@/components/MarketplaceAdmin";
 
 /* ======================== RELOJ ======================== */
 function RealTimeClock() {
@@ -76,7 +77,7 @@ function extraerDatos(texto: string) {
 }
 
 /* ======================== TIPOS ======================== */
-type Tab = "panel" | "nuevo" | "pedidos" | "repartidores" | "locales" | "turnos" | "gps" | "liquidaciones" | "reportes";
+type Tab = "panel" | "nuevo" | "pedidos" | "repartidores" | "locales" | "turnos" | "gps" | "liquidaciones" | "reportes" | "marketplace";
 
 /* ======================== COMPONENTE ======================== */
 export default function AdminApp() {
@@ -606,6 +607,7 @@ export default function AdminApp() {
     { key: "gps", icon: Navigation, label: "GPS" },
     { key: "liquidaciones", icon: Banknote, label: "Liquidaciones" },
     { key: "reportes", icon: FileText, label: "Reportes" },
+    { key: "marketplace", icon: Store, label: "Marketplace" },
     { key: "locales", icon: Building2, label: "Locales" },
   ];
   const inpC = "w-full px-4 py-3 rounded-xl border border-slate-700 bg-slate-800/50 text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400 text-sm";
@@ -1140,6 +1142,11 @@ export default function AdminApp() {
           )}
 
           {/* ======================== LOCALES ======================== */}
+          {tab === "marketplace" && (
+            <div className="px-6 pb-8">
+              <MarketplaceAdmin />
+            </div>
+          )}
           {tab === "locales" && (
             <div className="space-y-6">
               <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6">
