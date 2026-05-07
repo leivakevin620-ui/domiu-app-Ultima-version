@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
 
 interface Location {
@@ -32,14 +32,6 @@ const getColor = (id: string) => {
 export default function GoogleMapsLive() {
   const mapRef = useRef<HTMLDivElement>(null);
   const mounted = useRef(true);
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<string | null>(null);
-
-  const filtered = useMemo(() => {
-    if (!search) return locations;
-    return locations.filter(l => l.nombre_repartidor?.toLowerCase().includes(search.toLowerCase()));
-  }, [locations, search]);
 
   useEffect(() => {
     mounted.current = true;
@@ -66,7 +58,39 @@ export default function GoogleMapsLive() {
           });
         }
 
-        // 2. Esperar div
+        // 2. Obtener ubicación admin
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+              if (map) {
+                map.setCenter(p);
+                // Marcador admin
+                if (!markers["admin"]) {
+                  markers["admin"] = new (window as any).google.maps.Marker({
+                    position: p,
+                    map,
+                    title: "Tu ubicación",
+                    icon: {
+                      path: (window as any).google.maps.SymbolPath.CIRCLE,
+                      fillColor: "#3b82f6",
+                      fillOpacity: 1,
+                      strokeColor: "#fff",
+                      strokeWeight: 2,
+                      scale: 10,
+                    },
+                  });
+                } else {
+                  markers["admin"].setPosition(p);
+                }
+              }
+            },
+            (err) => console.error("GPS admin error:", err),
+            { enableHighAccuracy: true, timeout: 5000 }
+          );
+        }
+
+        // 3. Esperar div
         let tries = 0;
         while (!mapRef.current && tries < 100 && mounted.current) {
           await new Promise(r => setTimeout(r, 50));
@@ -74,7 +98,7 @@ export default function GoogleMapsLive() {
         }
         if (!mapRef.current || !mounted.current) return;
 
-        // 3. Crear o reutilizar mapa
+        // 4. Crear o reutilizar mapa
         if (!map) {
           map = new (window as any).google.maps.Map(mapRef.current, {
             center: { lat: 10.4, lng: -75.5 },
@@ -89,14 +113,14 @@ export default function GoogleMapsLive() {
           console.log("♻️ Mapa reutilizado");
         }
 
-        // 4. Cargar posiciones iniciales
+        // 5. Cargar posiciones iniciales
         await loadPositions();
 
-        // 5. Suscribirse a cambios (solo una vez)
+        // 6. Suscribirse a cambios (solo una vez)
         if (!channel) {
           const sb = getSupabaseClient();
           channel = sb
-            .channel("simple_realtime")
+            .channel("locations_live")
             .on("postgres_changes", { event: "*", schema: "public", table: "ubicaciones_repartidores" }, () => {
               if (mounted.current) loadPositions();
             })
@@ -115,7 +139,6 @@ export default function GoogleMapsLive() {
         const sb = getSupabaseClient();
         const { data, error } = await sb.from("ubicaciones_repartidores").select("*");
         if (error || !data) return;
-        setLocations(data);
         updateAll(data);
       } catch (e) { console.error("Error cargando:", e); }
     };
@@ -133,10 +156,10 @@ export default function GoogleMapsLive() {
         // Historial
         if (!history[loc.repartidor_id]) history[loc.repartidor_id] = [];
         history[loc.repartidor_id].push(pos);
-        if (history[loc.repartidor_id].length > 50) history[loc.repartidor_id] = history[loc.repartidor_id].slice(-50);
+        if (history[loc.repartidor_id].length > 100) history[loc.repartidor_id] = history[loc.repartidor_id].slice(-100);
 
         if (markers[loc.repartidor_id]) {
-          // Actualizar marcador existente
+          // Actualizar marcador
           const marker = markers[loc.repartidor_id];
           marker.setPosition(pos);
           marker.setIcon({
@@ -147,8 +170,8 @@ export default function GoogleMapsLive() {
             strokeWeight: 2,
             scale: 8,
           });
-          // Actualizar etiqueta (nombre completo, truncado si es muy largo)
-          const shortName = loc.nombre_repartidor ? loc.nombre_repartidor.substring(0, 12) : "R";
+          // Actualizar etiqueta (nombre completo, truncado)
+          const shortName = (loc.nombre_repartidor || "R").substring(0, 12);
           marker.setLabel({
             text: shortName,
             color: "#fff",
@@ -156,9 +179,9 @@ export default function GoogleMapsLive() {
             fontWeight: "bold",
           });
         } else {
-          // Crear nuevo marcador con nombre completo (truncado)
-          const shortName = loc.nombre_repartidor ? loc.nombre_repartidor.substring(0, 12) : "R";
-          const marker = new (window as any).google.maps.Marker({
+          // Crear marcador con nombre
+          const shortName = (loc.nombre_repartidor || "R").substring(0, 12);
+          markers[loc.repartidor_id] = new (window as any).google.maps.Marker({
             position: pos,
             map,
             icon: {
@@ -179,10 +202,10 @@ export default function GoogleMapsLive() {
             title: loc.nombre_repartidor || "Repartidor",
           });
 
-          // InfoWindow con información completa (se abre al hacer clic)
+          // InfoWindow con info completa (se abre al hacer clic)
           const iw = new (window as any).google.maps.InfoWindow({
             content: `
-              <div style="padding:12px;min-width:220px;">
+              <div style="padding:12px;min-width:200px;">
                 <div style="font-weight:bold;font-size:14px;margin-bottom:8px;">${loc.nombre_repartidor || "Repartidor"}</div>
                 <div style="font-size:12px;margin-bottom:4px;">
                   <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${loc.estado==='disponible'?'#22c55e':loc.estado==='ocupado'?'#eab308':'#94a3b8'};margin-right:6px;"></span>
@@ -195,14 +218,12 @@ export default function GoogleMapsLive() {
             `,
           });
 
-          marker.addListener("click", () => {
+          markers[loc.repartidor_id].addListener("click", () => {
             if (infoWindow) infoWindow.close();
-            iw.open(map, marker);
+            iw.open(map, markers[loc.repartidor_id]);
             infoWindow = iw;
-            setSelected(loc.repartidor_id);
           });
 
-          markers[loc.repartidor_id] = marker;
           console.log("📍 Marcador:", loc.nombre_repartidor);
         }
 
@@ -223,9 +244,9 @@ export default function GoogleMapsLive() {
         }
       });
 
-      // Eliminar los que ya no existen
+      // Eliminar los que ya no están
       Object.keys(markers).forEach(id => {
-        if (!currentIds.has(id)) {
+        if (!currentIds.has(id) && id !== "admin") {
           markers[id].setMap(null);
           delete markers[id];
           if (polylines[id]) { polylines[id].setMap(null); delete polylines[id]; }
@@ -234,90 +255,20 @@ export default function GoogleMapsLive() {
       });
     };
 
-    const selectRider = (id: string) => {
-      setSelected(id);
-      const loc = locations.find(l => l.repartidor_id === id);
-      if (loc && map) {
-        map.panTo({ lat: loc.latitud, lng: loc.longitud });
-        map.setZoom(16);
-        if (markers[id]) {
-          if (infoWindow) infoWindow.close();
-          markers[id].infoWindow?.open(map, markers[id]);
-        }
-      }
-    };
-
     init();
 
     return () => {
       mounted.current = false;
-      // NO limpiar nada
+      // NO limpiar nada para persistencia
     };
   }, []);
 
   return (
     <div>
-      <div ref={mapRef} style={{ width: "100%", height: "400px", borderRadius: "12px", background: "#1e293b" }} />
-
-      {/* Lista abajo: INFORMACIÓN COMPLETA */}
-      <div className="mt-4 bg-slate-900 rounded-xl border border-slate-800 p-4">
-        <div className="flex items-center gap-3 mb-3">
-          <input
-            type="text"
-            placeholder="Buscar repartidor..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="flex-1 bg-slate-800 text-white px-4 py-2 rounded-lg text-sm border border-slate-700 focus:border-yellow-400 focus:outline-none"
-          />
-          <span className="text-slate-400 text-sm">{filtered.length} con GPS activo</span>
-        </div>
-
-        <div className="space-y-2 max-h-56 overflow-y-auto">
-          {filtered.length === 0 ? (
-            <p className="text-slate-500 text-sm text-center py-4">
-              {search ? "No encontrado" : "No hay repartidores con GPS activo"}
-            </p>
-          ) : (
-            filtered.map(loc => {
-              const color = getColor(loc.repartidor_id);
-              const isSelected = selected === loc.repartidor_id;
-              const points = history[loc.repartidor_id]?.length || 0;
-              return (
-                <div
-                  key={loc.repartidor_id}
-                  onClick={() => selectRider(loc.repartidor_id)}
-                  className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${isSelected ? "bg-slate-700" : "hover:bg-slate-800"}`}
-                >
-                  {/* Círculo de color con iniciales */}
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm"
-                    style={{ background: color }}
-                  >
-                    {loc.nombre_repartidor ? loc.nombre_repartidor.substring(0, 2).toUpperCase() : "R"}
-                  </div>
-                  
-                  <div className="flex-1">
-                    <p className="text-white text-sm font-semibold">{loc.nombre_repartidor || "Repartidor"}</p>
-                    <p className="text-slate-400 text-xs">
-                      {loc.latitud?.toFixed(4)}, {loc.longitud?.toFixed(4)}
-                    </p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className={`inline-block w-2 h-2 rounded-full ${loc.estado === 'disponible' ? 'bg-green-500' : loc.estado === 'ocupado' ? 'bg-yellow-500' : 'bg-slate-500'}`} />
-                      <span className="text-slate-400 text-xs">{loc.estado}</span>
-                      <span className="text-slate-500 text-xs">•</span>
-                      <span className="text-slate-500 text-xs">{new Date(loc.ultima_actualizacion).toLocaleTimeString()}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="text-right">
-                    <span className="text-xs" style={{ color }}>● {points} pts</span>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
+      <div
+        ref={mapRef}
+        style={{ width: "100%", height: "500px", borderRadius: "12px", background: "#1e293b" }}
+      />
     </div>
   );
 }
