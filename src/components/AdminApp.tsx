@@ -1089,14 +1089,6 @@ export default function AdminApp() {
               </div>
             </div>
           )}
-                <div className="mt-4 bg-slate-800 p-4 rounded-xl">
-                  <p className="text-slate-500 text-sm">
-                    Esta lista se actualiza en tiempo real. Para ver el mapa, verifica la configuración de Google Maps API Key.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* ======================== REPORTES ======================== */}
           {tab === "reportes" && (
