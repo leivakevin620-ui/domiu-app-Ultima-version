@@ -13,10 +13,11 @@ interface Location {
   ultima_actualizacion: string;
 }
 
-// Global singleton
+// Singleton
 let globalMap: any = null;
-let globalMarkers: Record<string, any> = {};
+let globalOverlays: Record<string, any> = {};
 let globalChannel: any = null;
+let globalInitialized = false;
 
 export default function GoogleMapsLive() {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -37,7 +38,7 @@ export default function GoogleMapsLive() {
       }
 
       try {
-        // Load Google Maps JS API once
+        // Load Google Maps
         if (!(window as any).google?.maps) {
           await new Promise<void>((resolve, reject) => {
             const script = document.createElement("script");
@@ -81,11 +82,11 @@ export default function GoogleMapsLive() {
         // Load initial positions
         await loadPositions();
 
-        // Subscribe to realtime changes (only once globally)
+        // Subscribe to realtime changes (only once)
         if (!globalChannel) {
           const sb = getSupabaseClient();
           globalChannel = sb
-            .channel("live_riders_map_v2")
+            .channel("live_riders_overlay")
             .on("postgres_changes", {
               event: "*",
               schema: "public",
@@ -119,92 +120,130 @@ export default function GoogleMapsLive() {
 
         if (error || !data || !mountedRef.current) return;
 
-        updateMarkers(data);
+        updateOverlays(data);
       } catch (e) {
         console.error("Error loading positions:", e);
       }
     };
 
-    const updateMarkers = (locs: Location[]) => {
+    const updateOverlays = (locs: Location[]) => {
       if (!globalMap) return;
 
       const currentIds = new Set<string>();
-      let hasValid = false;
+      let overlayClass: any = null;
+
+      // Define overlay class if not defined
+      if (!(window as any).RiderOverlay) {
+        class RiderOverlay extends (window as any).google.maps.OverlayView {
+          private position: any;
+          private div: HTMLDivElement | null = null;
+          private loc: Location;
+
+          constructor(pos: any, loc: Location) {
+            super();
+            this.position = pos;
+            this.loc = loc;
+            this.setMap(globalMap);
+          }
+
+          onAdd() {
+            this.div = document.createElement("div");
+            this.div.style.position = "absolute";
+            this.div.style.background = this.loc.estado === "disponible" ? "#22c55e" : 
+                                     this.loc.estado === "ocupado" ? "#eab308" : "#94a3b8";
+            this.div.style.color = "#fff";
+            this.div.style.padding = "6px 10px";
+            this.div.style.borderRadius = "8px";
+            this.div.style.fontSize = "12px";
+            this.div.style.fontWeight = "bold";
+            this.div.style.boxShadow = "0 2px 6px rgba(0,0,0,0.3)";
+            this.div.style.whiteSpace = "nowrap";
+            this.div.style.cursor = "pointer";
+            this.div.innerHTML = `
+              <div>${this.loc.nombre_repartidor || "Repartidor"}</div>
+              <div style="font-size:10px;font-weight:normal;margin-top:2px;">
+                ${this.loc.estado} • ${new Date(this.loc.ultima_actualizacion).toLocaleTimeString()}
+              </div>
+              <div style="font-size:10px;font-weight:normal;">
+                ${this.loc.latitud?.toFixed(4)}, ${this.loc.longitud?.toFixed(4)}
+              </div>
+            `;
+            const panes = this.getPanes();
+            panes?.overlayLayer.appendChild(this.div);
+          }
+
+          draw() {
+            const projection = this.getProjection();
+            if (!projection || !this.div) return;
+            const point = projection.fromLatLngToDivPixel(this.position);
+            if (point) {
+              this.div.style.left = (point.x - this.div.offsetWidth / 2) + "px";
+              this.div.style.top = (point.y - this.div.offsetHeight - 10) + "px";
+            }
+          }
+
+          onRemove() {
+            if (this.div && this.div.parentNode) {
+              this.div.parentNode.removeChild(this.div);
+              this.div = null;
+            }
+          }
+
+          updatePosition(pos: any, loc: Location) {
+            this.position = pos;
+            this.loc = loc;
+            if (this.div) {
+              this.div.style.background = loc.estado === "disponible" ? "#22c55e" : 
+                                         loc.estado === "ocupado" ? "#eab308" : "#94a3b8";
+              this.div.innerHTML = `
+                <div>${loc.nombre_repartidor || "Repartidor"}</div>
+                <div style="font-size:10px;font-weight:normal;margin-top:2px;">
+                  ${loc.estado} • ${new Date(loc.ultima_actualizacion).toLocaleTimeString()}
+                </div>
+                <div style="font-size:10px;font-weight:normal;">
+                  ${loc.latitud?.toFixed(4)}, ${loc.longitud?.toFixed(4)}
+                </div>
+              `;
+            }
+            this.draw();
+          }
+        }
+        (window as any).RiderOverlay = RiderOverlay;
+      }
 
       locs.forEach(loc => {
         if (!loc.latitud || !loc.longitud) return;
         currentIds.add(loc.repartidor_id);
-        hasValid = true;
 
-        const color = loc.estado === "disponible" ? "#22c55e" :
-                      loc.estado === "ocupado" ? "#eab308" : "#94a3b8";
+        const pos = new (window as any).google.maps.LatLng(loc.latitud, loc.longitud);
 
-        const position = { lat: loc.latitud, lng: loc.longitud };
-
-        if (globalMarkers[loc.repartidor_id]) {
-          // Update existing marker
-          const marker = globalMarkers[loc.repartidor_id];
-          marker.setPosition(position);
-          marker.setIcon({
-            path: (window as any).google.maps.SymbolPath.CIRCLE,
-            fillColor: color,
-            fillOpacity: 1,
-            strokeColor: "#fff",
-            strokeWeight: 2,
-            scale: 8,
-          });
-          // Update label
-          marker.setLabel({
-            text: loc.nombre_repartidor || "Repartidor",
-            color: "#fff",
-            fontSize: "12px",
-            fontWeight: "bold",
-          });
+        if (globalOverlays[loc.repartidor_id]) {
+          // Update existing overlay
+          const overlay = globalOverlays[loc.repartidor_id];
+          overlay.updatePosition(pos, loc);
         } else {
-          // Create new marker with label
-          const marker = new (window as any).google.maps.Marker({
-            position,
-            map: globalMap,
-            icon: {
-              path: (window as any).google.maps.SymbolPath.CIRCLE,
-              fillColor: color,
-              fillOpacity: 1,
-              strokeColor: "#fff",
-              strokeWeight: 2,
-              scale: 8,
-            },
-            label: {
-              text: loc.nombre_repartidor || "Repartidor",
-              color: "#fff",
-              fontSize: "12px",
-              fontWeight: "bold",
-            },
-          });
-
-          globalMarkers[loc.repartidor_id] = marker;
-          console.log("📍 Marker created:", loc.nombre_repartidor);
+          // Create new overlay
+          const OverlayClass = (window as any).RiderOverlay;
+          const overlay = new OverlayClass(pos, loc);
+          globalOverlays[loc.repartidor_id] = overlay;
+          console.log("📍 Overlay created:", loc.nombre_repartidor);
         }
       });
 
-      // Remove old markers
-      Object.keys(globalMarkers).forEach(id => {
+      // Remove old overlays
+      Object.keys(globalOverlays).forEach(id => {
         if (!currentIds.has(id)) {
-          globalMarkers[id].setMap(null);
-          delete globalMarkers[id];
+          globalOverlays[id].setMap(null);
+          delete globalOverlays[id];
         }
       });
-
-      // Optionally fit bounds if needed
-      if (hasValid && Object.keys(globalMarkers).length > 0) {
-        // Maybe fit bounds once? Not needed for live updates.
-      }
     };
 
     init();
 
     return () => {
       mountedRef.current = false;
-      // Do NOT clear globalMap, globalMarkers, or globalChannel
+      // Do NOT clear globalMap, globalOverlays, or globalChannel
     };
   }, []);
 
