@@ -23,14 +23,15 @@ import GoogleMapView from "@/components/GoogleMapView";
 function RealTimeClock() {
   const [time, setTime] = useState("");
   useEffect(() => {
+    const p = (n: number) => String(n).padStart(2, "0");
     const tick = () => {
       const d = new Date();
-      const p = (n: number) => String(n).padStart(2, "0");
       const h = d.getHours();
       setTime(p(d.getDate()) + "/" + p(d.getMonth() + 1) + "/" + d.getFullYear() + " " + p(h % 12 || 12) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds()) + " " + (h >= 12 ? "PM" : "AM"));
     };
     tick();
-    const i = setInterval(tick, 1000);
+    // Actualizar cada 60 segundos en lugar de 1 segundo
+    const i = setInterval(tick, 60000);
     return () => clearInterval(i);
   }, []);
   return <span className="font-mono text-sm text-slate-400">{time}</span>;
@@ -184,6 +185,7 @@ export default function AdminApp() {
         sb.from("turnos").select("*").eq("activo", false).order("closed_at", { ascending: false }).limit(20),
         sb.from("ubicaciones_repartidores").select("*").order("ultima_actualizacion", { ascending: false }),
       ]);
+
       setPedidos(rP.data || []);
       setReps(rR.data || []);
       setLocs(rL.data || []);
@@ -195,11 +197,12 @@ export default function AdminApp() {
 
   useEffect(() => { load(); }, [load]);
 
+  // NO POLLING - Solo Realtime
   // Polling cada 60 segundos (respaldo del realtime)
-  useEffect(() => {
-    const interval = setInterval(() => load(), 60000);
-    return () => clearInterval(interval);
-  }, [load]);
+  // useEffect(() => {
+  //   const interval = setInterval(() => load(), 60000);
+  //   return () => clearInterval(interval);
+  // }, [load]);
 
   /* Realtime */
   const subRef = useRef<any>(null);
