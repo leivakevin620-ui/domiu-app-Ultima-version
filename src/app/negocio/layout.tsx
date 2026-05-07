@@ -1,10 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Store, ClipboardList, Package, Settings, LogOut, Bell, Menu, X, LayoutDashboard } from "lucide-react";
+import { Store, ClipboardList, Package, Settings, LogOut, Bell, Menu, X, LayoutDashboard, XCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { NegocioProvider, useNegocio } from "@/context/negocio/NegocioContext";
+import { getSupabaseClient } from "@/lib/supabase";
+
+function NewOrderNotification() {
+  const { negocio } = useNegocio();
+  const [notificacion, setNotificacion] = useState<{ codigo: string; cliente: string } | null>(null);
+
+  useEffect(() => {
+    if (!negocio?.id) return;
+    const sub = getSupabaseClient()
+      .channel("negocio-notificaciones")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "pedidos_cliente", filter: `negocio_id=eq.${negocio.id}` }, (payload: any) => {
+        const nuevo = payload.new;
+        setNotificacion({ codigo: nuevo.codigo, cliente: nuevo.cliente_nombre });
+        setTimeout(() => setNotificacion(null), 6000);
+      })
+      .subscribe();
+    return () => { sub.unsubscribe(); };
+  }, [negocio?.id]);
+
+  if (!notificacion) return null;
+
+  return (
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-32px)] max-w-md animate-slide-down">
+      <div className="bg-domi-yellow text-domi-black rounded-2xl p-4 shadow-2xl shadow-domi-yellow/20 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-domi-black/10 flex items-center justify-center shrink-0">
+          <Bell size={20} className="text-domi-black" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm">Nuevo pedido recibido</p>
+          <p className="text-xs text-domi-black/70 truncate">#{notificacion.codigo} - {notificacion.cliente}</p>
+        </div>
+        <button onClick={() => setNotificacion(null)} className="w-8 h-8 rounded-full bg-domi-black/10 flex items-center justify-center shrink-0 hover:bg-domi-black/20">
+          <XCircle size={16} className="text-domi-black" />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const tabs = [
   { href: "/negocio", label: "Inicio", icon: LayoutDashboard },
@@ -141,6 +179,7 @@ export default function NegocioLayout({ children }: { children: React.ReactNode 
   return (
     <NegocioProvider userId={user?.id || ""}>
       <div className="min-h-screen bg-domi-black text-white">
+        <NewOrderNotification />
         <NegocioNav />
         <main className="md:ml-64 pb-20 md:pb-8">
           <div className="max-w-6xl mx-auto px-4 py-6">

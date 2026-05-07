@@ -49,7 +49,7 @@ export default function PedidoDetailPage() {
     setLoading(true);
     const { error } = await getSupabaseClient()
       .from("pedidos_cliente")
-      .update({ estado_negocio: nuevoEstado, estado: nuevoEstado === "listo_para_recoger" ? "preparacion" : nuevoEstado === "en_preparacion" ? "recibido" : undefined, updated_at: new Date().toISOString() })
+      .update({ estado_negocio: nuevoEstado, estado: nuevoEstado === "en_preparacion" ? "preparacion" : undefined, updated_at: new Date().toISOString() })
       .eq("id", id);
     if (!error) {
       setPedido((prev) => prev ? { ...prev, estado_negocio: nuevoEstado } : prev);
