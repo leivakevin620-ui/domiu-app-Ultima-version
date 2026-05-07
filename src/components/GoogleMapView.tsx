@@ -13,140 +13,151 @@ interface Location {
   ultima_actualizacion: string;
 }
 
+// Variables persistentes a nivel de módulo
+let globalMap: any = null;
+let globalMarkers: Record<string, any> = {};
+let mapInitialized = false;
+
 export default function GoogleMapView() {
   const mapRef = useRef<HTMLDivElement>(null);
-  const [error, setError] = useState("");
+  const [locations, setLocations] = useState<Location[]>([]);
   const [hasData, setHasData] = useState(false);
-  const mapInstance = useRef<any>(null);
-  const markersRef = useRef<Record<string, any>>({});
+  const [error, setError] = useState("");
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) {
-      setError("Falta NEXT_PUBLIC_GOOGLE_MAPS_API_KEY");
-      return;
-    }
-
-    let mounted = true;
-    let realtimeChannel: any = null;
-
-    const init = async () => {
+    mountedRef.current = true;
+    
+    const initMap = async () => {
       try {
-        // 1. Cargar Google Maps
+        const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+        if (!apiKey) {
+          setError("Falta NEXT_PUBLIC_GOOGLE_MAPS_API_KEY");
+          return;
+        }
+
+        // Cargar Google Maps una sola vez
         if (!(window as any).google?.maps) {
           await new Promise<void>((resolve, reject) => {
             const script = document.createElement("script");
             script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
             script.async = true;
-            script.onload = () => {
-              console.log("✅ Google Maps loaded");
-              resolve();
-            };
+            script.onload = () => resolve();
             script.onerror = () => reject(new Error("Error cargando Google Maps"));
             document.head.appendChild(script);
           });
         }
 
-        // 2. Esperar al div del mapa
+        // Esperar al div
         let tries = 0;
-        while (!mapRef.current && tries < 100 && mounted) {
-          await new Promise(r => setTimeout(r, 50));
+        while (!mapRef.current && tries < 50 && mountedRef.current) {
+          await new Promise(r => setTimeout(r, 100));
           tries++;
         }
 
-        if (!mapRef.current || !mounted) return;
+        if (!mapRef.current || !mountedRef.current) return;
 
-        // 3. Crear mapa
-        const map = new (window as any).google.maps.Map(mapRef.current, {
-          center: { lat: 10.4, lng: -75.5 },
-          zoom: 12,
-          mapTypeId: "roadmap",
-        });
+        // Si el mapa ya existe globalmente, moverlo al nuevo div
+        if (globalMap && mapRef.current.children.length === 0) {
+          const oldDiv = globalMap.getDiv();
+          if (oldDiv && oldDiv.parentNode) {
+            oldDiv.parentNode.removeChild(oldDiv);
+          }
+          mapRef.current.appendChild(globalMap.getDiv());
+          console.log("♻️ Mapa reutilizado");
+        } else if (!globalMap) {
+          // Crear mapa por primera vez
+          globalMap = new (window as any).google.maps.Map(mapRef.current, {
+            center: { lat: 10.4, lng: -75.5 },
+            zoom: 12,
+            mapTypeId: "roadmap",
+          });
+          console.log("✅ Mapa creado (primera vez)");
+        }
 
-        mapInstance.current = map;
-        console.log("✅ Mapa creado");
-
-        // 4. Cargar ubicaciones iniciales
+        // Cargar ubicaciones iniciales
         const sb = getSupabaseClient();
-        const { data, error: dbError } = await sb
+        const { data } = await sb
           .from("ubicaciones_repartidores")
           .select("*");
 
-        if (dbError) {
-          console.error("❌ Error DB:", dbError);
-          setError("Error cargando ubicaciones");
-          return;
+        if (data && mountedRef.current) {
+          setLocations(data);
+          setHasData(data.length > 0);
+          updateMarkers(data);
+          
+          // Solo ajustar bounds la primera vez
+          if (!mapInitialized && data.length > 0) {
+            const bounds = new (window as any).google.maps.LatLngBounds();
+            data.forEach((loc: Location) => {
+              if (loc.latitud && loc.longitud) {
+                bounds.extend(new (window as any).google.maps.LatLng(loc.latitud, loc.longitud));
+              }
+            });
+            globalMap.fitBounds(bounds);
+            mapInitialized = true;
+            console.log("🗺️ Bounds ajustados (primera vez)");
+          }
         }
 
-        console.log("📍 Datos recibidos:", data);
-
-        if (data && data.length > 0) {
-          setHasData(true);
-          updateMarkers(data, true); // true = primera vez, ajustar mapa
-        } else {
-          console.log("⚠️ No hay datos en ubicaciones_repartidores");
-          setHasData(false);
+        // Suscribirse a cambios (solo una vez)
+        if (!globalMap._channel) {
+          const channel = sb.channel("gps_admin_stable_v4");
+          channel
+            .on("postgres_changes", {
+              event: "*",
+              schema: "public",
+              table: "ubicaciones_repartidores"
+            }, async (payload: any) => {
+              if (!mountedRef.current) return;
+              
+              const { data: newData } = await sb
+                .from("ubicaciones_repartidores")
+                .select("*");
+              
+              if (newData && mountedRef.current) {
+                setLocations(newData);
+                setHasData(newData.length > 0);
+                updateMarkers(newData);
+              }
+            })
+            .subscribe();
+          
+          globalMap._channel = channel;
+          console.log("📡 Realtime suscrito");
         }
-
-        // 5. Suscribirse a cambios (realtime)
-        realtimeChannel = sb.channel("gps_admin_simple");
-        realtimeChannel
-          .on("postgres_changes", {
-            event: "*",
-            schema: "public",
-            table: "ubicaciones_repartidores"
-          }, (payload: any) => {
-            console.log("🔄 Cambio detectado:", payload);
-            if (!mounted) return;
-            
-            // Recargar datos
-            sb.from("ubicaciones_repartidores")
-              .select("*")
-              .then(({ data: newData }) => {
-                if (newData && mounted) {
-                  setHasData(newData.length > 0);
-                  updateMarkers(newData, false); // false = no ajustar mapa
-                }
-              });
-          })
-          .subscribe((status: string) => {
-            console.log("📡 Realtime status:", status);
-          });
 
       } catch (err: any) {
-        console.error("❌ Error inicializando:", err);
-        if (mounted) setError(err.message);
+        console.error("Error:", err);
+        if (mountedRef.current) setError(err.message);
       }
     };
 
-    init();
+    initMap();
 
     return () => {
-      mounted = false;
-      if (realtimeChannel) {
-        getSupabaseClient().removeChannel(realtimeChannel);
-      }
+      mountedRef.current = false;
+      // No limpiar globalMap al desmontar para reutilizarlo
     };
   }, []);
 
-  const updateMarkers = (locations: Location[], firstTime: boolean) => {
-    const map = mapInstance.current;
-    if (!map) return;
+  const updateMarkers = (locs: Location[]) => {
+    if (!globalMap) return;
 
-    const bounds = new (window as any).google.maps.LatLngBounds();
-    let hasValidLocation = false;
+    const currentIds = new Set<string>();
 
-    locations.forEach(loc => {
+    locs.forEach(loc => {
       if (!loc.latitud || !loc.longitud) return;
+      currentIds.add(loc.repartidor_id);
 
       const color = loc.estado === "disponible" ? "#22c55e" : 
                     loc.estado === "ocupado" ? "#eab308" : "#94a3b8";
-
+      
       const position = { lat: loc.latitud, lng: loc.longitud };
 
-      if (markersRef.current[loc.repartidor_id]) {
+      if (globalMarkers[loc.repartidor_id]) {
         // Actualizar marcador existente (sin recrear)
-        const marker = markersRef.current[loc.repartidor_id];
+        const marker = globalMarkers[loc.repartidor_id];
         marker.setPosition(position);
         marker.setIcon({
           path: (window as any).google.maps.SymbolPath.CIRCLE,
@@ -160,7 +171,7 @@ export default function GoogleMapView() {
         // Crear nuevo marcador
         const marker = new (window as any).google.maps.Marker({
           position,
-          map,
+          map: globalMap,
           title: loc.nombre_repartidor || "Repartidor",
           icon: {
             path: (window as any).google.maps.SymbolPath.CIRCLE,
@@ -176,29 +187,24 @@ export default function GoogleMapView() {
           content: `<div style="padding:8px"><strong>${loc.nombre_repartidor || "Repartidor"}</strong><br/>Estado: ${loc.estado}<br/>${new Date(loc.ultima_actualizacion).toLocaleTimeString()}</div>`,
         });
 
-        marker.addListener("click", () => info.open(map, marker));
-        markersRef.current[loc.repartidor_id] = marker;
-        console.log("📌 Marcador creado:", loc.nombre_repartidor, position);
+        marker.addListener("click", () => info.open(globalMap, marker));
+        globalMarkers[loc.repartidor_id] = marker;
       }
-
-      bounds.extend(new (window as any).google.maps.LatLng(loc.latitud, loc.longitud));
-      hasValidLocation = true;
     });
 
-    // Solo ajustar el mapa la primera vez
-    if (firstTime && hasValidLocation) {
-      map.fitBounds(bounds);
-      console.log("🗺️ Mapa ajustado a bounds");
-    }
+    // Eliminar marcadores que ya no existen
+    Object.keys(globalMarkers).forEach(id => {
+      if (!currentIds.has(id)) {
+        globalMarkers[id].setMap(null);
+        delete globalMarkers[id];
+      }
+    });
   };
 
   if (error) {
     return (
       <div className="bg-slate-800 p-6 rounded-xl text-center">
         <p className="text-red-400 font-bold">Error: {error}</p>
-        <p className="text-slate-400 text-sm mt-2">
-          Verifica la API Key y que el dominio esté autorizado en Google Cloud Console
-        </p>
       </div>
     );
   }
@@ -209,13 +215,11 @@ export default function GoogleMapView() {
         ref={mapRef}
         style={{ width: "100%", height: "400px", borderRadius: "12px", background: "#1e293b" }}
       />
-      {!hasData && (
-        <div className="mt-4 bg-slate-800 p-4 rounded-xl text-center">
-          <p className="text-slate-400 text-sm">
-            No hay repartidores conectados. Para ver el GPS, asegúrate de que los repartidores tengan el GPS activado en su app.
-          </p>
-        </div>
-      )}
+      <div className="mt-4 space-y-2">
+        {!hasData && (
+          <p className="text-slate-400 text-sm text-center">No hay repartidores conectados</p>
+        )}
+      </div>
     </div>
   );
 }
