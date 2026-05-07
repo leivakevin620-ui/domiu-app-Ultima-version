@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
 
 interface Location {
@@ -15,16 +15,47 @@ interface Location {
 
 // Singleton
 let globalMap: any = null;
-let globalOverlays: Record<string, any> = {};
+let globalMarkers: Record<string, any> = {};
 let globalChannel: any = null;
-let globalDirectionsRenderer: any = null;
-let globalAdminMarker: any = null;
+let globalInfoWindow: any = null;
+
+// Generar color único basado en ID
+const getColorForId = (id: string) => {
+  const colors = [
+    "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6",
+    "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1"
+  ];
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
+
+// Obtener iniciales del nombre
+const getInitials = (name: string) => {
+  if (!name) return "?";
+  const parts = name.split(" ");
+  return parts.length > 1
+    ? (parts[0][0] + parts[1][0]).toUpperCase()
+    : name.substring(0, 2).toUpperCase();
+};
 
 export default function GoogleMapsLive() {
   const mapRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
   const [adminPos, setAdminPos] = useState<{lat: number, lng: number} | null>(null);
+  const [ridersList, setRidersList] = useState<Location[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedRider, setSelectedRider] = useState<string | null>(null);
+
+  // Filtrar repartidores por búsqueda
+  const filteredRiders = useMemo(() => {
+    if (!searchTerm) return ridersList;
+    return ridersList.filter(r =>
+      r.nombre_repartidor?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [ridersList, searchTerm]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -65,34 +96,12 @@ export default function GoogleMapsLive() {
                 lng: position.coords.longitude,
               };
               setAdminPos(pos);
-              console.log("📍 Admin location:", pos);
-              
               if (globalMap) {
                 globalMap.setCenter(pos);
-                // Add admin marker
-                if (!globalAdminMarker) {
-                  globalAdminMarker = new (window as any).google.maps.Marker({
-                    position: pos,
-                    map: globalMap,
-                    title: "Tu ubicación (Admin)",
-                    icon: {
-                      path: (window as any).google.maps.SymbolPath.CIRCLE,
-                      fillColor: "#3b82f6",
-                      fillOpacity: 1,
-                      strokeColor: "#fff",
-                      strokeWeight: 2,
-                      scale: 10,
-                    },
-                  });
-                } else {
-                  globalAdminMarker.setPosition(pos);
-                }
               }
             },
             (error) => {
               console.error("GPS Admin error:", error);
-              // Default to Cartagena if can't get location
-              if (globalMap) globalMap.setCenter({ lat: 10.4, lng: -75.5 });
             },
             { enableHighAccuracy: true, timeout: 5000 }
           );
@@ -130,7 +139,7 @@ export default function GoogleMapsLive() {
         if (!globalChannel) {
           const sb = getSupabaseClient();
           globalChannel = sb
-            .channel("live_riders_v3")
+            .channel("live_riders_v4")
             .on("postgres_changes", {
               event: "*",
               schema: "public",
@@ -164,207 +173,207 @@ export default function GoogleMapsLive() {
 
         if (error || !data || !mountedRef.current) return;
 
-        updateOverlays(data);
+        setRidersList(data);
+        updateMarkers(data);
       } catch (e) {
         console.error("Error loading positions:", e);
       }
     };
 
-    const updateOverlays = (locs: Location[]) => {
+    const updateMarkers = (locs: Location[]) => {
       if (!globalMap) return;
 
       const currentIds = new Set<string>();
-
-      // Define overlay class if not defined
-      if (!(window as any).RiderOverlay) {
-        class RiderOverlay extends (window as any).google.maps.OverlayView {
-          private position: any;
-          private div: HTMLDivElement | null = null;
-          private loc: Location;
-          private repartidorId: string;
-
-          constructor(pos: any, loc: Location, repartidorId: string) {
-            super();
-            this.position = pos;
-            this.loc = loc;
-            this.repartidorId = repartidorId;
-            this.setMap(globalMap);
-          }
-
-          onAdd() {
-            this.div = document.createElement("div");
-            this.div.style.position = "absolute";
-            this.div.style.cursor = "pointer";
-            this.div.style.background = this.loc.estado === "disponible" ? "#22c55e" : 
-                                       this.loc.estado === "ocupado" ? "#eab308" : "#94a3b8";
-            this.div.style.color = "#fff";
-            this.div.style.padding = "8px 12px";
-            this.div.style.borderRadius = "8px";
-            this.div.style.fontSize = "12px";
-            this.div.style.fontWeight = "bold";
-            this.div.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
-            this.div.style.whiteSpace = "nowrap";
-            this.div.innerHTML = `
-              <div>${this.loc.nombre_repartidor || "Repartidor"}</div>
-              <div style="font-size:10px;font-weight:normal;margin-top:2px;">
-                ${this.loc.estado} • ${new Date(this.loc.ultima_actualizacion).toLocaleTimeString()}
-              </div>
-              <div style="font-size:10px;font-weight:normal;">
-                ${this.loc.latitud?.toFixed(4)}, ${this.loc.longitud?.toFixed(4)}
-              </div>
-              <div style="font-size:10px;font-weight:normal;color:#1e40af;margin-top:2px;cursor:pointer;" 
-                   class="ver-trayectoria">
-                Ver trayectoria
-              </div>
-            `;
-
-            // Click to show route
-            this.div.querySelector(".ver-trayectoria")?.addEventListener("click", (e) => {
-              e.stopPropagation();
-              if (adminPos) {
-                showRoute(adminPos, this.position, this.loc.nombre_repartidor);
-              } else {
-                alert("Activa tu GPS para ver la trayectoria");
-              }
-            });
-
-            const panes = this.getPanes();
-            panes?.overlayLayer.appendChild(this.div);
-          }
-
-          draw() {
-            const projection = this.getProjection();
-            if (!projection || !this.div) return;
-            const point = projection.fromLatLngToDivPixel(this.position);
-            if (point) {
-              this.div.style.left = (point.x - this.div.offsetWidth / 2) + "px";
-              this.div.style.top = (point.y - this.div.offsetHeight - 10) + "px";
-            }
-          }
-
-          onRemove() {
-            if (this.div && this.div.parentNode) {
-              this.div.parentNode.removeChild(this.div);
-              this.div = null;
-            }
-          }
-
-          updatePosition(pos: any, loc: Location) {
-            this.position = pos;
-            this.loc = loc;
-            if (this.div) {
-              this.div.style.background = loc.estado === "disponible" ? "#22c55e" : 
-                                             loc.estado === "ocupado" ? "#eab308" : "#94a3b8";
-              this.div.innerHTML = `
-                <div>${loc.nombre_repartidor || "Repartidor"}</div>
-                <div style="font-size:10px;font-weight:normal;margin-top:2px;">
-                  ${loc.estado} • ${new Date(loc.ultima_actualizacion).toLocaleTimeString()}
-                </div>
-                <div style="font-size:10px;font-weight:normal;">
-                  ${loc.latitud?.toFixed(4)}, ${loc.longitud?.toFixed(4)}
-                </div>
-                <div style="font-size:10px;font-weight:normal;color:#1e40af;margin-top:2px;cursor:pointer;" 
-                     class="ver-trayectoria">
-                  Ver trayectoria
-                </div>
-              `;
-              // Reattach click
-              this.div.querySelector(".ver-trayectoria")?.addEventListener("click", (e) => {
-                e.stopPropagation();
-                if (adminPos) {
-                  showRoute(adminPos, this.position, loc.nombre_repartidor);
-                } else {
-                  alert("Activa tu GPS para ver la trayectoria");
-                }
-              });
-            }
-            this.draw();
-          }
-        }
-        (window as any).RiderOverlay = RiderOverlay;
-      }
 
       locs.forEach(loc => {
         if (!loc.latitud || !loc.longitud) return;
         currentIds.add(loc.repartidor_id);
 
-        const pos = new (window as any).google.maps.LatLng(loc.latitud, loc.longitud);
+        const color = getColorForId(loc.repartidor_id);
+        const initials = getInitials(loc.nombre_repartidor || "R");
+        const position = new (window as any).google.maps.LatLng(loc.latitud, loc.longitud);
 
-        if (globalOverlays[loc.repartidor_id]) {
-          // Update existing overlay
-          const overlay = globalOverlays[loc.repartidor_id];
-          overlay.updatePosition(pos, loc);
-        } else {
-          // Create new overlay
-          const OverlayClass = (window as any).RiderOverlay;
-          const overlay = new OverlayClass(pos, loc, loc.repartidor_id);
-          globalOverlays[loc.repartidor_id] = overlay;
-          console.log("📍 Overlay created:", loc.nombre_repartidor);
-        }
-      });
+        if (globalMarkers[loc.repartidor_id]) {
+          // Update existing marker
+          const markerData = globalMarkers[loc.repartidor_id];
+          markerData.marker.setPosition(position);
+          markerData.loc = loc;
 
-      // Remove old overlays
-      Object.keys(globalOverlays).forEach(id => {
-        if (!currentIds.has(id)) {
-          globalOverlays[id].setMap(null);
-          delete globalOverlays[id];
-        }
-      });
-    };
-
-    const showRoute = (origin: any, destination: any, riderName: string) => {
-      if (!globalMap) return;
-
-      // Clear previous route
-      if (globalDirectionsRenderer) {
-        globalDirectionsRenderer.setMap(null);
-      }
-
-      const directionsService = new (window as any).google.maps.DirectionsService();
-      globalDirectionsRenderer = new (window as any).google.maps.DirectionsRenderer({
-        suppressMarkers: true,
-        polylineOptions: {
-          strokeColor: "#3b82f6",
-          strokeWeight: 4,
-          strokeOpacity: 0.7,
-        },
-      });
-      globalDirectionsRenderer.setMap(globalMap);
-
-      directionsService.route(
-        {
-          origin: new (window as any).google.maps.LatLng(origin.lat, origin.lng),
-          destination: destination,
-          travelMode: (window as any).google.maps.TravelMode.DRIVING,
-        },
-        (result: any, status: string) => {
-          if (status === "OK") {
-            globalDirectionsRenderer.setDirections(result);
-            console.log(`🛣️ Route to ${riderName} shown`);
-          } else {
-            console.error("Directions request failed:", status);
+          // Update info window content
+          if (markerData.infoWindow) {
+            markerData.infoWindow.setContent(`
+              <div style="padding:12px;min-width:200px;">
+                <div style="font-weight:bold;font-size:14px;margin-bottom:8px;">${loc.nombre_repartidor || "Repartidor"}</div>
+                <div style="font-size:12px;margin-bottom:4px;">
+                  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${loc.estado === 'disponible' ? '#22c55e' : loc.estado === 'ocupado' ? '#eab308' : '#94a3b8'};margin-right:6px;"></span>
+                  ${loc.estado}
+                </div>
+                <div style="font-size:11px;color:#666;margin-bottom:4px;">Última: ${new Date(loc.ultima_actualizacion).toLocaleTimeString()}</div>
+                <div style="font-size:11px;color:#666;">${loc.latitud?.toFixed(6)}, ${loc.longitud?.toFixed(6)}</div>
+              </div>
+            `);
           }
+        } else {
+          // Create custom marker with avatar
+          const svgMarker = {
+            path: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3 3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.01 6-3.01s5.97 1.02 6 3.01c-1.29 1.94-3.5 3.22-6 3.22z",
+            fillColor: color,
+            fillOpacity: 1,
+            strokeColor: "#fff",
+            strokeWeight: 2,
+            scale: 1.5,
+            labelOrigin: new (window as any).google.maps.Point(12, 12),
+          };
+
+          const marker = new (window as any).google.maps.Marker({
+            position,
+            map: globalMap,
+            icon: svgMarker,
+            label: {
+              text: initials,
+              color: "#fff",
+              fontSize: "10px",
+              fontWeight: "bold",
+            },
+          });
+
+          // Info window with full info (closed by default)
+          const infoWindow = new (window as any).google.maps.InfoWindow({
+            content: `
+              <div style="padding:12px;min-width:200px;">
+                <div style="font-weight:bold;font-size:14px;margin-bottom:8px;">${loc.nombre_repartidor || "Repartidor"}</div>
+                <div style="font-size:12px;margin-bottom:4px;">
+                  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${loc.estado === 'disponible' ? '#22c55e' : loc.estado === 'ocupado' ? '#eab308' : '#94a3b8'};margin-right:6px;"></span>
+                  ${loc.estado}
+                </div>
+                <div style="font-size:11px;color:#666;margin-bottom:4px;">Última: ${new Date(loc.ultima_actualizacion).toLocaleTimeString()}</div>
+                <div style="font-size:11px;color:#666;">${loc.latitud?.toFixed(6)}, ${loc.longitud?.toFixed(6)}</div>
+              </div>
+            `,
+          });
+
+          marker.addListener("click", () => {
+            // Close other info windows
+            if (globalInfoWindow) globalInfoWindow.close();
+            infoWindow.open(globalMap, marker);
+            globalInfoWindow = infoWindow;
+            setSelectedRider(loc.repartidor_id);
+          });
+
+          globalMarkers[loc.repartidor_id] = { marker, infoWindow, loc };
+          console.log("📍 Marker created:", loc.nombre_repartidor);
         }
-      );
+      });
+
+      // Remove old markers
+      Object.keys(globalMarkers).forEach(id => {
+        if (!currentIds.has(id)) {
+          globalMarkers[id].marker.setMap(null);
+          delete globalMarkers[id];
+        }
+      });
+
+      // If selected rider, center map on them
+      if (selectedRider && globalMarkers[selectedRider]) {
+        const loc = globalMarkers[selectedRider].loc;
+        globalMap.panTo({ lat: loc.latitud, lng: loc.longitud });
+      }
     };
 
     init();
 
     return () => {
       mountedRef.current = false;
-      // Do NOT clear globalMap, globalOverlays, or globalChannel
+      // Do NOT clear globalMap, globalMarkers, or globalChannel
     };
   }, []);
 
+  // Handle rider selection from list
+  const handleSelectRider = (riderId: string) => {
+    setSelectedRider(riderId);
+    if (globalMarkers[riderId]) {
+      const { marker, loc } = globalMarkers[riderId];
+      globalMap?.panTo({ lat: loc.latitud, lng: loc.longitud });
+      globalMap?.setZoom(16);
+      
+      // Open info window
+      if (globalInfoWindow) globalInfoWindow.close();
+      globalMarkers[riderId].infoWindow.open(globalMap, marker);
+      globalInfoWindow = globalMarkers[riderId].infoWindow;
+    }
+  };
+
   return (
     <div>
-      <div className="mb-4 bg-slate-800 p-3 rounded-xl text-sm text-slate-400">
-        💡 El mapa se centra en tu ubicación actual (activa tu GPS). Haz clic en "Ver trayectoria" para ver la ruta hasta el repartidor.
-      </div>
       <div
         ref={mapRef}
         style={{ width: "100%", height: "400px", borderRadius: "12px", background: "#1e293b" }}
       />
+      
+      {/* Lista de repartidores abajo */}
+      <div className="mt-4 bg-slate-900 rounded-xl border border-slate-800 p-4">
+        <div className="flex items-center gap-3 mb-3">
+          <input
+            type="text"
+            placeholder="Buscar repartidor..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="flex-1 bg-slate-800 text-white px-4 py-2 rounded-lg text-sm border border-slate-700 focus:border-yellow-400 focus:outline-none"
+          />
+          <span className="text-slate-400 text-sm">
+            {filteredRiders.length} conectados
+          </span>
+        </div>
+
+        <div className="space-y-2 max-h-48 overflow-y-auto">
+          {filteredRiders.length === 0 ? (
+            <p className="text-slate-500 text-sm text-center py-4">
+              {searchTerm ? "No se encontraron repartidores" : "No hay repartidores conectados"}
+            </p>
+          ) : (
+            filteredRiders.map(loc => {
+              const color = getColorForId(loc.repartidor_id);
+              const initials = getInitials(loc.nombre_repartidor || "R");
+              const isSelected = selectedRider === loc.repartidor_id;
+              
+              return (
+                <div
+                  key={loc.repartidor_id}
+                  onClick={() => handleSelectRider(loc.repartidor_id)}
+                  className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                    isSelected ? "bg-slate-700" : "hover:bg-slate-800"
+                  }`}
+                >
+                  {/* Avatar con iniciales */}
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                    style={{ background: color }}
+                  >
+                    {initials}
+                  </div>
+                  
+                  <div className="flex-1">
+                    <p className="text-white text-sm font-semibold">{loc.nombre_repartidor || "Repartidor"}</p>
+                    <p className="text-slate-400 text-xs">
+                      {loc.latitud?.toFixed(4)}, {loc.longitud?.toFixed(4)}
+                    </p>
+                  </div>
+                  
+                  <div className="text-right">
+                    <span className={`inline-block w-2 h-2 rounded-full ${
+                      loc.estado === 'disponible' ? 'bg-green-500' : 
+                      loc.estado === 'ocupado' ? 'bg-yellow-500' : 'bg-slate-500'
+                    }`} />
+                    <p className="text-slate-500 text-xs mt-1">
+                      {new Date(loc.ultima_actualizacion).toLocaleTimeString()}
+                    </p>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
     </div>
   );
 }
