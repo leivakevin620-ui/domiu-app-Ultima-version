@@ -13,11 +13,20 @@ interface Location {
   ultima_actualizacion: string;
 }
 
+// Singleton
 let map: any = null;
 let markers: Record<string, any> = {};
 let polylines: Record<string, any> = {};
 let history: Record<string, Array<{lat: number, lng: number}>> = {};
 let channel: any = null;
+
+// Color por ID
+const getColor = (id: string) => {
+  const colors = ["#3b82f6","#ef4444","#10b981","#f59e0b","#8b5cf6","#ec4899","#06b6d4","#84cc16","#f97316","#6366f1"];
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+};
 
 export default function GoogleMapsLive() {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -38,12 +47,12 @@ export default function GoogleMapsLive() {
 
       const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
       if (!apiKey) {
-        if (mapRef.current) mapRef.current.innerHTML = '<div style="color:red;padding:20px;">Falta API Key</div>';
+        if (mapRef.current) mapRef.current.innerHTML = '<div style="color:red;padding:20px">Falta API Key</div>';
         return;
       }
 
       try {
-        // Cargar Maps
+        // Cargar Google Maps
         if (!(window as any).google?.maps) {
           await new Promise<void>((resolve, reject) => {
             const script = document.createElement("script");
@@ -63,7 +72,7 @@ export default function GoogleMapsLive() {
         }
         if (!mapRef.current || !mounted.current) return;
 
-        // Crear o reutilizar mapa
+        // Crear mapa si no existe
         if (!map) {
           map = new (window as any).google.maps.Map(mapRef.current, {
             center: { lat: 10.4, lng: -75.5 },
@@ -72,6 +81,7 @@ export default function GoogleMapsLive() {
           });
           console.log("✅ Mapa creado");
         } else {
+          // Mover a este div
           const div = map.getDiv();
           if (div && div.parentNode) div.parentNode.removeChild(div);
           mapRef.current.appendChild(map.getDiv());
@@ -81,11 +91,11 @@ export default function GoogleMapsLive() {
         // Cargar posiciones
         await loadPositions();
 
-        // Suscribirse a cambios
+        // Suscribirse a cambios (solo una vez)
         if (!channel) {
           const sb = getSupabaseClient();
           channel = sb
-            .channel("locations_live")
+            .channel("simple_realtime")
             .on("postgres_changes", { event: "*", schema: "public", table: "ubicaciones_repartidores" }, () => {
               if (mounted.current) loadPositions();
             })
@@ -94,7 +104,7 @@ export default function GoogleMapsLive() {
         }
       } catch (err: any) {
         console.error("Error:", err);
-        if (mapRef.current) mapRef.current.innerHTML = `<div style="color:red;padding:20px;">Error: ${err.message}</div>`;
+        if (mapRef.current) mapRef.current.innerHTML = `<div style="color:red;padding:20px">Error: ${err.message}</div>`;
       }
     };
 
@@ -105,19 +115,17 @@ export default function GoogleMapsLive() {
         const { data, error } = await sb.from("ubicaciones_repartidores").select("*");
         if (error || !data) return;
         setLocations(data);
-        updateMarkers(data);
+        updateAll(data);
       } catch (e) { console.error("Error cargando:", e); }
     };
 
-    const updateMarkers = (locs: Location[]) => {
+    const updateAll = (locs: Location[]) => {
       if (!map) return;
       const currentIds = new Set<string>();
 
       locs.forEach(loc => {
         if (!loc.latitud || !loc.longitud) return;
         currentIds.add(loc.repartidor_id);
-
-        // Color único
         const color = getColor(loc.repartidor_id);
         const pos = { lat: loc.latitud, lng: loc.longitud };
 
@@ -127,7 +135,7 @@ export default function GoogleMapsLive() {
         if (history[loc.repartidor_id].length > 50) history[loc.repartidor_id] = history[loc.repartidor_id].slice(-50);
 
         if (markers[loc.repartidor_id]) {
-          // Actualizar
+          // Actualizar marcador
           markers[loc.repartidor_id].setPosition(pos);
           markers[loc.repartidor_id].setIcon({
             path: (window as any).google.maps.SymbolPath.CIRCLE,
@@ -138,8 +146,8 @@ export default function GoogleMapsLive() {
             scale: 8,
           });
         } else {
-          // Crear marcador básico (círculo de color)
-          const marker = new (window as any).google.maps.Marker({
+          // Crear marcador simple (círculo de color)
+          markers[loc.repartidor_id] = new (window as any).google.maps.Marker({
             position: pos,
             map,
             title: loc.nombre_repartidor || "Repartidor",
@@ -152,13 +160,12 @@ export default function GoogleMapsLive() {
               scale: 8,
             },
             label: {
-              text: getInitials(loc.nombre_repartidor),
+              text: loc.nombre_repartidor?.substring(0, 2).toUpperCase() || "R",
               color: "#fff",
               fontSize: "10px",
               fontWeight: "bold",
             },
           });
-          markers[loc.repartidor_id] = marker;
           console.log("📍 Marcador:", loc.nombre_repartidor);
         }
 
@@ -179,7 +186,7 @@ export default function GoogleMapsLive() {
         }
       });
 
-      // Eliminar los que ya no existen
+      // Eliminar los que ya no están
       Object.keys(markers).forEach(id => {
         if (!currentIds.has(id)) {
           markers[id].setMap(null);
@@ -210,6 +217,7 @@ export default function GoogleMapsLive() {
     <div>
       <div ref={mapRef} style={{ width: "100%", height: "400px", borderRadius: "12px", background: "#1e293b" }} />
 
+      {/* Lista abajo: SOLO NOMBRES */}
       <div className="mt-4 bg-slate-900 rounded-xl border border-slate-800 p-4">
         <div className="flex items-center gap-3 mb-3">
           <input
@@ -230,15 +238,18 @@ export default function GoogleMapsLive() {
           ) : (
             filtered.map(loc => {
               const color = getColor(loc.repartidor_id);
-              const initials = getInitials(loc.nombre_repartidor || "");
               return (
                 <div
                   key={loc.repartidor_id}
                   onClick={() => selectRider(loc.repartidor_id)}
                   className="flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors"
                 >
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm" style={{ background: color }}>
-                    {initials}
+                  {/* Círculo de color */}
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                    style={{ background: color }}
+                  >
+                    {loc.nombre_repartidor?.substring(0, 2).toUpperCase() || "R"}
                   </div>
                   <div className="flex-1">
                     <p className="text-white text-sm font-semibold">{loc.nombre_repartidor || "Repartidor"}</p>
@@ -255,17 +266,4 @@ export default function GoogleMapsLive() {
       </div>
     </div>
   );
-}
-
-function getColor(id: string) {
-  const colors = ["#3b82f6","#ef4444","#10b981","#f59e0b","#8b5cf6","#ec4899","#06b6d4","#84cc16","#f97316","#6366f1"];
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
-}
-
-function getInitials(name: string) {
-  if (!name) return "?";
-  const parts = name.split(" ");
-  return parts.length > 1 ? (parts[0][0]+parts[1][0]).toUpperCase() : name.substring(0,2).toUpperCase();
 }
