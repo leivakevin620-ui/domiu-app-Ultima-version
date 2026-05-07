@@ -19,6 +19,7 @@ import * as XLSX from "xlsx";
 import dynamic from "next/dynamic";
 import GoogleMapsLive from "@/components/GoogleMapsLive";
 import MarketplaceAdmin from "@/components/MarketplaceAdmin";
+import MarketplaceStores from "@/components/MarketplaceStores";
 
 /* ======================== RELOJ ======================== */
 function RealTimeClock() {
@@ -95,6 +96,7 @@ export default function AdminApp() {
   const [turnosHistorial, setTurnosHistorial] = useState<any[]>([]);
   const [ubicacionesRepartidores, setUbicacionesRepartidores] = useState<any[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mpSubTab, setMpSubTab] = useState<"orders" | "stores">("orders");
 
   /* Pedido form */
   const [editId, setEditId] = useState<string | null>(null);
@@ -1141,12 +1143,23 @@ export default function AdminApp() {
             </div>
           )}
 
-          {/* ======================== LOCALES ======================== */}
+          {/* ======================== MARKETPLACE ======================== */}
           {tab === "marketplace" && (
-            <div className="px-6 pb-8">
-              <MarketplaceAdmin />
+            <div className="space-y-6">
+              {/* Sub-tabs */}
+              <div className="flex gap-2 border-b border-slate-800 pb-3">
+                {["orders", "stores"].map(st => (
+                  <button key={st} onClick={() => setMpSubTab(st as any)}
+                    className={`px-5 py-2 rounded-lg text-sm font-semibold transition ${mpSubTab === st ? "bg-yellow-400/10 text-yellow-400 border border-yellow-400/20" : "text-slate-400 hover:text-white"}`}>
+                    {st === "orders" ? "Pedidos" : "Negocios y Productos"}
+                  </button>
+                ))}
+              </div>
+              {mpSubTab === "orders" ? <MarketplaceAdmin /> : <MarketplaceStores />}
             </div>
           )}
+
+          {/* ======================== LOCALES ======================== */}
           {tab === "locales" && (
             <div className="space-y-6">
               <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6">

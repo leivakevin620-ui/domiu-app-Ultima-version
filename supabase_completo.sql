@@ -240,6 +240,62 @@ INSERT INTO productos (negocio_id, nombre, descripcion, precio, imagen, categori
 ((SELECT id FROM neg), 'Nigiri Mix x8', '8 piezas variadas de nigiri', 32000, '', 'Nigiri');
 
 -- ============================================================
+-- 5. FIX FK: cambiar REFERENCES profiles(id) a auth.users(id)
+--    Esto evita errores "violates foreign key constraint" cuando
+--    el perfil del usuario no existe en la tabla profiles
+-- ============================================================
+
+DO $$
+DECLARE
+  fk RECORD;
+BEGIN
+  FOR fk IN (
+    SELECT conname, conrelid::regclass AS tbl, pg_get_constraintdef(oid) AS def
+    FROM pg_constraint WHERE contype = 'f' AND confrelid = 'profiles'::regclass
+  ) LOOP
+    EXECUTE format('ALTER TABLE %s DROP CONSTRAINT IF EXISTS %I', fk.tbl, fk.conname);
+    EXECUTE format(
+      'ALTER TABLE %s ADD CONSTRAINT %I %s',
+      fk.tbl, fk.conname,
+      replace(fk.def, 'REFERENCES profiles(id)', 'REFERENCES auth.users(id)')
+    );
+  END LOOP;
+END $$;
+
+-- Crear perfiles faltantes para TODOS los usuarios auth que no tengan profile
+INSERT INTO profiles (id, email, nombre, rol)
+SELECT
+  u.id,
+  u.email,
+  COALESCE(u.raw_user_meta_data->>'nombre', split_part(u.email, '@', 1)),
+  COALESCE(u.raw_user_meta_data->>'rol', 'admin')
+FROM auth.users u
+WHERE u.id NOT IN (SELECT id FROM profiles)
+ON CONFLICT (id) DO NOTHING;
+
+-- Forzar recreacion del trigger para nuevos usuarios
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO profiles (id, email, nombre)
+  VALUES (NEW.id, NEW.email, NEW.raw_user_meta_data->>'nombre')
+  ON CONFLICT (id) DO NOTHING;
+  INSERT INTO app_config (user_id) VALUES (NEW.id)
+  ON CONFLICT DO NOTHING;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+
+-- Agregar politica de INSERT para profiles (permite crear perfiles)
+DROP POLICY IF EXISTS "Profiles insert" ON profiles;
+CREATE POLICY "Profiles insert" ON profiles FOR INSERT WITH CHECK (true);
+
+-- ============================================================
 -- HECHO - Pasos manuales restantes:
 -- ============================================================
 -- 1. Supabase Dashboard → Database → Replication
