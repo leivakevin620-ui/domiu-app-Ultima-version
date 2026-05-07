@@ -29,11 +29,9 @@ export default function RiderApp() {
   const [loading, setLoading] = useState(true);
   const [estadoRider, setEstadoRider] = useState("No disponible");
   
-  // GPS state
+  // GPS state - solo guardamos en Supabase, no usamos estado React
   const [gpsActivo, setGpsActivo] = useState(false);
   const [gpsStatus, setGpsStatus] = useState<"esperando" | "activo" | "detenido" | "error">("esperando");
-  const [gpsLat, setGpsLat] = useState<number | null>(null);
-  const [gpsLng, setGpsLng] = useState<number | null>(null);
   const gpsWatchRef = useRef<number | null>(null);
   
   const subRef = useRef<any>(null);
@@ -83,33 +81,31 @@ export default function RiderApp() {
 
     setGpsStatus("esperando");
     
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        setGpsLat(lat);
-        setGpsLng(lng);
-        setGpsStatus("activo");
-        
-        // Guardar en Supabase
-        if (riderData?.id) {
-          sb.from("ubicaciones_repartidores").upsert({
-            repartidor_id: riderData.id,
-            nombre_repartidor: riderData.nombre,
-            latitud: lat,
-            longitud: lng,
-            estado: estadoRider === "Disponible" ? "disponible" : "ocupado",
-            ultima_actualizacion: new Date().toISOString(),
-          }).then(() => console.log("GPS guardado"));
-        }
-      },
-      (error) => {
-        console.error("GPS error:", error);
-        setGpsStatus("error");
-        toast.error("Error GPS: " + error.message);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+      const watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          setGpsStatus("activo");
+          
+          // Guardar en Supabase sin actualizar estado React
+          if (riderData?.id) {
+            sb.from("ubicaciones_repartidores").upsert({
+              repartidor_id: riderData.id,
+              nombre_repartidor: riderData.nombre,
+              latitud: lat,
+              longitud: lng,
+              estado: estadoRider === "Disponible" ? "disponible" : "ocupado",
+              ultima_actualizacion: new Date().toISOString(),
+            }).then(() => console.log("GPS guardado"));
+          }
+        },
+        (error) => {
+          console.error("GPS error:", error);
+          setGpsStatus("error");
+          toast.error("Error GPS: " + error.message);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
     
     gpsWatchRef.current = watchId;
     
