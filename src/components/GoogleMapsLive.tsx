@@ -22,9 +22,9 @@ let channel: any = null;
 let infoWindow: any = null;
 let adminMarker: any = null;
 
-// Color único por ID
+// Color único por ID - Colores muy fuertes y brillantes
 const getColor = (id: string) => {
-  const colors = ["#3b82f6","#ef4444","#10b981","#f59e0b","#8b5cf6","#ec4899","#06b6d4","#84cc16","#f97316","#6366f1"];
+  const colors = ["#ff0000","#00ff00","#0000ff","#ffff00","#ff00ff","#00ffff","#ff8000","#8000ff","#0080ff","#ff0080"];
   let hash = 0;
   for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash);
   return colors[Math.abs(hash) % colors.length];
