@@ -13,9 +13,11 @@ interface Location {
   ultima_actualizacion: string;
 }
 
-// Singleton
+// Singleton objects
 let globalMap: any = null;
 let globalMarkers: Record<string, any> = {};
+let globalPolylines: Record<string, any> = {};
+let globalHistory: Record<string, Array<{lat: number, lng: number, time: number}>> = {};
 let globalChannel: any = null;
 let globalInfoWindow: any = null;
 
@@ -98,6 +100,25 @@ export default function GoogleMapsLive() {
               setAdminPos(pos);
               if (globalMap) {
                 globalMap.setCenter(pos);
+                // Add admin marker
+                if (!globalMarkers["admin"]) {
+                  const adminMarker = new (window as any).google.maps.Marker({
+                    position: pos,
+                    map: globalMap,
+                    title: "Tu ubicación (Admin)",
+                    icon: {
+                      path: (window as any).google.maps.SymbolPath.CIRCLE,
+                      fillColor: "#3b82f6",
+                      fillOpacity: 1,
+                      strokeColor: "#fff",
+                      strokeWeight: 2,
+                      scale: 10,
+                    },
+                  });
+                  globalMarkers["admin"] = { marker: adminMarker };
+                } else {
+                  globalMarkers["admin"].marker.setPosition(pos);
+                }
               }
             },
             (error) => {
@@ -139,7 +160,7 @@ export default function GoogleMapsLive() {
         if (!globalChannel) {
           const sb = getSupabaseClient();
           globalChannel = sb
-            .channel("live_riders_v4")
+            .channel("live_riders_v5")
             .on("postgres_changes", {
               event: "*",
               schema: "public",
@@ -174,13 +195,13 @@ export default function GoogleMapsLive() {
         if (error || !data || !mountedRef.current) return;
 
         setRidersList(data);
-        updateMarkers(data);
+        updateMarkersAndTrails(data);
       } catch (e) {
         console.error("Error loading positions:", e);
       }
     };
 
-    const updateMarkers = (locs: Location[]) => {
+    const updateMarkersAndTrails = (locs: Location[]) => {
       if (!globalMap) return;
 
       const currentIds = new Set<string>();
@@ -193,13 +214,27 @@ export default function GoogleMapsLive() {
         const initials = getInitials(loc.nombre_repartidor || "R");
         const position = new (window as any).google.maps.LatLng(loc.latitud, loc.longitud);
 
+        // Update history
+        if (!globalHistory[loc.repartidor_id]) {
+          globalHistory[loc.repartidor_id] = [];
+        }
+        globalHistory[loc.repartidor_id].push({
+          lat: loc.latitud,
+          lng: loc.longitud,
+          time: new Date(loc.ultima_actualizacion).getTime(),
+        });
+        // Keep only last 50 points
+        if (globalHistory[loc.repartidor_id].length > 50) {
+          globalHistory[loc.repartidor_id] = globalHistory[loc.repartidor_id].slice(-50);
+        }
+
         if (globalMarkers[loc.repartidor_id]) {
           // Update existing marker
           const markerData = globalMarkers[loc.repartidor_id];
           markerData.marker.setPosition(position);
           markerData.loc = loc;
 
-          // Update info window content
+          // Update info window
           if (markerData.infoWindow) {
             markerData.infoWindow.setContent(`
               <div style="padding:12px;min-width:200px;">
@@ -210,11 +245,15 @@ export default function GoogleMapsLive() {
                 </div>
                 <div style="font-size:11px;color:#666;margin-bottom:4px;">Última: ${new Date(loc.ultima_actualizacion).toLocaleTimeString()}</div>
                 <div style="font-size:11px;color:#666;">${loc.latitud?.toFixed(6)}, ${loc.longitud?.toFixed(6)}</div>
+                <div style="font-size:11px;color:${color};margin-top:4px;">● Rastro: ${globalHistory[loc.repartidor_id].length} puntos</div>
               </div>
             `);
           }
+
+          // Update polyline (trail)
+          updatePolyline(loc.repartidor_id, color);
         } else {
-          // Create custom marker with avatar
+          // Create new marker with avatar
           const svgMarker = {
             path: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3 3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.01 6-3.01s5.97 1.02 6 3.01c-1.29 1.94-3.5 3.22-6 3.22z",
             fillColor: color,
@@ -237,7 +276,7 @@ export default function GoogleMapsLive() {
             },
           });
 
-          // Info window with full info (closed by default)
+          // Info window with full info
           const infoWindow = new (window as any).google.maps.InfoWindow({
             content: `
               <div style="padding:12px;min-width:200px;">
@@ -248,12 +287,12 @@ export default function GoogleMapsLive() {
                 </div>
                 <div style="font-size:11px;color:#666;margin-bottom:4px;">Última: ${new Date(loc.ultima_actualizacion).toLocaleTimeString()}</div>
                 <div style="font-size:11px;color:#666;">${loc.latitud?.toFixed(6)}, ${loc.longitud?.toFixed(6)}</div>
+                <div style="font-size:11px;color:${color};margin-top:4px;">● Rastro: ${globalHistory[loc.repartidor_id]?.length || 0} puntos</div>
               </div>
             `,
           });
 
           marker.addListener("click", () => {
-            // Close other info windows
             if (globalInfoWindow) globalInfoWindow.close();
             infoWindow.open(globalMap, marker);
             globalInfoWindow = infoWindow;
@@ -262,21 +301,59 @@ export default function GoogleMapsLive() {
 
           globalMarkers[loc.repartidor_id] = { marker, infoWindow, loc };
           console.log("📍 Marker created:", loc.nombre_repartidor);
+
+          // Create initial polyline
+          updatePolyline(loc.repartidor_id, color);
         }
       });
 
-      // Remove old markers
+      // Remove old markers and polylines
       Object.keys(globalMarkers).forEach(id => {
-        if (!currentIds.has(id)) {
+        if (!currentIds.has(id) && id !== "admin") {
           globalMarkers[id].marker.setMap(null);
+          if (globalMarkers[id].infoWindow) globalMarkers[id].infoWindow.close();
           delete globalMarkers[id];
+          // Remove polyline
+          if (globalPolylines[id]) {
+            globalPolylines[id].setMap(null);
+            delete globalPolylines[id];
+          }
+          delete globalHistory[id];
         }
       });
+    };
 
-      // If selected rider, center map on them
-      if (selectedRider && globalMarkers[selectedRider]) {
-        const loc = globalMarkers[selectedRider].loc;
-        globalMap.panTo({ lat: loc.latitud, lng: loc.longitud });
+    const updatePolyline = (riderId: string, color: string) => {
+      const history = globalHistory[riderId];
+      if (!history || history.length < 2) return;
+
+      const path = history.map(p => ({ lat: p.lat, lng: p.lng }));
+
+      if (globalPolylines[riderId]) {
+        globalPolylines[riderId].setPath(path);
+      } else {
+        const polyline = new (window as any).google.maps.Polyline({
+          path,
+          geodesic: true,
+          strokeColor: color,
+          strokeOpacity: 0.7,
+          strokeWeight: 3,
+          map: globalMap,
+        });
+        globalPolylines[riderId] = polyline;
+      }
+    };
+
+    const handleSelectRider = (riderId: string) => {
+      setSelectedRider(riderId);
+      if (globalMarkers[riderId]) {
+        const { marker, loc } = globalMarkers[riderId];
+        globalMap?.panTo({ lat: loc.latitud, lng: loc.longitud });
+        globalMap?.setZoom(16);
+        // Open info window
+        if (globalInfoWindow) globalInfoWindow.close();
+        globalMarkers[riderId].infoWindow.open(globalMap, marker);
+        globalInfoWindow = globalMarkers[riderId].infoWindow;
       }
     };
 
@@ -284,24 +361,9 @@ export default function GoogleMapsLive() {
 
     return () => {
       mountedRef.current = false;
-      // Do NOT clear globalMap, globalMarkers, or globalChannel
+      // Do NOT clear globalMap, globalMarkers, globalPolylines, globalHistory, or globalChannel
     };
   }, []);
-
-  // Handle rider selection from list
-  const handleSelectRider = (riderId: string) => {
-    setSelectedRider(riderId);
-    if (globalMarkers[riderId]) {
-      const { marker, loc } = globalMarkers[riderId];
-      globalMap?.panTo({ lat: loc.latitud, lng: loc.longitud });
-      globalMap?.setZoom(16);
-      
-      // Open info window
-      if (globalInfoWindow) globalInfoWindow.close();
-      globalMarkers[riderId].infoWindow.open(globalMap, marker);
-      globalInfoWindow = globalMarkers[riderId].infoWindow;
-    }
-  };
 
   return (
     <div>
@@ -335,6 +397,7 @@ export default function GoogleMapsLive() {
               const color = getColorForId(loc.repartidor_id);
               const initials = getInitials(loc.nombre_repartidor || "R");
               const isSelected = selectedRider === loc.repartidor_id;
+              const historyCount = globalHistory[loc.repartidor_id]?.length || 0;
               
               return (
                 <div
@@ -344,7 +407,7 @@ export default function GoogleMapsLive() {
                     isSelected ? "bg-slate-700" : "hover:bg-slate-800"
                   }`}
                 >
-                  {/* Avatar con iniciales */}
+                  {/* Avatar con iniciales y color único */}
                   <div
                     className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm"
                     style={{ background: color }}
@@ -357,6 +420,9 @@ export default function GoogleMapsLive() {
                     <p className="text-slate-400 text-xs">
                       {loc.latitud?.toFixed(4)}, {loc.longitud?.toFixed(4)}
                     </p>
+                    <p className="text-slate-500 text-xs mt-1">
+                      Rastro: {historyCount} puntos • {new Date(loc.ultima_actualizacion).toLocaleTimeString()}
+                    </p>
                   </div>
                   
                   <div className="text-right">
@@ -365,7 +431,9 @@ export default function GoogleMapsLive() {
                       loc.estado === 'ocupado' ? 'bg-yellow-500' : 'bg-slate-500'
                     }`} />
                     <p className="text-slate-500 text-xs mt-1">
-                      {new Date(loc.ultima_actualizacion).toLocaleTimeString()}
+                      {historyCount > 0 && (
+                        <span style={{ color }}>&#x25C9; {historyCount}</span>
+                      )}
                     </p>
                   </div>
                 </div>
