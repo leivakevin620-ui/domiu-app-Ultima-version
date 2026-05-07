@@ -1100,16 +1100,14 @@ export default function AdminApp() {
           )}
 
           {/* ======================== GPS (MAPA GOOGLE MAPS) ======================== */}
-          {tab === "gps" && (
-            <div className="space-y-6">
-              <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6">
-                <h3 className="font-bold text-white mb-4 flex items-center gap-2">
-                  <Navigation size={20} className="text-yellow-400" /> GPS en Tiempo Real
-                </h3>
-                <GoogleMapView />
-              </div>
+          <div className="space-y-6" style={{ display: tab === "gps" ? "block" : "none" }}>
+            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6">
+              <h3 className="font-bold text-white mb-4 flex items-center gap-2">
+                <Navigation size={20} className="text-yellow-400" /> GPS en Tiempo Real
+              </h3>
+              <GoogleMapView />
             </div>
-          )}
+          </div>
 
           {/* ======================== REPORTES ======================== */}
           {tab === "reportes" && (
