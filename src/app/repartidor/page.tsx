@@ -7,15 +7,16 @@ import {
   Home, ListOrdered, MapPin, DollarSign, User, Phone,
   Copy, MessageCircle, AlertTriangle, LogOut, Check,
   Clock, Package, TrendingUp, Wallet, Navigation,
-  ChevronRight, Shield, Truck, FileText
+  ChevronRight, Shield, Truck, FileText, Store
 } from "lucide-react";
+import RiderMarketplace from "@/components/RiderMarketplace";
 
 /* ======================== UTILIDADES ======================== */
 function fmt(v: number) { return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(v || 0); }
 function fechaCorta(f: string) { return new Date(f).toLocaleString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
 const EMPRESA_PHONE = "3113748405";
 
-type TabType = "inicio" | "pedidos" | "mapa" | "liquidacion" | "turnos" | "gps" | "perfil";
+type TabType = "inicio" | "pedidos" | "mapa" | "liquidacion" | "turnos" | "gps" | "marketplace" | "perfil";
 
 /* ======================== COMPONENTE ======================== */
 export default function RiderAppPage() {
@@ -848,6 +849,13 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
         </div>
       )}
 
+      {/* MARKETPLACE */}
+      {tab === "marketplace" && (
+        <div style={{ padding: "16px 16px 0" }}>
+          <RiderMarketplace riderId={riderData.id} riderName={riderData.nombre} />
+        </div>
+      )}
+
       {/* PERFIL */}
       {tab === "perfil" && (
         <div style={{ padding: "16px 16px 0" }}>
@@ -918,6 +926,7 @@ function RiderAppContent({ user, profile, logout }: { user: any; profile: any; l
           { id: "mapa" as TabType, icon: MapPin, label: "Mapa" },
           { id: "liquidacion" as TabType, icon: DollarSign, label: "Liquidación" },
           { id: "turnos" as TabType, icon: Clock, label: "Turnos" },
+          { id: "marketplace" as TabType, icon: Store, label: "Market" },
           { id: "gps" as TabType, icon: Navigation, label: "GPS" },
           { id: "perfil" as TabType, icon: User, label: "Perfil" },
         ]).map((t) => (
