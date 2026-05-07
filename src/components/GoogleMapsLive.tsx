@@ -13,15 +13,15 @@ interface Location {
   ultima_actualizacion: string;
 }
 
-// Singleton objects
+// Singleton
 let globalMap: any = null;
 let globalMarkers: Record<string, any> = {};
 let globalPolylines: Record<string, any> = {};
-let globalHistory: Record<string, Array<{lat: number, lng: number, time: number}>> = {};
+let globalHistory: Record<string, Array<{lat: number, lng: number}>> = {};
 let globalChannel: any = null;
 let globalInfoWindow: any = null;
 
-// Generar color único basado en ID
+// Colores únicos por ID
 const getColorForId = (id: string) => {
   const colors = [
     "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6",
@@ -34,7 +34,7 @@ const getColorForId = (id: string) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
-// Obtener iniciales del nombre
+// Iniciales del nombre
 const getInitials = (name: string) => {
   if (!name) return "?";
   const parts = name.split(" ");
@@ -49,9 +49,8 @@ export default function GoogleMapsLive() {
   const [adminPos, setAdminPos] = useState<{lat: number, lng: number} | null>(null);
   const [ridersList, setRidersList] = useState<Location[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedRider, setSelectedRider] = useState<string | null>(null);
 
-  // Filtrar repartidores por búsqueda
+  // Filtrar solo por nombre
   const filteredRiders = useMemo(() => {
     if (!searchTerm) return ridersList;
     return ridersList.filter(r =>
@@ -74,11 +73,11 @@ export default function GoogleMapsLive() {
       }
 
       try {
-        // 1. Load Google Maps
+        // 1. Cargar Google Maps
         if (!(window as any).google?.maps) {
           await new Promise<void>((resolve, reject) => {
             const script = document.createElement("script");
-            script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry`;
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
             script.async = true;
             script.onload = () => {
               console.log("✅ Maps loaded");
@@ -89,7 +88,7 @@ export default function GoogleMapsLive() {
           });
         }
 
-        // 2. Get admin location
+        // 2. Obtener ubicación del admin
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
             (position) => {
@@ -100,7 +99,7 @@ export default function GoogleMapsLive() {
               setAdminPos(pos);
               if (globalMap) {
                 globalMap.setCenter(pos);
-                // Add admin marker
+                // Marcador admin
                 if (!globalMarkers["admin"]) {
                   const adminMarker = new (window as any).google.maps.Marker({
                     position: pos,
@@ -128,7 +127,7 @@ export default function GoogleMapsLive() {
           );
         }
 
-        // 3. Wait for div
+        // 3. Esperar div
         let tries = 0;
         while (!mapRef.current && tries < 100 && mountedRef.current) {
           await new Promise(r => setTimeout(r, 50));
@@ -143,24 +142,24 @@ export default function GoogleMapsLive() {
             zoom: 14,
             mapTypeId: "roadmap",
           });
-          console.log("✅ Map created (singleton)");
+          console.log("✅ Mapa creado (singleton)");
         } else {
           const div = globalMap.getDiv();
           if (div && div.parentNode) {
             div.parentNode.removeChild(div);
           }
           mapRef.current.appendChild(globalMap.getDiv());
-          console.log("♻️ Map reused");
+          console.log("♻️ Mapa reutilizado");
         }
 
-        // 4. Load initial positions
+        // 4. Cargar posiciones iniciales
         await loadPositions();
 
-        // 5. Subscribe to realtime
+        // 5. Suscribirse a cambios (solo una vez)
         if (!globalChannel) {
           const sb = getSupabaseClient();
           globalChannel = sb
-            .channel("live_riders_v5")
+            .channel("live_riders_v6")
             .on("postgres_changes", {
               event: "*",
               schema: "public",
@@ -173,7 +172,7 @@ export default function GoogleMapsLive() {
             .subscribe((status: string) => {
               console.log("Realtime status:", status);
             });
-          console.log("📡 Realtime subscribed");
+          console.log("📡 Realtime suscrito");
         }
       } catch (err: any) {
         console.error("Error:", err);
@@ -197,7 +196,7 @@ export default function GoogleMapsLive() {
         setRidersList(data);
         updateMarkersAndTrails(data);
       } catch (e) {
-        console.error("Error loading positions:", e);
+        console.error("Error cargando posiciones:", e);
       }
     };
 
@@ -212,50 +211,26 @@ export default function GoogleMapsLive() {
 
         const color = getColorForId(loc.repartidor_id);
         const initials = getInitials(loc.nombre_repartidor || "R");
-        const position = new (window as any).google.maps.LatLng(loc.latitud, loc.longitud);
+        const position = { lat: loc.latitud, lng: loc.longitud };
 
-        // Update history
+        // Actualizar historial
         if (!globalHistory[loc.repartidor_id]) {
           globalHistory[loc.repartidor_id] = [];
         }
-        globalHistory[loc.repartidor_id].push({
-          lat: loc.latitud,
-          lng: loc.longitud,
-          time: new Date(loc.ultima_actualizacion).getTime(),
-        });
-        // Keep only last 50 points
+        globalHistory[loc.repartidor_id].push(position);
         if (globalHistory[loc.repartidor_id].length > 50) {
           globalHistory[loc.repartidor_id] = globalHistory[loc.repartidor_id].slice(-50);
         }
 
         if (globalMarkers[loc.repartidor_id]) {
-          // Update existing marker
+          // Actualizar marcador existente
           const markerData = globalMarkers[loc.repartidor_id];
           markerData.marker.setPosition(position);
           markerData.loc = loc;
-
-          // Update info window
-          if (markerData.infoWindow) {
-            markerData.infoWindow.setContent(`
-              <div style="padding:12px;min-width:200px;">
-                <div style="font-weight:bold;font-size:14px;margin-bottom:8px;">${loc.nombre_repartidor || "Repartidor"}</div>
-                <div style="font-size:12px;margin-bottom:4px;">
-                  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${loc.estado === 'disponible' ? '#22c55e' : loc.estado === 'ocupado' ? '#eab308' : '#94a3b8'};margin-right:6px;"></span>
-                  ${loc.estado}
-                </div>
-                <div style="font-size:11px;color:#666;margin-bottom:4px;">Última: ${new Date(loc.ultima_actualizacion).toLocaleTimeString()}</div>
-                <div style="font-size:11px;color:#666;">${loc.latitud?.toFixed(6)}, ${loc.longitud?.toFixed(6)}</div>
-                <div style="font-size:11px;color:${color};margin-top:4px;">● Rastro: ${globalHistory[loc.repartidor_id].length} puntos</div>
-              </div>
-            `);
-          }
-
-          // Update polyline (trail)
-          updatePolyline(loc.repartidor_id, color);
         } else {
-          // Create new marker with avatar
+          // Crear nuevo marcador con avatar
           const svgMarker = {
-            path: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3 3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.01 6-3.01s5.97 1.02 6 3.01c-1.29 1.94-3.5 3.22-6 3.22z",
+            path: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.01 6-3.01s5.97 1.02 6 3.01c-1.29 1.94-3.5 3.22-6 3.22z",
             fillColor: color,
             fillOpacity: 1,
             strokeColor: "#fff",
@@ -274,9 +249,10 @@ export default function GoogleMapsLive() {
               fontSize: "10px",
               fontWeight: "bold",
             },
+            title: loc.nombre_repartidor || "Repartidor",
           });
 
-          // Info window with full info
+          // InfoWindow con información completa (se abre al hacer clic)
           const infoWindow = new (window as any).google.maps.InfoWindow({
             content: `
               <div style="padding:12px;min-width:200px;">
@@ -287,7 +263,7 @@ export default function GoogleMapsLive() {
                 </div>
                 <div style="font-size:11px;color:#666;margin-bottom:4px;">Última: ${new Date(loc.ultima_actualizacion).toLocaleTimeString()}</div>
                 <div style="font-size:11px;color:#666;">${loc.latitud?.toFixed(6)}, ${loc.longitud?.toFixed(6)}</div>
-                <div style="font-size:11px;color:${color};margin-top:4px;">● Rastro: ${globalHistory[loc.repartidor_id]?.length || 0} puntos</div>
+                <div style="font-size:11px;color:${color};margin-top:4px;">● Trayectoria: ${globalHistory[loc.repartidor_id]?.length || 0} puntos</div>
               </div>
             `,
           });
@@ -296,24 +272,22 @@ export default function GoogleMapsLive() {
             if (globalInfoWindow) globalInfoWindow.close();
             infoWindow.open(globalMap, marker);
             globalInfoWindow = infoWindow;
-            setSelectedRider(loc.repartidor_id);
           });
 
           globalMarkers[loc.repartidor_id] = { marker, infoWindow, loc };
-          console.log("📍 Marker created:", loc.nombre_repartidor);
-
-          // Create initial polyline
-          updatePolyline(loc.repartidor_id, color);
+          console.log("📍 Marcador creado:", loc.nombre_repartidor);
         }
+
+        // Actualizar línea de trayectoria
+        updateTrail(loc.repartidor_id, color);
       });
 
-      // Remove old markers and polylines
+      // Eliminar marcadores y líneas que ya no existen
       Object.keys(globalMarkers).forEach(id => {
         if (!currentIds.has(id) && id !== "admin") {
           globalMarkers[id].marker.setMap(null);
           if (globalMarkers[id].infoWindow) globalMarkers[id].infoWindow.close();
           delete globalMarkers[id];
-          // Remove polyline
           if (globalPolylines[id]) {
             globalPolylines[id].setMap(null);
             delete globalPolylines[id];
@@ -323,17 +297,15 @@ export default function GoogleMapsLive() {
       });
     };
 
-    const updatePolyline = (riderId: string, color: string) => {
+    const updateTrail = (riderId: string, color: string) => {
       const history = globalHistory[riderId];
       if (!history || history.length < 2) return;
 
-      const path = history.map(p => ({ lat: p.lat, lng: p.lng }));
-
       if (globalPolylines[riderId]) {
-        globalPolylines[riderId].setPath(path);
+        globalPolylines[riderId].setPath(history);
       } else {
         const polyline = new (window as any).google.maps.Polyline({
-          path,
+          path: history,
           geodesic: true,
           strokeColor: color,
           strokeOpacity: 0.7,
@@ -341,16 +313,16 @@ export default function GoogleMapsLive() {
           map: globalMap,
         });
         globalPolylines[riderId] = polyline;
+        console.log("🛣️ Trayectoria creada para:", riderId);
       }
     };
 
     const handleSelectRider = (riderId: string) => {
-      setSelectedRider(riderId);
       if (globalMarkers[riderId]) {
         const { marker, loc } = globalMarkers[riderId];
         globalMap?.panTo({ lat: loc.latitud, lng: loc.longitud });
         globalMap?.setZoom(16);
-        // Open info window
+        // Abrir info window
         if (globalInfoWindow) globalInfoWindow.close();
         globalMarkers[riderId].infoWindow.open(globalMap, marker);
         globalInfoWindow = globalMarkers[riderId].infoWindow;
@@ -361,7 +333,7 @@ export default function GoogleMapsLive() {
 
     return () => {
       mountedRef.current = false;
-      // Do NOT clear globalMap, globalMarkers, globalPolylines, globalHistory, or globalChannel
+      // NO limpiar nada para persistencia
     };
   }, []);
 
@@ -372,7 +344,7 @@ export default function GoogleMapsLive() {
         style={{ width: "100%", height: "400px", borderRadius: "12px", background: "#1e293b" }}
       />
       
-      {/* Lista de repartidores abajo */}
+      {/* Lista simple abajo: SOLO NOMBRES con color */}
       <div className="mt-4 bg-slate-900 rounded-xl border border-slate-800 p-4">
         <div className="flex items-center gap-3 mb-3">
           <input
@@ -390,22 +362,27 @@ export default function GoogleMapsLive() {
         <div className="space-y-2 max-h-48 overflow-y-auto">
           {filteredRiders.length === 0 ? (
             <p className="text-slate-500 text-sm text-center py-4">
-              {searchTerm ? "No se encontraron repartidores" : "No hay repartidores conectados"}
+              {searchTerm ? "No se encontraron repartidores" : "No hay repartidores con GPS activo"}
             </p>
           ) : (
             filteredRiders.map(loc => {
               const color = getColorForId(loc.repartidor_id);
               const initials = getInitials(loc.nombre_repartidor || "R");
-              const isSelected = selectedRider === loc.repartidor_id;
-              const historyCount = globalHistory[loc.repartidor_id]?.length || 0;
               
               return (
                 <div
                   key={loc.repartidor_id}
-                  onClick={() => handleSelectRider(loc.repartidor_id)}
-                  className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                    isSelected ? "bg-slate-700" : "hover:bg-slate-800"
-                  }`}
+                  onClick={() => {
+                    if (globalMarkers[loc.repartidor_id]) {
+                      const { marker, loc: l } = globalMarkers[loc.repartidor_id];
+                      globalMap?.panTo({ lat: l.latitud, lng: l.longitud });
+                      globalMap?.setZoom(16);
+                      if (globalInfoWindow) globalInfoWindow.close();
+                      globalMarkers[loc.repartidor_id].infoWindow.open(globalMap, marker);
+                      globalInfoWindow = globalMarkers[loc.repartidor_id].infoWindow;
+                    }
+                  }}
+                  className="flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors"
                 >
                   {/* Avatar con iniciales y color único */}
                   <div
@@ -418,10 +395,7 @@ export default function GoogleMapsLive() {
                   <div className="flex-1">
                     <p className="text-white text-sm font-semibold">{loc.nombre_repartidor || "Repartidor"}</p>
                     <p className="text-slate-400 text-xs">
-                      {loc.latitud?.toFixed(4)}, {loc.longitud?.toFixed(4)}
-                    </p>
-                    <p className="text-slate-500 text-xs mt-1">
-                      Rastro: {historyCount} puntos • {new Date(loc.ultima_actualizacion).toLocaleTimeString()}
+                      {new Date(loc.ultima_actualizacion).toLocaleTimeString()}
                     </p>
                   </div>
                   
@@ -431,9 +405,7 @@ export default function GoogleMapsLive() {
                       loc.estado === 'ocupado' ? 'bg-yellow-500' : 'bg-slate-500'
                     }`} />
                     <p className="text-slate-500 text-xs mt-1">
-                      {historyCount > 0 && (
-                        <span style={{ color }}>&#x25C9; {historyCount}</span>
-                      )}
+                      {globalHistory[loc.repartidor_id]?.length || 0} pts
                     </p>
                   </div>
                 </div>
