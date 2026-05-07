@@ -91,12 +91,19 @@ export default function LoginPage() {
           <div><label style={{ display: "block", color: "#94a3b8", fontSize: 14, marginBottom: 6 }}>Contrasena</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Minimo 6 caracteres" required minLength={6} style={{ width: "100%", padding: "14px 18px", borderRadius: 14, border: "1px solid rgba(255,255,255,0.12)", background: "#09111d", color: "#f8fafc", fontSize: 16, boxSizing: "border-box" }} /></div>
           <button type="submit" disabled={submitLoading || loading} style={{ padding: "16px 24px", borderRadius: 14, border: "none", background: "linear-gradient(135deg, #facc15 0%, #f59e0b 100%)", color: "#0f172a", fontWeight: 700, fontSize: 16, cursor: (submitLoading || loading) ? "wait" : "pointer", marginTop: 8 }}>{(submitLoading || loading) ? "Procesando..." : isRegister ? "Crear cuenta" : "Iniciar sesion"}</button>
         </form>
-        <p style={{ textAlign: "center", marginTop: 24, color: "#94a3b8", fontSize: 14 }}>
+        <p style={{ textAlign: "center", marginTop: 16, color: "#94a3b8", fontSize: 14 }}>
           {isRegister ? "Ya tienes cuenta? " : "No tienes cuenta? "}
           <button type="button" onClick={() => { setIsRegister(!isRegister); setError(""); setTelefono(""); setVehiculo(""); setPlaca(""); setDocumento(""); setAccessCode(""); }} style={{ background: "none", border: "none", color: "#facc15", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
             {isRegister ? "Inicia sesion" : "Registrate"}
           </button>
         </p>
+        <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <a href="/cliente" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 24px", borderRadius: 14, background: "rgba(250,204,21,0.1)", color: "#facc15", fontWeight: 600, fontSize: 14, textDecoration: "none", transition: "background 0.2s" }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(250,204,21,0.2)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(250,204,21,0.1)")}>
+            🛒 Ir a cliente
+          </a>
+        </div>
       </div>
     </div>
   );
