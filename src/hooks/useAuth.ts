@@ -8,7 +8,7 @@ export type UserProfile = {
   id: string;
   email: string;
   nombre: string;
-  rol: "admin" | "repartidor";
+  rol: "admin" | "repartidor" | "negocio";
 };
 
 async function fetchProfile(userId: string, sessionUser: User): Promise<UserProfile> {
@@ -20,28 +20,37 @@ async function fetchProfile(userId: string, sessionUser: User): Promise<UserProf
       .maybeSingle();
 
     if (pData) {
+      let rol: "admin" | "repartidor" | "negocio" = "admin";
+      if (pData.rol === "repartidor") rol = "repartidor";
+      else if (pData.rol === "negocio") rol = "negocio";
       return {
         id: pData.id,
         email: pData.email || sessionUser.email || "",
         nombre: pData.nombre || sessionUser.email || "",
-        rol: (pData.rol === "repartidor" ? "repartidor" : "admin") as "admin" | "repartidor",
+        rol,
       };
     }
 
     const meta = sessionUser.user_metadata || {};
+    let rol: "admin" | "repartidor" | "negocio" = "admin";
+    if (meta.rol === "repartidor") rol = "repartidor";
+    else if (meta.rol === "negocio") rol = "negocio";
     return {
       id: userId,
       email: sessionUser.email || "",
       nombre: meta.nombre || sessionUser.email || "",
-      rol: (meta.rol === "repartidor" ? "repartidor" : "admin") as "admin" | "repartidor",
+      rol,
     };
   } catch (e) {
     const meta = sessionUser.user_metadata || {};
+    let rol: "admin" | "repartidor" | "negocio" = "admin";
+    if (meta.rol === "repartidor") rol = "repartidor";
+    else if (meta.rol === "negocio") rol = "negocio";
     return {
       id: userId,
       email: sessionUser.email || "",
       nombre: meta.nombre || sessionUser.email || "",
-      rol: (meta.rol === "repartidor" ? "repartidor" : "admin") as "admin" | "repartidor",
+      rol,
     };
   }
 }
@@ -117,12 +126,25 @@ export function useAuth() {
 
   const registerAdmin = useCallback(async (email: string, password: string, nombre: string, accessCode: string) => {
     setLoading(true);
-    // Validar código localmente solo como primera capa (la validación real debe ser en servidor)
     const validCode = process.env.NEXT_PUBLIC_ADMIN_ACCESS_CODE;
     if (!validCode || accessCode !== validCode) { setLoading(false); throw new Error("Codigo de acceso invalido."); }
     const { data, error } = await supabase.auth.signUp({
       email, password,
       options: { data: { nombre, rol: "admin" } },
+    });
+    if (error) { setLoading(false); throw error; }
+    if (!data.user) { setLoading(false); throw new Error("No se pudo crear el usuario"); }
+    setLoading(false);
+    return data.user;
+  }, []);
+
+  const registerNegocio = useCallback(async (
+    email: string, password: string, nombreNegocio: string, telefono: string, categoria: string
+  ) => {
+    setLoading(true);
+    const { data, error } = await supabase.auth.signUp({
+      email, password,
+      options: { data: { nombre: nombreNegocio, rol: "negocio", telefono, categoria } },
     });
     if (error) { setLoading(false); throw error; }
     if (!data.user) { setLoading(false); throw new Error("No se pudo crear el usuario"); }
@@ -136,5 +158,5 @@ export function useAuth() {
     window.location.href = "/login";
   }, []);
 
-  return { user, profile, loading, initialized, login, registerAdmin, registerRepartidor, logout };
+  return { user, profile, loading, initialized, login, registerAdmin, registerRepartidor, registerNegocio, logout };
 }
