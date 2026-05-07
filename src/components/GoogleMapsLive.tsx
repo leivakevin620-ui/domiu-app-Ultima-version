@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
 
 interface Location {
@@ -17,11 +17,14 @@ interface Location {
 let globalMap: any = null;
 let globalOverlays: Record<string, any> = {};
 let globalChannel: any = null;
-let globalInitialized = false;
+let globalDirectionsRenderer: any = null;
+let globalAdminMarker: any = null;
 
 export default function GoogleMapsLive() {
   const mapRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
+  const [adminPos, setAdminPos] = useState<{lat: number, lng: number} | null>(null);
+  const [selectedRider, setSelectedRider] = useState<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -38,11 +41,11 @@ export default function GoogleMapsLive() {
       }
 
       try {
-        // Load Google Maps
+        // 1. Load Google Maps
         if (!(window as any).google?.maps) {
           await new Promise<void>((resolve, reject) => {
             const script = document.createElement("script");
-            script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry`;
             script.async = true;
             script.onload = () => {
               console.log("✅ Maps loaded");
@@ -53,7 +56,49 @@ export default function GoogleMapsLive() {
           });
         }
 
-        // Wait for div
+        // 2. Get admin location
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const pos = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+              };
+              setAdminPos(pos);
+              console.log("📍 Admin location:", pos);
+              
+              if (globalMap) {
+                globalMap.setCenter(pos);
+                // Add admin marker
+                if (!globalAdminMarker) {
+                  globalAdminMarker = new (window as any).google.maps.Marker({
+                    position: pos,
+                    map: globalMap,
+                    title: "Tu ubicación (Admin)",
+                    icon: {
+                      path: (window as any).google.maps.SymbolPath.CIRCLE,
+                      fillColor: "#3b82f6",
+                      fillOpacity: 1,
+                      strokeColor: "#fff",
+                      strokeWeight: 2,
+                      scale: 10,
+                    },
+                  });
+                } else {
+                  globalAdminMarker.setPosition(pos);
+                }
+              }
+            },
+            (error) => {
+              console.error("GPS Admin error:", error);
+              // Default to Cartagena if can't get location
+              if (globalMap) globalMap.setCenter({ lat: 10.4, lng: -75.5 });
+            },
+            { enableHighAccuracy: true, timeout: 5000 }
+          );
+        }
+
+        // 3. Wait for div
         let tries = 0;
         while (!mapRef.current && tries < 100 && mountedRef.current) {
           await new Promise(r => setTimeout(r, 50));
@@ -64,13 +109,12 @@ export default function GoogleMapsLive() {
 
         if (!globalMap) {
           globalMap = new (window as any).google.maps.Map(mapRef.current, {
-            center: { lat: 10.4, lng: -75.5 },
-            zoom: 12,
+            center: adminPos || { lat: 10.4, lng: -75.5 },
+            zoom: 14,
             mapTypeId: "roadmap",
           });
           console.log("✅ Map created (singleton)");
         } else {
-          // Move map to this div
           const div = globalMap.getDiv();
           if (div && div.parentNode) {
             div.parentNode.removeChild(div);
@@ -79,14 +123,14 @@ export default function GoogleMapsLive() {
           console.log("♻️ Map reused");
         }
 
-        // Load initial positions
+        // 4. Load initial positions
         await loadPositions();
 
-        // Subscribe to realtime changes (only once)
+        // 5. Subscribe to realtime
         if (!globalChannel) {
           const sb = getSupabaseClient();
           globalChannel = sb
-            .channel("live_riders_overlay")
+            .channel("live_riders_v3")
             .on("postgres_changes", {
               event: "*",
               schema: "public",
@@ -130,7 +174,6 @@ export default function GoogleMapsLive() {
       if (!globalMap) return;
 
       const currentIds = new Set<string>();
-      let overlayClass: any = null;
 
       // Define overlay class if not defined
       if (!(window as any).RiderOverlay) {
@@ -138,27 +181,29 @@ export default function GoogleMapsLive() {
           private position: any;
           private div: HTMLDivElement | null = null;
           private loc: Location;
+          private repartidorId: string;
 
-          constructor(pos: any, loc: Location) {
+          constructor(pos: any, loc: Location, repartidorId: string) {
             super();
             this.position = pos;
             this.loc = loc;
+            this.repartidorId = repartidorId;
             this.setMap(globalMap);
           }
 
           onAdd() {
             this.div = document.createElement("div");
             this.div.style.position = "absolute";
+            this.div.style.cursor = "pointer";
             this.div.style.background = this.loc.estado === "disponible" ? "#22c55e" : 
-                                     this.loc.estado === "ocupado" ? "#eab308" : "#94a3b8";
+                                       this.loc.estado === "ocupado" ? "#eab308" : "#94a3b8";
             this.div.style.color = "#fff";
-            this.div.style.padding = "6px 10px";
+            this.div.style.padding = "8px 12px";
             this.div.style.borderRadius = "8px";
             this.div.style.fontSize = "12px";
             this.div.style.fontWeight = "bold";
-            this.div.style.boxShadow = "0 2px 6px rgba(0,0,0,0.3)";
+            this.div.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
             this.div.style.whiteSpace = "nowrap";
-            this.div.style.cursor = "pointer";
             this.div.innerHTML = `
               <div>${this.loc.nombre_repartidor || "Repartidor"}</div>
               <div style="font-size:10px;font-weight:normal;margin-top:2px;">
@@ -167,7 +212,22 @@ export default function GoogleMapsLive() {
               <div style="font-size:10px;font-weight:normal;">
                 ${this.loc.latitud?.toFixed(4)}, ${this.loc.longitud?.toFixed(4)}
               </div>
+              <div style="font-size:10px;font-weight:normal;color:#1e40af;margin-top:2px;cursor:pointer;" 
+                   class="ver-trayectoria">
+                Ver trayectoria
+              </div>
             `;
+
+            // Click to show route
+            this.div.querySelector(".ver-trayectoria")?.addEventListener("click", (e) => {
+              e.stopPropagation();
+              if (adminPos) {
+                showRoute(adminPos, this.position, this.loc.nombre_repartidor);
+              } else {
+                alert("Activa tu GPS para ver la trayectoria");
+              }
+            });
+
             const panes = this.getPanes();
             panes?.overlayLayer.appendChild(this.div);
           }
@@ -194,7 +254,7 @@ export default function GoogleMapsLive() {
             this.loc = loc;
             if (this.div) {
               this.div.style.background = loc.estado === "disponible" ? "#22c55e" : 
-                                         loc.estado === "ocupado" ? "#eab308" : "#94a3b8";
+                                             loc.estado === "ocupado" ? "#eab308" : "#94a3b8";
               this.div.innerHTML = `
                 <div>${loc.nombre_repartidor || "Repartidor"}</div>
                 <div style="font-size:10px;font-weight:normal;margin-top:2px;">
@@ -203,7 +263,20 @@ export default function GoogleMapsLive() {
                 <div style="font-size:10px;font-weight:normal;">
                   ${loc.latitud?.toFixed(4)}, ${loc.longitud?.toFixed(4)}
                 </div>
+                <div style="font-size:10px;font-weight:normal;color:#1e40af;margin-top:2px;cursor:pointer;" 
+                     class="ver-trayectoria">
+                  Ver trayectoria
+                </div>
               `;
+              // Reattach click
+              this.div.querySelector(".ver-trayectoria")?.addEventListener("click", (e) => {
+                e.stopPropagation();
+                if (adminPos) {
+                  showRoute(adminPos, this.position, loc.nombre_repartidor);
+                } else {
+                  alert("Activa tu GPS para ver la trayectoria");
+                }
+              });
             }
             this.draw();
           }
@@ -224,7 +297,7 @@ export default function GoogleMapsLive() {
         } else {
           // Create new overlay
           const OverlayClass = (window as any).RiderOverlay;
-          const overlay = new OverlayClass(pos, loc);
+          const overlay = new OverlayClass(pos, loc, loc.repartidor_id);
           globalOverlays[loc.repartidor_id] = overlay;
           console.log("📍 Overlay created:", loc.nombre_repartidor);
         }
@@ -239,6 +312,42 @@ export default function GoogleMapsLive() {
       });
     };
 
+    const showRoute = (origin: any, destination: any, riderName: string) => {
+      if (!globalMap) return;
+
+      // Clear previous route
+      if (globalDirectionsRenderer) {
+        globalDirectionsRenderer.setMap(null);
+      }
+
+      const directionsService = new (window as any).google.maps.DirectionsService();
+      globalDirectionsRenderer = new (window as any).google.maps.DirectionsRenderer({
+        suppressMarkers: true,
+        polylineOptions: {
+          strokeColor: "#3b82f6",
+          strokeWeight: 4,
+          strokeOpacity: 0.7,
+        },
+      });
+      globalDirectionsRenderer.setMap(globalMap);
+
+      directionsService.route(
+        {
+          origin: new (window as any).google.maps.LatLng(origin.lat, origin.lng),
+          destination: destination,
+          travelMode: (window as any).google.maps.TravelMode.DRIVING,
+        },
+        (result: any, status: string) => {
+          if (status === "OK") {
+            globalDirectionsRenderer.setDirections(result);
+            console.log(`🛣️ Route to ${riderName} shown`);
+          } else {
+            console.error("Directions request failed:", status);
+          }
+        }
+      );
+    };
+
     init();
 
     return () => {
@@ -249,6 +358,9 @@ export default function GoogleMapsLive() {
 
   return (
     <div>
+      <div className="mb-4 bg-slate-800 p-3 rounded-xl text-sm text-slate-400">
+        💡 El mapa se centra en tu ubicación actual (activa tu GPS). Haz clic en "Ver trayectoria" para ver la ruta hasta el repartidor.
+      </div>
       <div
         ref={mapRef}
         style={{ width: "100%", height: "400px", borderRadius: "12px", background: "#1e293b" }}
