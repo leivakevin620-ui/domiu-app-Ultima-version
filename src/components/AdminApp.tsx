@@ -129,6 +129,7 @@ export default function AdminApp() {
 
   /* Repartidor detalle */
   const [rDetalle, setRDetalle] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   /* Turnos */
   const [showTurnoModal, setShowTurnoModal] = useState(false);
@@ -140,6 +141,26 @@ export default function AdminApp() {
   /* Toast helpers */
   const ok = (m: string) => { setMsg(m); setErr(""); setTimeout(() => setMsg(""), 4000); };
   const fail = (m: string) => { setErr(m); setMsg(""); setTimeout(() => setErr(""), 6000); };
+
+  /* Delete user */
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!confirm(`¿Eliminar cuenta de ${userName}? Esta acción no se puede deshacer.`)) return;
+    setDeletingId(userId);
+    try {
+      const res = await fetch("/api/delete-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) throw new Error("Error eliminando usuario");
+      setReps((prev: any[]) => prev.filter((r: any) => r.user_id !== userId));
+      ok("Cuenta eliminada correctamente");
+    } catch (e: any) {
+      fail(e.message || "Error eliminando usuario");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   /* ======================== DATA ======================== */
   const load = useCallback(async () => {
