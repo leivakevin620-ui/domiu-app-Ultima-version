@@ -195,9 +195,9 @@ export default function AdminApp() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Polling cada 10 segundos (respaldo del realtime)
+  // Polling cada 60 segundos (respaldo del realtime)
   useEffect(() => {
-    const interval = setInterval(() => load(), 10000);
+    const interval = setInterval(() => load(), 60000);
     return () => clearInterval(interval);
   }, [load]);
 
