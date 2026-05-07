@@ -69,6 +69,7 @@ export default function GoogleMapsLive() {
               setAdminPos(p);
               if (map) {
                 map.setCenter(p);
+                // Marcador admin con nombre
                 if (!adminMarker) {
                   adminMarker = new (window as any).google.maps.Marker({
                     position: p,
@@ -79,8 +80,14 @@ export default function GoogleMapsLive() {
                       fillColor: "#3b82f6",
                       fillOpacity: 1,
                       strokeColor: "#fff",
-                      strokeWeight: 2,
-                      scale: 10,
+                      strokeWeight: 3,
+                      scale: 14,
+                    },
+                    label: {
+                      text: "ADMIN",
+                      color: "#fff",
+                      fontSize: "12px",
+                      fontWeight: "bold",
                     },
                   });
                 } else {
@@ -156,7 +163,7 @@ export default function GoogleMapsLive() {
         const color = getColor(loc.repartidor_id);
         const pos = { lat: loc.latitud, lng: loc.longitud };
 
-        // Actualizar historial (siempre, aunque la app esté cerrada)
+        // Historial - siempre guardar (aunque salga de la app)
         if (!history[loc.repartidor_id]) history[loc.repartidor_id] = [];
         history[loc.repartidor_id].push({ ...pos, time: new Date(loc.ultima_actualizacion).getTime() });
         if (history[loc.repartidor_id].length > 200) {
@@ -168,20 +175,19 @@ export default function GoogleMapsLive() {
           const marker = markers[loc.repartidor_id];
           marker.setPosition(pos);
           marker.setIcon({
-            path: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10 10-10-4.48-10-10-10zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3 3 1.34 3 3 3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.01 6-3.01s5.97 1.02 6 3.01c-1.29 1.94-3.5 3.22-6 3.22z",
+            path: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10 10-10-4.48-10-10-10zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3 3-3 3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.01 6-3.01s5.97 1.02 6 3.01c-1.29 1.94-3.5 3.22-6 3.22z",
             fillColor: color,
             fillOpacity: 1,
             strokeColor: "#fff",
-            strokeWeight: 2,
-            scale: 1.5,
-            labelOrigin: new (window as any).google.maps.Point(12, 12),
+            strokeWeight: 3,
+            scale: 14,
           });
-          // Actualizar etiqueta (nombre completo, truncado a 15 caracteres)
+          // Actualizar etiqueta (nombre completo, truncado a 15)
           const displayName = (loc.nombre_repartidor || "R").substring(0, 15);
           marker.setLabel({
             text: displayName,
             color: "#fff",
-            fontSize: "11px",
+            fontSize: "12px",
             fontWeight: "bold",
           });
         } else {
@@ -191,18 +197,18 @@ export default function GoogleMapsLive() {
             position: pos,
             map,
             icon: {
-              path: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10 10-10-4.48-10-10-10zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3 3 1.34 3 3 3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.01 6-3.01s5.97 1.02 6 3.01c-1.29 1.94-3.5 3.22-6 3.22z",
+              path: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10 10-10-4.48-10-10-10zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3 3-3 3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.01 6-3.01s5.97 1.02 6 3.01c-1.29 1.94-3.5 3.22-6 3.22z",
               fillColor: color,
               fillOpacity: 1,
               strokeColor: "#fff",
-              strokeWeight: 2,
-              scale: 1.5,
+              strokeWeight: 3,
+              scale: 14,
               labelOrigin: new (window as any).google.maps.Point(12, 12),
             },
             label: {
               text: displayName,
               color: "#fff",
-              fontSize: "11px",
+              fontSize: "12px",
               fontWeight: "bold",
             },
             title: loc.nombre_repartidor || "Repartidor",
@@ -229,15 +235,12 @@ export default function GoogleMapsLive() {
             iw.open(map, markers[loc.repartidor_id]);
             infoWindow = iw;
             setIsTracking(loc.repartidor_id);
-            // Seguimiento: centrar mapa en este repartidor
-            map.panTo(pos);
-            map.setZoom(16);
           });
 
           console.log("📍 Marcador creado:", loc.nombre_repartidor);
         }
 
-        // Actualizar línea de trayectoria (siempre visible)
+        // Trayectoria (siempre visible, más gruesa)
         if (history[loc.repartidor_id].length >= 2) {
           const path = history[loc.repartidor_id].map(p => ({ lat: p.lat, lng: p.lng }));
           if (polylines[loc.repartidor_id]) {
@@ -247,21 +250,21 @@ export default function GoogleMapsLive() {
               path,
               geodesic: true,
               strokeColor: color,
-              strokeOpacity: 0.7,
-              strokeWeight: 3,
+              strokeOpacity: 0.8,
+              strokeWeight: 6,
               map,
             });
             console.log("🛣️ Trayectoria creada para:", loc.nombre_repartidor);
           }
         }
 
-        // Si estamos haciendo seguimiento de este repartidor, mantener el mapa centrado
+        // Si estamos haciendo seguimiento, centrar mapa
         if (isTracking === loc.repartidor_id) {
           map.panTo(pos);
         }
       });
 
-      // Eliminar los que ya no existen (excepto admin)
+      // Eliminar los que ya no están (excepto admin)
       Object.keys(markers).forEach(id => {
         if (!currentIds.has(id) && id !== "admin") {
           markers[id].setMap(null);
