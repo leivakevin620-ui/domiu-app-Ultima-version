@@ -38,6 +38,21 @@ CREATE TABLE IF NOT EXISTS productos (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Tabla repartidores (del sistema original, necesaria para FKs)
+CREATE TABLE IF NOT EXISTS repartidores (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  nombre TEXT NOT NULL,
+  telefono TEXT,
+  estado TEXT DEFAULT 'No disponible',
+  vehiculo TEXT,
+  placa TEXT,
+  documento TEXT,
+  foto_url TEXT,
+  activo BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS pedidos_cliente (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   codigo TEXT NOT NULL UNIQUE DEFAULT upper(substr(md5(random()::text), 1, 8)),
@@ -65,6 +80,22 @@ CREATE TABLE IF NOT EXISTS detalle_pedido_cliente (
   precio_unitario NUMERIC(10,2) NOT NULL,
   subtotal NUMERIC(10,2) NOT NULL
 );
+
+-- ============================================================
+-- 1.5. TABLA UBICACIONES REPARTIDORES (para GPS en vivo)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS ubicaciones_repartidores (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  repartidor_id UUID NOT NULL REFERENCES repartidores(id) ON DELETE CASCADE,
+  nombre_repartidor TEXT,
+  latitud DOUBLE PRECISION NOT NULL,
+  longitud DOUBLE PRECISION NOT NULL,
+  estado TEXT DEFAULT 'disponible',
+  ultima_actualizacion TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE ubicaciones_repartidores ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
 -- 2. COLUMNAS ADICIONALES
@@ -135,25 +166,26 @@ DROP POLICY IF EXISTS "detalle_pedido_select" ON detalle_pedido_cliente;
 CREATE POLICY "detalle_pedido_select" ON detalle_pedido_cliente FOR SELECT USING (true);
 
 -- RLS especifica para repartidor (Fase 4)
+-- Nota: usamos ::text para evitar error de tipos (text vs uuid)
 DROP POLICY IF EXISTS "repartidor_select_pedidos" ON pedidos_cliente;
 CREATE POLICY "repartidor_select_pedidos" ON pedidos_cliente FOR SELECT
-  USING (repartidor_id IN (SELECT id FROM repartidores WHERE user_id = auth.uid()));
+  USING (repartidor_id::text IN (SELECT id::text FROM repartidores WHERE user_id = auth.uid()));
 
 DROP POLICY IF EXISTS "repartidor_update_pedidos" ON pedidos_cliente;
 CREATE POLICY "repartidor_update_pedidos" ON pedidos_cliente FOR UPDATE
-  USING (repartidor_id IN (SELECT id FROM repartidores WHERE user_id = auth.uid()));
+  USING (repartidor_id::text IN (SELECT id::text FROM repartidores WHERE user_id = auth.uid()));
 
 DROP POLICY IF EXISTS "repartidor_insert_ubicacion" ON ubicaciones_repartidores;
 CREATE POLICY "repartidor_insert_ubicacion" ON ubicaciones_repartidores FOR INSERT
-  WITH CHECK (repartidor_id IN (SELECT id FROM repartidores WHERE user_id = auth.uid()));
+  WITH CHECK (repartidor_id::text IN (SELECT id::text FROM repartidores WHERE user_id = auth.uid()));
 
 DROP POLICY IF EXISTS "repartidor_update_ubicacion" ON ubicaciones_repartidores;
 CREATE POLICY "repartidor_update_ubicacion" ON ubicaciones_repartidores FOR UPDATE
-  USING (repartidor_id IN (SELECT id FROM repartidores WHERE user_id = auth.uid()));
+  USING (repartidor_id::text IN (SELECT id::text FROM repartidores WHERE user_id = auth.uid()));
 
 DROP POLICY IF EXISTS "repartidor_select_ubicacion" ON ubicaciones_repartidores;
 CREATE POLICY "repartidor_select_ubicacion" ON ubicaciones_repartidores FOR SELECT
-  USING (repartidor_id IN (SELECT id FROM repartidores WHERE user_id = auth.uid()));
+  USING (repartidor_id::text IN (SELECT id::text FROM repartidores WHERE user_id = auth.uid()));
 
 -- ============================================================
 -- 4. DATOS DE EJEMPLO
