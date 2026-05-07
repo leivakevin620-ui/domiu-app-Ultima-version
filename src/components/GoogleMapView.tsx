@@ -13,17 +13,17 @@ interface Location {
   ultima_actualizacion: string;
 }
 
-// Variables persistentes FUERA del componente
-let persistentMap: any = null;
-let persistentMarkers: Record<string, any> = {};
-let boundsSet = false;
+// Instancia única GLOBAL (persiste entre renders)
+let _map: any = null;
+let _markers: Record<string, any> = {};
+let _boundsSet = false;
+let _interval: NodeJS.Timeout | null = null;
 
 export default function GoogleMapView() {
   const mapRef = useRef<HTMLDivElement>(null);
   const [hasData, setHasData] = useState(false);
   const [error, setError] = useState("");
   const mountedRef = useRef(true);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -36,50 +36,55 @@ export default function GoogleMapView() {
           return;
         }
 
-        // Cargar Google Maps UNA vez
+        // 1. Cargar Google Maps (una sola vez globalmente)
         if (!(window as any).google?.maps) {
           await new Promise<void>((resolve, reject) => {
             const script = document.createElement("script");
             script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
             script.async = true;
-            script.onload = resolve;
+            script.onload = () => {
+              console.log("✅ Google Maps cargado");
+              resolve();
+            };
             script.onerror = () => reject(new Error("Error cargando Google Maps"));
             document.head.appendChild(script);
           });
         }
 
-        // Esperar al div
+        // 2. Esperar al div
         let tries = 0;
-        while (!mapRef.current && tries < 50 && mountedRef.current) {
-          await new Promise(r => setTimeout(r, 100));
+        while (!mapRef.current && tries < 100 && mountedRef.current) {
+          await new Promise(r => setTimeout(r, 50));
           tries++;
         }
 
         if (!mapRef.current || !mountedRef.current) return;
 
-        // Crear mapa solo si no existe
-        if (!persistentMap) {
-          persistentMap = new (window as any).google.maps.Map(mapRef.current, {
+        // 3. Crear mapa UNA sola vez (global)
+        if (!_map) {
+          _map = new (window as any).google.maps.Map(mapRef.current, {
             center: { lat: 10.4, lng: -75.5 },
             zoom: 12,
           });
-          console.log("✅ Mapa creado (una sola vez)");
+          console.log("✅ Mapa creado (única vez)");
         } else {
-          // Reutilizar mapa existente
-          const div = persistentMap.getDiv();
+          // Mover mapa existente al nuevo div
+          const div = _map.getDiv();
           if (div && div.parentNode) {
             div.parentNode.removeChild(div);
           }
-          mapRef.current.appendChild(persistentMap.getDiv());
-          console.log("♻️ Mapa reutilizado");
+          mapRef.current.appendChild(_map.getDiv());
+          console.log("♻️ Mapa reutilizado (no se recrea)");
         }
 
-        // Cargar datos iniciales
-        await loadAndUpdate();
+        // 4. Cargar datos iniciales
+        await loadData();
 
-        // Polling cada 5 segundos (en lugar de Realtime)
-        intervalRef.current = setInterval(loadAndUpdate, 5000);
-        console.log("⏱️ Polling iniciado (5 seg)");
+        // 5. Iniciar polling (solo una vez globalmente)
+        if (!_interval) {
+          _interval = setInterval(loadData, 30000); // 30 segundos
+          console.log("⏱️ Polling iniciado (30s)");
+        }
 
       } catch (err: any) {
         console.error("Error:", err);
@@ -87,8 +92,8 @@ export default function GoogleMapView() {
       }
     };
 
-    const loadAndUpdate = async () => {
-      if (!persistentMap || !mountedRef.current) return;
+    const loadData = async () => {
+      if (!_map || !mountedRef.current) return;
 
       try {
         const sb = getSupabaseClient();
@@ -106,8 +111,7 @@ export default function GoogleMapView() {
     };
 
     const updateMarkers = (locs: Location[]) => {
-      const map = persistentMap;
-      if (!map) return;
+      if (!_map) return;
 
       const bounds = new (window as any).google.maps.LatLngBounds();
       const currentIds = new Set<string>();
@@ -123,9 +127,9 @@ export default function GoogleMapView() {
 
         const position = { lat: loc.latitud, lng: loc.longitud };
 
-        if (persistentMarkers[loc.repartidor_id]) {
+        if (_markers[loc.repartidor_id]) {
           // Actualizar marcador existente (sin recrear)
-          const marker = persistentMarkers[loc.repartidor_id];
+          const marker = _markers[loc.repartidor_id];
           marker.setPosition(position);
           marker.setIcon({
             path: (window as any).google.maps.SymbolPath.CIRCLE,
@@ -139,7 +143,7 @@ export default function GoogleMapView() {
           // Crear nuevo marcador
           const marker = new (window as any).google.maps.Marker({
             position,
-            map,
+            map: _map,
             title: loc.nombre_repartidor || "Repartidor",
             icon: {
               path: (window as any).google.maps.SymbolPath.CIRCLE,
@@ -155,25 +159,26 @@ export default function GoogleMapView() {
             content: `<div style="padding:8px"><strong>${loc.nombre_repartidor || "Repartidor"}</strong><br/>Estado: ${loc.estado}<br/>${new Date(loc.ultima_actualizacion).toLocaleTimeString()}</div>`,
           });
 
-          marker.addListener("click", () => info.open(map, marker));
-          persistentMarkers[loc.repartidor_id] = marker;
+          marker.addListener("click", () => info.open(_map, marker));
+          _markers[loc.repartidor_id] = marker;
+          console.log("📌 Marcador:", loc.nombre_repartidor);
         }
 
         bounds.extend(new (window as any).google.maps.LatLng(loc.latitud, loc.longitud));
       });
 
       // Eliminar marcadores que ya no existen
-      Object.keys(persistentMarkers).forEach(id => {
+      Object.keys(_markers).forEach(id => {
         if (!currentIds.has(id)) {
-          persistentMarkers[id].setMap(null);
-          delete persistentMarkers[id];
+          _markers[id].setMap(null);
+          delete _markers[id];
         }
       });
 
       // Ajustar bounds SOLO la primera vez
-      if (!boundsSet && hasValid) {
-        map.fitBounds(bounds);
-        boundsSet = true;
+      if (!_boundsSet && hasValid) {
+        _map.fitBounds(bounds);
+        _boundsSet = true;
         console.log("🗺️ Bounds ajustados (una sola vez)");
       }
     };
@@ -182,12 +187,8 @@ export default function GoogleMapView() {
 
     return () => {
       mountedRef.current = false;
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-        console.log("⏱️ Polling detenido");
-      }
-      // NO limpiar persistentMap ni persistentMarkers
+      // NO limpiar _map, _markers, ni _interval
+      // Esto evita que el mapa parpadee al desmontar
     };
   }, []);
 
