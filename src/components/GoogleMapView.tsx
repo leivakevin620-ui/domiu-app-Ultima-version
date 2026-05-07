@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
 
 interface Location {
@@ -18,8 +18,63 @@ export default function GoogleMapView() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [error, setError] = useState("");
   const mapInstance = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
+  const markersRef = useRef<Record<string, any>>({});
+  const boundsInitialized = useRef(false);
   const channelRef = useRef<any>(null);
+
+  const updateOrCreateMarker = useCallback((map: any, loc: Location) => {
+    const color = loc.estado === "disponible" ? "#22c55e" : 
+                  loc.estado === "ocupado" ? "#eab308" : "#94a3b8";
+    
+    const icon = {
+      path: (window as any).google.maps.SymbolPath.CIRCLE,
+      fillColor: color,
+      fillOpacity: 1,
+      strokeColor: "#fff",
+      strokeWeight: 2,
+      scale: 8,
+    };
+
+    const position = { lat: loc.latitud, lng: loc.longitud };
+
+    if (markersRef.current[loc.repartidor_id]) {
+      // Actualizar marcador existente (sin recrear)
+      const marker = markersRef.current[loc.repartidor_id];
+      marker.setPosition(position);
+      marker.setIcon(icon);
+      
+      // Actualizar info window
+      const info = marker.infoWindow;
+      if (info) {
+        info.setContent(`<div style="padding:8px"><strong>${loc.nombre_repartidor || "Repartidor"}</strong><br/>Estado: ${loc.estado}<br/>${new Date(loc.ultima_actualizacion).toLocaleTimeString()}</div>`);
+      }
+    } else {
+      // Crear nuevo marcador
+      const marker = new (window as any).google.maps.Marker({
+        position,
+        map,
+        title: loc.nombre_repartidor || "Repartidor",
+        icon,
+      });
+
+      const info = new (window as any).google.maps.InfoWindow({
+        content: `<div style="padding:8px"><strong>${loc.nombre_repartidor || "Repartidor"}</strong><br/>Estado: ${loc.estado}<br/>${new Date(loc.ultima_actualizacion).toLocaleTimeString()}</div>`,
+      });
+
+      marker.addListener("click", () => info.open(map, marker));
+      marker.infoWindow = info;
+      markersRef.current[loc.repartidor_id] = marker;
+    }
+  }, []);
+
+  const removeOldMarkers = useCallback((currentIds: Set<string>) => {
+    Object.keys(markersRef.current).forEach(id => {
+      if (!currentIds.has(id)) {
+        markersRef.current[id].setMap(null);
+        delete markersRef.current[id];
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -29,7 +84,6 @@ export default function GoogleMapView() {
     }
 
     let mounted = true;
-    let isSubscribed = false;
 
     const initMap = async () => {
       try {
@@ -57,6 +111,7 @@ export default function GoogleMapView() {
         const map = new (window as any).google.maps.Map(mapRef.current, {
           center: { lat: 10.4, lng: -75.5 },
           zoom: 12,
+          mapTypeId: "roadmap",
         });
 
         mapInstance.current = map;
@@ -70,13 +125,12 @@ export default function GoogleMapView() {
 
         if (data && mounted) {
           setLocations(data);
-          updateMarkers(data);
+          updateMarkersOnce(map, data, true);
         }
 
         // Suscribirse a cambios (solo una vez)
-        if (!isSubscribed) {
-          isSubscribed = true;
-          const channel = sb.channel("admin_gps_map_v2");
+        if (!channelRef.current) {
+          const channel = sb.channel("admin_gps_stable");
           
           channel
             .on("postgres_changes", {
@@ -92,14 +146,10 @@ export default function GoogleMapView() {
               
               if (newData && mounted) {
                 setLocations(newData);
-                updateMarkers(newData);
+                updateMarkersOnce(mapInstance.current, newData, false);
               }
             })
-            .subscribe((status) => {
-              if (status === "SUBSCRIBED") {
-                console.log("Realtime conectado");
-              }
-            });
+            .subscribe();
 
           channelRef.current = channel;
         }
@@ -120,50 +170,28 @@ export default function GoogleMapView() {
     };
   }, []);
 
-  const updateMarkers = (locs: Location[]) => {
-    if (!mapInstance.current) return;
+  const updateMarkersOnce = (map: any, locs: Location[], fitBounds: boolean) => {
+    if (!map) return;
 
-    // Limpiar marcadores anteriores
-    markersRef.current.forEach(m => {
-      if (m && m.setMap) m.setMap(null);
-    });
-    markersRef.current = [];
-
-    if (locs.length === 0) return;
-
-    const bounds = new (window as any).google.maps.LatLngBounds();
-
+    const currentIds = new Set<string>();
     locs.forEach(loc => {
       if (!loc.latitud || !loc.longitud) return;
-
-      const color = loc.estado === "disponible" ? "#22c55e" : 
-                    loc.estado === "ocupado" ? "#eab308" : "#94a3b8";
-
-      const marker = new (window as any).google.maps.Marker({
-        position: { lat: loc.latitud, lng: loc.longitud },
-        map: mapInstance.current,
-        title: loc.nombre_repartidor || "Repartidor",
-        icon: {
-          path: (window as any).google.maps.SymbolPath.CIRCLE,
-          fillColor: color,
-          fillOpacity: 1,
-          strokeColor: "#fff",
-          strokeWeight: 2,
-          scale: 8,
-        },
-      });
-
-      const info = new (window as any).google.maps.InfoWindow({
-        content: `<div style="padding:8px"><strong>${loc.nombre_repartidor || "Repartidor"}</strong><br/>Estado: ${loc.estado}<br/>${new Date(loc.ultima_actualizacion).toLocaleTimeString()}</div>`,
-      });
-
-      marker.addListener("click", () => info.open(mapInstance.current, marker));
-      markersRef.current.push(marker);
-      bounds.extend(new (window as any).google.maps.LatLng(loc.latitud, loc.longitud));
+      currentIds.add(loc.repartidor_id);
+      updateOrCreateMarker(map, loc);
     });
 
-    if (locs.length > 0) {
-      mapInstance.current.fitBounds(bounds);
+    removeOldMarkers(currentIds);
+
+    // Solo ajustar límites la primera vez o si se fuerza
+    if (fitBounds && !boundsInitialized.current && locs.length > 0) {
+      const bounds = new (window as any).google.maps.LatLngBounds();
+      locs.forEach(loc => {
+        if (loc.latitud && loc.longitud) {
+          bounds.extend(new (window as any).google.maps.LatLng(loc.latitud, loc.longitud));
+        }
+      });
+      map.fitBounds(bounds);
+      boundsInitialized.current = true;
     }
   };
 
