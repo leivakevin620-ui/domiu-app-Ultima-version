@@ -9,7 +9,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@react-google-maps/api": "^2.20.8",
     "@supabase/supabase-js": "^2.39.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",

@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { GoogleMap, MarkerF, InfoWindowF, useJsApiLoader } from "@react-google-maps/api";
+import { useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
 
 interface Location {
@@ -14,193 +13,156 @@ interface Location {
   ultima_actualizacion: string;
 }
 
-interface GoogleMapViewProps {
-  repartidores: Location[];
-}
-
-const containerStyle = {
-  width: "100%",
-  height: "500px",
-  borderRadius: "12px",
-};
-
-const center = {
-  lat: 10.4,
-  lng: -75.5,
-};
-
-const colors: Record<string, string> = {
-  disponible: "#22c55e",
-  ocupado: "#eab308",
-  desconectado: "#94a3b8",
-};
-
-export default function GoogleMapView({ repartidores }: GoogleMapViewProps) {
-  const [locations, setLocations] = useState<Location[]>(repartidores || []);
-  const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
-  const [map, setMap] = useState<google.maps.Map | null>(null);
-  const channelRef = useRef<any>(null);
-
-  const { isLoaded } = useJsApiLoader({
-    id: "google-map-script",
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
-  });
+export default function GoogleMapView() {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [error, setError] = useState("");
+  const mapInstance = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
 
   useEffect(() => {
-    if (!isLoaded) return;
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!apiKey) {
+      setError("Falta NEXT_PUBLIC_GOOGLE_MAPS_API_KEY");
+      return;
+    }
 
-    const sb = getSupabaseClient();
+    let mounted = true;
 
-    const channel = sb
-      .channel("gps_realtime_admin")
-      .on("postgres_changes", { event: "*", schema: "public", table: "ubicaciones_repartidores" }, () => {
-        loadLocations();
-      })
-      .subscribe();
+    const initMap = async () => {
+      try {
+        // Cargar Google Maps
+        if (!(window as any).google?.maps) {
+          await new Promise<void>((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+            script.async = true;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error("Error cargando Google Maps"));
+            document.head.appendChild(script);
+          });
+        }
 
-    channelRef.current = channel;
+        // Esperar al div
+        if (!mapRef.current) {
+          await new Promise(r => setTimeout(r, 500));
+        }
 
-    return () => {
-      if (channelRef.current) {
-        sb.removeChannel(channelRef.current);
+        if (!mapRef.current || !mounted) return;
+
+        const map = new (window as any).google.maps.Map(mapRef.current, {
+          center: { lat: 10.4, lng: -75.5 },
+          zoom: 12,
+          mapTypeId: "roadmap",
+        });
+
+        mapInstance.current = map;
+
+        // Cargar ubicaciones
+        const sb = getSupabaseClient();
+        const { data } = await sb
+          .from("ubicaciones_repartidores")
+          .select("*")
+          .order("ultima_actualizacion", { ascending: false });
+
+        if (data && mounted) {
+          setLocations(data);
+          updateMarkers(data);
+        }
+
+        // Tiempo real
+        const channel = sb
+          .channel("admin_gps_map")
+          .on("postgres_changes", { event: "*", schema: "public", table: "ubicaciones_repartidores" }, async () => {
+            const { data: newData } = await sb
+              .from("ubicaciones_repartidores")
+              .select("*")
+              .order("ultima_actualizacion", { ascending: false });
+            if (newData && mounted) {
+              setLocations(newData);
+              updateMarkers(newData);
+            }
+          })
+          .subscribe();
+
+        return () => {
+          sb.removeChannel(channel);
+        };
+      } catch (err: any) {
+        if (mounted) setError(err.message);
       }
     };
-  }, [isLoaded]);
 
-  function loadLocations() {
-    const sb = getSupabaseClient();
-    sb.from("ubicaciones_repartidores")
-      .select("*")
-      .order("ultima_actualizacion", { ascending: false })
-      .then(({ data, error }) => {
-        if (!error && data) {
-          setLocations(data);
-        }
+    initMap();
+
+    return () => { mounted = false; };
+  }, []);
+
+  const updateMarkers = (locs: Location[]) => {
+    if (!mapInstance.current) return;
+
+    // Limpiar marcadores
+    markersRef.current.forEach(m => m.setMap(null));
+    markersRef.current = [];
+
+    const bounds = new (window as any).google.maps.LatLngBounds();
+
+    locs.forEach(loc => {
+      if (!loc.latitud || !loc.longitud) return;
+
+      const color = loc.estado === "disponible" ? "#22c55e" : loc.estado === "ocupado" ? "#eab308" : "#94a3b8";
+
+      const marker = new (window as any).google.maps.Marker({
+        position: { lat: loc.latitud, lng: loc.longitud },
+        map: mapInstance.current,
+        title: loc.nombre_repartidor,
+        icon: {
+          path: (window as any).google.maps.SymbolPath.CIRCLE,
+          fillColor: color,
+          fillOpacity: 1,
+          strokeColor: "#fff",
+          strokeWeight: 2,
+          scale: 8,
+        },
       });
-  }
 
-  if (!isLoaded) {
+      const info = new (window as any).google.maps.InfoWindow({
+        content: `<b>${loc.nombre_repartidor}</b><br>Estado: ${loc.estado}<br>${new Date(loc.ultima_actualizacion).toLocaleTimeString()}`,
+      });
+
+      marker.addListener("click", () => info.open(mapInstance.current, marker));
+      markersRef.current.push(marker);
+      bounds.extend(new (window as any).google.maps.LatLng(loc.latitud, loc.longitud));
+    });
+
+    if (locs.length > 0) mapInstance.current.fitBounds(bounds);
+  };
+
+  if (error) {
     return (
-      <div style={{ padding: "20px", textAlign: "center", color: "#94a3b8", height: "500px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        Cargando mapa...
+      <div className="bg-slate-800 p-6 rounded-xl text-center">
+        <p className="text-red-400 font-bold">Error GPS: {error}</p>
+        <p className="text-slate-400 text-sm mt-2">Verifica la API Key en Vercel y autoriza el dominio en Google Cloud Console</p>
       </div>
     );
   }
-
-  if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
-    return (
-      <div style={{ padding: "20px", textAlign: "center", color: "#ef4444", height: "500px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        Falta configurar Google Maps API Key en .env.local
-      </div>
-    );
-  }
-
-  const validLocations = locations.filter((loc) => loc.latitud && loc.longitud);
 
   return (
     <div>
-      <GoogleMap
-        mapContainerStyle={containerStyle}
-        center={center}
-        zoom={12}
-        onLoad={(map) => setMap(map)}
-        options={{
-          zoomControl: true,
-          mapTypeControl: true,
-          streetViewControl: false,
-          fullscreenControl: true,
-        }}
-      >
-        {validLocations.map((loc) => (
-          <MarkerF
-            key={loc.repartidor_id}
-            position={{ lat: loc.latitud, lng: loc.longitud }}
-            title={loc.nombre_repartidor || "Repartidor"}
-            icon={{
-              path: google.maps.SymbolPath.CIRCLE,
-              fillColor: colors[loc.estado] || colors.desconectado,
-              fillOpacity: 1,
-              strokeColor: "#fff",
-              strokeWeight: 3,
-              scale: 10,
-            }}
-            onClick={() => setSelectedMarker(loc.repartidor_id)}
-          >
-            {selectedMarker === loc.repartidor_id && (
-              <InfoWindowF
-                onCloseClick={() => setSelectedMarker(null)}
-              >
-                <div>
-                  <strong>{loc.nombre_repartidor || "Repartidor"}</strong>
-                  <br />
-                  Estado: {loc.estado}
-                  <br />
-                  Actualizado: {new Date(loc.ultima_actualizacion).toLocaleTimeString()}
-                </div>
-              </InfoWindowF>
-            )}
-          </MarkerF>
-        ))}
-      </GoogleMap>
-
-      <div style={{ marginTop: "16px" }}>
-        <h3 style={{ margin: "0 0 12px", fontSize: "16px", fontWeight: 700, color: "#f8fafc" }}>
-          Repartidores conectados ({validLocations.length})
-        </h3>
-        {validLocations.length === 0 ? (
-          <p style={{ color: "#94a3b8", fontSize: "14px" }}>No hay repartidores conectados</p>
-        ) : (
-          validLocations.map((loc) => (
-            <div
-              key={loc.id}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "12px 16px",
-                background: "#1e293b",
-                borderRadius: "8px",
-                marginBottom: "8px",
-                border: "1px solid #334155",
-              }}
-            >
-              <div>
-                <strong style={{ fontSize: "14px", color: "#f8fafc" }}>
-                  {loc.nombre_repartidor || "Repartidor"}
-                </strong>
-                <span
-                  style={{
-                    marginLeft: "8px",
-                    padding: "2px 8px",
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    background:
-                      loc.estado === "disponible"
-                        ? "#166534"
-                        : loc.estado === "ocupado"
-                        ? "#854d0e"
-                        : "#334155",
-                    color:
-                      loc.estado === "disponible"
-                        ? "#86efac"
-                        : loc.estado === "ocupado"
-                        ? "#fef08a"
-                        : "#94a3b8",
-                  }}
-                >
-                  {loc.estado}
-                </span>
-              </div>
-              <div style={{ textAlign: "right", fontSize: "12px", color: "#64748b" }}>
-                <div>
-                  {loc.latitud?.toFixed(6)}, {loc.longitud?.toFixed(6)}
-                </div>
-                <div>{new Date(loc.ultima_actualizacion).toLocaleTimeString()}</div>
-              </div>
+      <div
+        ref={mapRef}
+        style={{ width: "100%", height: "400px", borderRadius: "12px", background: "#1e293b" }}
+      />
+      <div className="mt-4 space-y-2">
+        {locations.map(loc => (
+          <div key={loc.id} className="bg-slate-800 p-3 rounded-lg flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${loc.estado === "disponible" ? "bg-green-500" : loc.estado === "ocupado" ? "bg-yellow-500" : "bg-slate-500"}`} />
+              <span className="text-white text-sm">{loc.nombre_repartidor}</span>
             </div>
-          ))
-        )}
+            <span className="text-slate-400 text-xs">{new Date(loc.ultima_actualizacion).toLocaleTimeString()}</span>
+          </div>
+        ))}
       </div>
     </div>
   );

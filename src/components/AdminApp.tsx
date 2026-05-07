@@ -900,14 +900,17 @@ export default function AdminApp() {
                         <div className="bg-slate-800/50 p-2 rounded-lg"><p className="text-slate-500">Generado</p><p className="text-white font-bold">{fmt(totalGen)}</p></div>
                         <div className="bg-slate-800/50 p-2 rounded-lg"><p className="text-slate-500">Debe empresa</p><p className="text-blue-400 font-bold">{fmt(totalDebe)}</p></div>
                       </div>
-                      <div className="flex gap-2 flex-wrap">
-                        <button onClick={() => { setRDetalle(r.id); }} className="flex-1 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-700 flex items-center justify-center gap-1"><Eye size={12} /> Detalle</button>
-                        <button onClick={() => { setREdit(r.id); setRNom(r.nombre); setRTel(r.telefono || ""); setRDoc(r.documento || ""); setRVeh(r.vehiculo || ""); setRPla(r.placa || ""); }} className="flex-1 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-700 flex items-center justify-center gap-1"><Edit2 size={12} /> Editar</button>
-                        {r.telefono && <button onClick={() => window.open(waLink(r.telefono, `Hola ${r.nombre}, sobre tus pedidos...`), "_blank")} className="px-3 py-2 bg-green-500/10 text-green-400 rounded-lg text-xs font-semibold hover:bg-green-500/20"><MessageCircle size={14} /></button>}
-                        <button onClick={() => toggleRepActivo(r.id, r.activo !== false ? false : true)} className={`px-3 py-2 rounded-lg text-xs font-semibold ${r.activo !== false ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "bg-green-500/10 text-green-400 hover:bg-green-500/20"}`}>
-                          {r.activo !== false ? <UserX size={14} /> : <UserCheck size={14} />}
-                        </button>
-                      </div>
+                       <div className="flex gap-2 flex-wrap">
+                         <button onClick={() => { setRDetalle(r.id); }} className="flex-1 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-700 flex items-center justify-center gap-1"><Eye size={12} /> Detalle</button>
+                         <button onClick={() => { setREdit(r.id); setRNom(r.nombre); setRTel(r.telefono || ""); setRDoc(r.documento || ""); setRVeh(r.vehiculo || ""); setRPla(r.placa || ""); }} className="flex-1 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-700 flex items-center justify-center gap-1"><Edit2 size={12} /> Editar</button>
+                         {r.telefono && <button onClick={() => window.open(waLink(r.telefono, `Hola ${r.nombre}, sobre tus pedidos...`), "_blank")} className="px-3 py-2 bg-green-500/10 text-green-400 rounded-lg text-xs font-semibold hover:bg-green-500/20"><MessageCircle size={14} /></button>}
+                         <button onClick={() => toggleRepActivo(r.id, r.activo !== false ? false : true)} className={`px-3 py-2 rounded-lg text-xs font-semibold ${r.activo !== false ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "bg-green-500/10 text-green-400 hover:bg-green-500/20"}`}>
+                           {r.activo !== false ? <UserX size={14} /> : <UserCheck size={14} />}
+                         </button>
+                         <button onClick={() => handleDeleteUser(r.user_id, r.nombre)} disabled={deletingId === r.user_id} className="px-3 py-2 bg-red-500/10 text-red-400 rounded-lg text-xs font-semibold hover:bg-red-500/20 disabled:opacity-50">
+                           {deletingId === r.user_id ? "..." : <Trash2 size={14} />}
+                         </button>
+                       </div>
 
                       {/* Detalle repartidor */}
                       {rDetalle === r.id && (
@@ -1075,16 +1078,22 @@ export default function AdminApp() {
             </div>
           )}
 
-          {/* ======================== GPS ======================== */}
+          {/* ======================== GPS (MAPA GOOGLE MAPS) ======================== */}
           {tab === "gps" && (
             <div className="space-y-6">
               <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6">
                 <h3 className="font-bold text-white mb-4 flex items-center gap-2">
-                  <Navigation size={20} className="text-yellow-400" /> Mapa GPS en Tiempo Real
+                  <Navigation size={20} className="text-yellow-400" /> GPS en Tiempo Real
                 </h3>
-              <div suppressHydrationWarning>
-                <GoogleMapView repartidores={ubicacionesRepartidores} />
+                <GoogleMapView />
               </div>
+            </div>
+          )}
+                <div className="mt-4 bg-slate-800 p-4 rounded-xl">
+                  <p className="text-slate-500 text-sm">
+                    Esta lista se actualiza en tiempo real. Para ver el mapa, verifica la configuración de Google Maps API Key.
+                  </p>
+                </div>
               </div>
             </div>
           )}

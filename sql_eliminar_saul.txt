@@ -1,0 +1,31 @@
+-- SQL PARA ELIMINAR CUENTAS DUPLICADAS DE SAÚL
+-- Ejecutar en Supabase → SQL Editor
+
+-- 1. Ver cuentas duplicadas
+SELECT id, email, nombre, created_at 
+FROM profiles 
+WHERE LOWER(nombre) LIKE '%saúl%' OR LOWER(nombre) LIKE '%saul%'
+ORDER BY created_at DESC;
+
+-- 2. Ver repartidores duplicados
+SELECT id, user_id, nombre, telefono, created_at
+FROM repartidores
+WHERE LOWER(nombre) LIKE '%saúl%' OR LOWER(nombre) LIKE '%saul%'
+ORDER BY created_at DESC;
+
+-- 3. MANTENER SOLO LA CUENTA MÁS RECIENTE:
+-- Copia el ID de la cuenta más reciente (primera fila del paso 1)
+-- Luego ejecuta (reemplaza 'ID_A_MANTENER' con el ID real):
+
+/*
+DELETE FROM repartidores 
+WHERE user_id IN (
+  SELECT id FROM profiles 
+  WHERE LOWER(nombre) LIKE '%saúl%' 
+  AND id != 'ID_A_MANTENER'
+);
+
+DELETE FROM profiles 
+WHERE LOWER(nombre) LIKE '%saúl%' 
+AND id != 'ID_A_MANTENER';
+*/
