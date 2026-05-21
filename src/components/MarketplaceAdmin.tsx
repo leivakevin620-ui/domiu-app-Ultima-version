@@ -93,7 +93,7 @@ export default function MarketplaceAdmin() {
     if (!sb) return;
     const sub = sb.channel("admin-marketplace").on("postgres_changes", { event: "*", schema: "public", table: "pedidos_cliente" }, () => fetchPedidos()).subscribe();
     return () => { sub.unsubscribe(); };
-  }, [sb, fetchPedidos]);
+  }, [fetchPedidos]);
 
   const cambiarEstado = async (id: string, nuevoEstado: string) => {
     try {
