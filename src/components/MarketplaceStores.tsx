@@ -6,7 +6,6 @@ import {
   RefreshCw, Search, AlertCircle, CheckCircle, DollarSign,
   MapPin, Phone, Clock, Star, ChevronDown, ChevronUp
 } from "lucide-react";
-import { getSupabaseClient } from "@/lib/supabase";
 
 const CATEGORIAS = ['Restaurantes','Tiendas','Licoreras','Droguerias','Promociones'];
 const CATEGORIAS_PRODUCTO = ['General','Pizzas','Bebidas','Abarrotes','Lacteos','Panaderia','Limpieza','Cervezas','Vinos','Licores','Cocteles','Medicamentos','Cuidado Personal','Rolls','Nigiri','Postres','Otros'];
@@ -28,8 +27,37 @@ type Producto = {
   precio: number; imagen: string; categoria_producto: string; disponible: boolean;
 };
 
+async function apiNegocio(body: any) {
+  const res = await fetch("/api/admin/negocios", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Error en operacion");
+  return data;
+}
+
+async function apiProducto(body: any) {
+  const res = await fetch("/api/admin/productos", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Error en operacion");
+  return data;
+}
+
+async function fetchNegocios(): Promise<Negocio[]> {
+  const res = await fetch("/api/admin/negocios");
+  if (!res.ok) throw new Error("Error cargando negocios");
+  return res.json();
+}
+
+async function fetchProductos(): Promise<Producto[]> {
+  const res = await fetch("/api/admin/productos");
+  if (!res.ok) throw new Error("Error cargando productos");
+  return res.json();
+}
+
 export default function MarketplaceStores() {
-  const sb = getSupabaseClient();
   const [negocios, setNegocios] = useState<Negocio[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
@@ -40,6 +68,7 @@ export default function MarketplaceStores() {
   const [editProd, setEditProd] = useState<Producto | null>(null);
   const [showProdForm, setShowProdForm] = useState(false);
   const [toast, setToast] = useState("");
+  const [toastError, setToastError] = useState("");
 
   // Negocio form
   const [fNom, setFNom] = useState(""); const [fCat, setFCat] = useState("Restaurantes");
@@ -54,16 +83,19 @@ export default function MarketplaceStores() {
   const [fpPrecio, setFpPrecio] = useState(""); const [fpImg, setFpImg] = useState("");
   const [fpCat, setFpCat] = useState("General");
 
-  const ok = (m: string) => { setToast(m); setTimeout(() => setToast(""), 3000); };
+  const ok = (m: string) => { setToast(m); setToastError(""); setTimeout(() => setToast(""), 3000); };
+  const fail = (m: string) => { setToastError(m); setToast(""); setTimeout(() => setToastError(""), 5000); };
 
   const load = useCallback(async () => {
-    if (!sb) return;
-    const { data: n } = await sb.from("negocios").select("*").order("created_at", { ascending: false });
-    if (n) setNegocios(n);
-    const { data: p } = await sb.from("productos").select("*").order("created_at", { ascending: false });
-    if (p) setProductos(p);
+    try {
+      const [n, p] = await Promise.all([fetchNegocios(), fetchProductos()]);
+      setNegocios(n);
+      setProductos(p);
+    } catch (e: any) {
+      fail(e.message);
+    }
     setLoading(false);
-  }, [sb]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
@@ -83,33 +115,46 @@ export default function MarketplaceStores() {
 
   const saveNegocio = async (e: any) => {
     e.preventDefault();
-    if (!fNom.trim()) return;
-    const data = {
-      nombre: fNom.trim(), categoria: fCat, descripcion: fDesc.trim(),
-      logo: fLogo.trim(), banner: fBanner.trim(), direccion: fDir.trim(),
-      telefono: fTel.trim(), horario: fHor.trim(), rating: Number(fRating),
-      domicilio_cost: Number(fDom), abierto: fAbierto, destacado: fDest,
-    };
-    if (editNeg) {
-      await sb.from("negocios").update(data).eq("id", editNeg.id);
-      ok("Negocio actualizado");
-    } else {
-      await sb.from("negocios").insert(data);
-      ok("Negocio creado");
+    if (!fNom.trim()) { fail("El nombre es obligatorio"); return; }
+    try {
+      const data = {
+        nombre: fNom.trim(), categoria: fCat, descripcion: fDesc.trim(),
+        logo: fLogo.trim(), banner: fBanner.trim(), direccion: fDir.trim(),
+        telefono: fTel.trim(), horario: fHor.trim(), rating: Number(fRating),
+        domicilio_cost: Number(fDom), abierto: fAbierto, destacado: fDest,
+      };
+      if (editNeg) {
+        await apiNegocio({ ...data, id: editNeg.id });
+        ok("Negocio actualizado correctamente");
+      } else {
+        await apiNegocio(data);
+        ok("Negocio creado correctamente");
+      }
+      resetNegForm();
+      load();
+    } catch (e: any) {
+      fail(e.message);
     }
-    resetNegForm(); load();
   };
 
   const deleteNegocio = async (id: string) => {
     if (!confirm("Eliminar este negocio y todos sus productos?")) return;
-    await sb.from("productos").delete().eq("negocio_id", id);
-    await sb.from("negocios").delete().eq("id", id);
-    ok("Negocio eliminado"); load();
+    try {
+      await apiNegocio({ id, action: "delete" });
+      ok("Negocio eliminado");
+      load();
+    } catch (e: any) {
+      fail(e.message);
+    }
   };
 
   const toggleNegocio = async (id: string, activo: boolean) => {
-    await sb.from("negocios").update({ activo }).eq("id", id);
-    load();
+    try {
+      await apiNegocio({ id, action: "toggle", activo });
+      load();
+    } catch (e: any) {
+      fail(e.message);
+    }
   };
 
   const resetProdForm = () => {
@@ -124,30 +169,44 @@ export default function MarketplaceStores() {
 
   const saveProducto = async (e: any, negocioId: string) => {
     e.preventDefault();
-    if (!fpNom.trim() || !fpPrecio) return;
-    const data = {
-      negocio_id: negocioId, nombre: fpNom.trim(), descripcion: fpDesc.trim(),
-      precio: Number(fpPrecio), imagen: fpImg.trim(), categoria_producto: fpCat,
-    };
-    if (editProd) {
-      await sb.from("productos").update(data).eq("id", editProd.id);
-      ok("Producto actualizado");
-    } else {
-      await sb.from("productos").insert(data);
-      ok("Producto creado");
+    if (!fpNom.trim() || !fpPrecio) { fail("Nombre y precio obligatorios"); return; }
+    try {
+      const data = {
+        negocio_id: negocioId, nombre: fpNom.trim(), descripcion: fpDesc.trim(),
+        precio: Number(fpPrecio), imagen: fpImg.trim(), categoria_producto: fpCat,
+      };
+      if (editProd) {
+        await apiProducto({ ...data, id: editProd.id });
+        ok("Producto actualizado correctamente");
+      } else {
+        await apiProducto(data);
+        ok("Producto creado correctamente");
+      }
+      resetProdForm();
+      load();
+    } catch (e: any) {
+      fail(e.message);
     }
-    resetProdForm(); load();
   };
 
   const deleteProducto = async (id: string) => {
     if (!confirm("Eliminar producto?")) return;
-    await sb.from("productos").delete().eq("id", id);
-    ok("Producto eliminado"); load();
+    try {
+      await apiProducto({ id, action: "delete" });
+      ok("Producto eliminado");
+      load();
+    } catch (e: any) {
+      fail(e.message);
+    }
   };
 
   const toggleProducto = async (id: string, disponible: boolean) => {
-    await sb.from("productos").update({ disponible }).eq("id", id);
-    load();
+    try {
+      await apiProducto({ id, action: "toggle", disponible });
+      load();
+    } catch (e: any) {
+      fail(e.message);
+    }
   };
 
   const filtered = busqueda
@@ -160,8 +219,12 @@ export default function MarketplaceStores() {
 
   return (
     <div className="space-y-6">
+      {/* Toast */}
       {toast && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl font-bold text-sm shadow-lg" style={{ background: "#10b981", color: "#fff" }}>{toast}</div>
+      )}
+      {toastError && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl font-bold text-sm shadow-lg" style={{ background: "#ef4444", color: "#fff" }}>{toastError}</div>
       )}
 
       {/* Header + Search */}

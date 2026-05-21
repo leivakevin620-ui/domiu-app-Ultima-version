@@ -21,13 +21,8 @@ const estadoColor: Record<string, string> = {
 };
 
 const estadoLabel: Record<string, string> = {
-  recibido: "Recibido",
-  en_preparacion: "Preparacion",
-  listo_para_recoger: "Listo",
-  asignado: "Asignado",
-  en_camino: "En camino",
-  entregado: "Entregado",
-  cancelado: "Cancelado",
+  recibido: "Recibido", en_preparacion: "Preparacion", listo_para_recoger: "Listo",
+  asignado: "Asignado", en_camino: "En camino", entregado: "Entregado", cancelado: "Cancelado",
 };
 
 const fmt = (v: number) =>
@@ -38,29 +33,32 @@ function waLink(num: string, msg: string) {
 }
 
 type PedidoMarket = {
-  id: string;
-  codigo: string;
-  cliente_nombre: string;
-  cliente_telefono: string;
-  cliente_direccion: string;
-  nota: string;
-  subtotal: number;
-  domicilio: number;
-  total: number;
-  estado: string;
-  estado_negocio: string;
-  repartidor_id: string | null;
-  costo_envio: number;
-  comision_empresa: number;
-  pago_repartidor: number;
-  ganancia_empresa: number;
-  created_at: string;
+  id: string; codigo: string; cliente_nombre: string; cliente_telefono: string;
+  cliente_direccion: string; nota: string; subtotal: number; domicilio: number;
+  total: number; estado: string; estado_negocio: string; repartidor_id: string | null;
+  costo_envio: number; comision_empresa: number; pago_repartidor: number;
+  ganancia_empresa: number; created_at: string;
   negocios: { nombre: string } | null;
   repartidores: { nombre: string; vehiculo: string; telefono: string } | null;
 };
 
+async function fetchMarketplace(estado?: string) {
+  const params = estado ? `?estado=${estado}` : "";
+  const res = await fetch(`/api/admin/marketplace${params}`);
+  if (!res.ok) throw new Error("Error cargando pedidos");
+  return res.json();
+}
+
+async function apiMarketplace(body: any) {
+  const res = await fetch("/api/admin/marketplace", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Error en operacion");
+  return data;
+}
+
 export default function MarketplaceAdmin() {
-  const sb = getSupabaseClient();
   const [pedidos, setPedidos] = useState<PedidoMarket[]>([]);
   const [reps, setReps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,61 +69,51 @@ export default function MarketplaceAdmin() {
   const [repartidorSel, setRepartidorSel] = useState("");
 
   const fetchPedidos = useCallback(async () => {
-    if (!sb) return;
-    let q = sb.from("pedidos_cliente").select("*, negocios(nombre), repartidores!left(nombre, vehiculo, telefono)").order("created_at", { ascending: false });
-    if (fEstado) q = q.eq("estado", fEstado);
-    const { data } = await q;
-    if (data) setPedidos(data);
+    try {
+      const data = await fetchMarketplace(fEstado || undefined);
+      setPedidos(data);
+    } catch (e: any) {
+      console.error(e);
+    }
     setLoading(false);
-  }, [fEstado, sb]);
+  }, [fEstado]);
 
   const fetchReps = useCallback(async () => {
-    if (!sb) return;
+    const sb = getSupabaseClient();
     const { data } = await sb.from("repartidores").select("*");
     if (data) setReps(data);
-  }, [sb]);
+  }, []);
 
   useEffect(() => { fetchPedidos(); }, [fetchPedidos]);
   useEffect(() => { fetchReps(); }, [fetchReps]);
 
   // Realtime
   useEffect(() => {
+    const sb = getSupabaseClient();
     if (!sb) return;
     const sub = sb.channel("admin-marketplace").on("postgres_changes", { event: "*", schema: "public", table: "pedidos_cliente" }, () => fetchPedidos()).subscribe();
     return () => { sub.unsubscribe(); };
   }, [sb, fetchPedidos]);
 
   const cambiarEstado = async (id: string, nuevoEstado: string) => {
-    const pedido = pedidos.find(p => p.id === id);
-    const costoEnvio = pedido?.domicilio || pedido?.costo_envio || 0;
-    const update: any = { estado: nuevoEstado, actualizado_en: new Date().toISOString() };
-    if (nuevoEstado === "en_preparacion") update.estado_negocio = "en_preparacion";
-    if (nuevoEstado === "listo_para_recoger") update.estado_negocio = "listo_para_recoger";
-    if (nuevoEstado === "asignado" || nuevoEstado === "en_camino" || nuevoEstado === "entregado") {
-      update.estado_negocio = "listo_para_recoger";
+    try {
+      await apiMarketplace({ id, action: "cambiar_estado", estado: nuevoEstado });
+      fetchPedidos();
+    } catch (e: any) {
+      console.error(e);
     }
-    if (nuevoEstado === "entregado") {
-      const comision = Math.round(costoEnvio * 0.2);
-      update.comision_empresa = comision;
-      update.pago_repartidor = costoEnvio - comision;
-      update.ganancia_empresa = comision;
-    }
-    await sb.from("pedidos_cliente").update(update).eq("id", id);
-    fetchPedidos();
   };
 
   const asignarRepartidor = async () => {
     if (!asignando || !repartidorSel) return;
-    const rep = reps.find((r: any) => r.id === repartidorSel);
-    await sb.from("pedidos_cliente").update({
-      repartidor_id: repartidorSel,
-      estado: "asignado",
-      estado_negocio: "listo_para_recoger",
-      actualizado_en: new Date().toISOString(),
-    }).eq("id", asignando);
-    setAsignando(null);
-    setRepartidorSel("");
-    fetchPedidos();
+    try {
+      await apiMarketplace({ id: asignando, action: "asignar_repartidor", repartidor_id: repartidorSel });
+      setAsignando(null);
+      setRepartidorSel("");
+      fetchPedidos();
+    } catch (e: any) {
+      console.error(e);
+    }
   };
 
   const filtered = busqueda ? pedidos.filter((p) =>
@@ -134,7 +122,6 @@ export default function MarketplaceAdmin() {
     p.cliente_telefono.includes(busqueda)
   ) : pedidos;
 
-  // Stats
   const stats = {
     totalVendido: pedidos.filter((p) => p.estado === "entregado").reduce((s, p) => s + p.total, 0),
     enviosCobrados: pedidos.filter((p) => p.estado === "entregado").reduce((s, p) => s + (p.domicilio || 0), 0),
@@ -263,7 +250,6 @@ export default function MarketplaceAdmin() {
                       <tr key={`${p.id}-detalle`}>
                         <td colSpan={8} className="px-4 py-4 bg-slate-800/20">
                           <div className="grid md:grid-cols-2 gap-4">
-                            {/* Info cliente */}
                             <div className="bg-slate-800/50 rounded-xl p-4">
                               <h4 className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-3">Datos del cliente</h4>
                               <div className="space-y-2 text-sm">
@@ -275,7 +261,6 @@ export default function MarketplaceAdmin() {
                                 </a>
                               </div>
                             </div>
-                            {/* Acciones */}
                             <div className="bg-slate-800/50 rounded-xl p-4">
                               <h4 className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-3">Acciones</h4>
                               <div className="flex flex-wrap gap-1.5">
@@ -291,7 +276,6 @@ export default function MarketplaceAdmin() {
                                 })}
                               </div>
                             </div>
-                            {/* Asignar repartidor */}
                             <div className="bg-slate-800/50 rounded-xl p-4">
                               <h4 className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-3">Repartidor</h4>
                               {p.repartidores ? (
@@ -305,7 +289,6 @@ export default function MarketplaceAdmin() {
                                 </button>
                               )}
                             </div>
-                            {/* Financiero */}
                             <div className="bg-slate-800/50 rounded-xl p-4">
                               <h4 className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-3">Resumen financiero</h4>
                               <div className="space-y-1.5 text-sm">

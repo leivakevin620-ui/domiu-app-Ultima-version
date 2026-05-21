@@ -1,14 +1,15 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ShoppingCart, Star, Clock, Bike, Plus, Minus, MapPin, Phone } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Star, Clock, Bike, Plus, Minus, MapPin, Phone, ChevronDown, Sparkles } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useCart } from "@/context/CartContext";
 
 type Negocio = {
   id: string; nombre: string; categoria: string; descripcion: string;
-  logo: string; banner: string; rating: number; tiempo_estimado: string;
-  domicilio_cost: number; abierto: boolean; direccion: string; telefono: string;
+  logo: string; banner: string; rating: number; calificacion: number;
+  tiempo_estimado: string; domicilio_cost: number; abierto: boolean;
+  direccion: string; telefono: string;
 };
 type Producto = {
   id: string; negocio_id: string; nombre: string; descripcion: string;
@@ -22,6 +23,7 @@ export default function NegocioDetailPage() {
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [selectedCat, setSelectedCat] = useState("");
+  const catRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     if (!id) return;
@@ -41,33 +43,51 @@ export default function NegocioDetailPage() {
   const totalItems = cartItems.reduce((s, i) => s + i.cantidad, 0);
   const totalPrice = cartItems.reduce((s, i) => s + i.precio * i.cantidad, 0);
 
+  const scrollToCat = (cat: string) => {
+    setSelectedCat(cat);
+    catRefs.current[cat]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   if (!negocio) return (
-    <div className="flex items-center justify-center min-h-screen bg-[var(--rappi-dark)]">
-      <div className="w-8 h-8 border-2 border-[var(--rappi-yellow)] border-t-transparent rounded-full animate-spin" />
+    <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)]">
+      <div className="w-10 h-10 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
     </div>
   );
 
   const getItemQty = (productId: string) => items.find((i) => i.productId === productId)?.cantidad || 0;
 
   return (
-    <div className="min-h-screen bg-[var(--rappi-dark)] text-[var(--rappi-text)] pb-24 animate-fade-in">
+    <div className="min-h-screen bg-[var(--bg-primary)] pb-28 animate-fade-in">
       {/* Banner */}
-      <div className="relative h-48 bg-gradient-to-br from-[var(--rappi-yellow)]/20 to-[var(--rappi-dark)] flex items-end">
-        <button onClick={() => router.back()} className="absolute top-4 left-4 w-10 h-10 rounded-2xl bg-black/40 flex items-center justify-center backdrop-blur-md z-10 hover:bg-black/60 transition-all">
+      <div className="relative h-52 bg-gradient-to-br from-[var(--primary)]/10 via-[var(--bg-primary)] to-[var(--primary)]/5 flex items-end overflow-hidden">
+        <div className="absolute inset-0 opacity-5" style={{backgroundImage: "radial-gradient(circle at 20% 50%, var(--primary) 0%, transparent 50%), radial-gradient(circle at 80% 20%, var(--primary) 0%, transparent 50%)"}} />
+        <button onClick={() => router.back()}
+          className="absolute top-4 left-4 w-11 h-11 rounded-2xl bg-black/30 flex items-center justify-center backdrop-blur-md z-10 border border-white/10 hover:bg-black/50 transition-all active:scale-90">
           <ArrowLeft size={18} />
         </button>
-        <div className="absolute bottom-4 left-4 right-4 max-w-lg mx-auto">
+        <div className="absolute bottom-4 left-5 right-5">
           <div className="flex items-start gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--rappi-yellow)]/30 to-[var(--rappi-yellow)]/5 flex items-center justify-center text-[var(--rappi-yellow)] font-bold text-2xl shrink-0 backdrop-blur-sm border border-white/10 shadow-xl">
+            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-[var(--primary)]/30 to-[var(--primary)]/5 flex items-center justify-center text-[var(--primary)] font-bold text-3xl shrink-0 backdrop-blur-sm border border-white/10 shadow-2xl">
               {negocio.nombre[0]}
             </div>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold drop-shadow-lg">{negocio.nombre}</h1>
-              <p className="text-xs text-[var(--rappi-text-muted)]">{negocio.categoria}</p>
-              <div className="flex items-center gap-4 mt-1.5">
-                <span className="flex items-center gap-1 text-xs text-[var(--rappi-yellow)] font-semibold"><Star size={12} /> {negocio.rating}</span>
-                <span className="flex items-center gap-1 text-xs text-[var(--rappi-text-muted)]"><Clock size={12} /> {negocio.tiempo_estimado}</span>
-                <span className="flex items-center gap-1 text-xs text-[var(--rappi-text-muted)]"><Bike size={12} /> ${negocio.domicilio_cost.toLocaleString()}</span>
+            <div className="flex-1 min-w-0 pt-1">
+              <h1 className="text-2xl font-black drop-shadow-lg">{negocio.nombre}</h1>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-xs font-medium text-[var(--text-secondary)] bg-white/5 px-2.5 py-0.5 rounded-full backdrop-blur-sm">{negocio.categoria}</span>
+                <span className={`badge ${negocio.abierto ? "badge-success" : "badge-error"}`}>
+                  {negocio.abierto ? "Abierto" : "Cerrado"}
+                </span>
+              </div>
+              <div className="flex items-center gap-4 mt-2">
+                <span className="flex items-center gap-1 text-xs text-[var(--primary)] font-bold bg-[var(--primary)]/10 px-2 py-1 rounded-full">
+                  <Star size={11} fill="var(--primary)" stroke="none" /> {negocio.rating || negocio.calificacion || "—"}
+                </span>
+                <span className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
+                  <Clock size={11} /> {negocio.tiempo_estimado}
+                </span>
+                <span className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
+                  <Bike size={11} /> ${negocio.domicilio_cost.toLocaleString()}
+                </span>
               </div>
             </div>
           </div>
@@ -75,76 +95,153 @@ export default function NegocioDetailPage() {
       </div>
 
       {/* Info bar */}
-      <div className="flex gap-4 px-4 py-3 border-b border-white/5">
-        <div className="flex items-center gap-1.5 text-xs text-[var(--rappi-text-muted)]">
-          <MapPin size={12} /> <span className="truncate max-w-[180px]">{negocio.direccion}</span>
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-white/5">
+        <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)] bg-[var(--bg-card)] px-3 py-2 rounded-xl flex-1 min-w-0">
+          <MapPin size={13} className="text-[var(--primary)] shrink-0" />
+          <span className="truncate">{negocio.direccion}</span>
         </div>
         {negocio.telefono && (
-          <a href={`tel:${negocio.telefono}`} className="flex items-center gap-1.5 text-xs text-[var(--rappi-yellow)] ml-auto shrink-0">
-            <Phone size={12} /> Llamar
+          <a href={`tel:${negocio.telefono}`}
+            className="w-9 h-9 rounded-xl bg-[var(--primary)]/10 flex items-center justify-center text-[var(--primary)] shrink-0 hover:bg-[var(--primary)]/20 transition-all active:scale-90">
+            <Phone size={15} />
           </a>
         )}
       </div>
 
-      {/* Product categories */}
+      {/* Category tabs */}
       {categories.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto px-4 py-4 scrollbar-none border-b border-white/5">
-          {categories.map((cat) => (
-            <button key={cat} onClick={() => setSelectedCat(cat)}
-              className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all active:scale-95 ${
-                selectedCat === cat ? "bg-[var(--rappi-yellow)] text-[var(--rappi-black)]" : "bg-[var(--rappi-gray)] text-[var(--rappi-text-muted)] hover:bg-[var(--rappi-gray)]/80"
-              }`}>{cat}</button>
-          ))}
+        <div className="sticky top-0 z-30 bg-[var(--bg-primary)]/80 backdrop-blur-xl border-b border-white/5">
+          <div className="flex gap-2 overflow-x-auto px-5 py-3 scroll-hide">
+            {categories.map((cat) => (
+              <button key={cat} onClick={() => scrollToCat(cat)}
+                className={`chip whitespace-nowrap transition-all active:scale-95 ${selectedCat === cat ? "chip-active" : "chip-inactive"}`}>
+                {cat}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Products */}
-      <div className="px-4 pt-4 pb-4 max-w-lg mx-auto grid gap-3">
-        {filtered.map((p) => {
-          const qty = getItemQty(p.id);
-          return (
-            <div key={p.id} className="product-card active:scale-[0.99] transition-all">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[var(--rappi-yellow)]/10 to-white/5 flex items-center justify-center text-3xl shrink-0 border border-white/5">
-                🍽️
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-sm">{p.nombre}</h4>
-                {p.descripcion && <p className="text-xs text-[var(--rappi-text-muted)] mt-0.5 line-clamp-2">{p.descripcion}</p>}
-                <div className="flex items-center justify-between mt-2">
-                  <span className="font-bold text-[var(--rappi-yellow)] text-sm">${p.precio.toLocaleString()}</span>
-                  {qty === 0 ? (
-                    <button onClick={(e) => { e.stopPropagation(); addItem({ productId: p.id, negocioId: negocio.id, negocioNombre: negocio.nombre, nombre: p.nombre, precio: p.precio, descripcion: p.descripcion || "" }); }}
-                      className="w-8 h-8 rounded-full bg-[var(--rappi-yellow)] text-[var(--rappi-black)] flex items-center justify-center hover:brightness-110 transition-all active:scale-90">
-                      <Plus size={18} />
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-2 bg-[var(--rappi-gray)] rounded-full px-1">
-                      <button onClick={(e) => { e.stopPropagation(); updateQuantity(p.id, qty - 1); }} className="w-7 h-7 rounded-full bg-[var(--rappi-yellow)] text-[var(--rappi-black)] flex items-center justify-center hover:brightness-110 transition-all active:scale-90">
-                        <Minus size={14} />
-                      </button>
-                      <span className="text-sm font-bold w-5 text-center text-[var(--rappi-text)]">{qty}</span>
-                      <button onClick={(e) => { e.stopPropagation(); updateQuantity(p.id, qty + 1); }} className="w-7 h-7 rounded-full bg-[var(--rappi-yellow)] text-[var(--rappi-black)] flex items-center justify-center hover:brightness-110 transition-all active:scale-90">
-                        <Plus size={14} />
-                      </button>
-                    </div>
-                  )}
+      {/* Products by category */}
+      <div className="px-5 pt-5 pb-4">
+        {categories.length > 1 ? (
+          categories.map((cat) => {
+            const catProducts = productos.filter((p) => p.categoria_producto === cat);
+            if (catProducts.length === 0) return null;
+            return (
+              <div key={cat} ref={(el) => { catRefs.current[cat] = el; }} className="mb-6 animate-fade-up">
+                <div className="flex items-center gap-2 mb-4">
+                  <Sparkles size={14} className="text-[var(--primary)]" />
+                  <h3 className="font-bold text-sm">{cat}</h3>
+                  <span className="text-[10px] text-[var(--text-muted)] bg-[var(--bg-card)] px-2 py-0.5 rounded-full">{catProducts.length}</span>
+                </div>
+                <div className="grid gap-2">
+                  {catProducts.map((p, idx) => {
+                    const qty = getItemQty(p.id);
+                    return (
+                      <div key={p.id} className="glass-card p-4 flex items-center gap-4 active:scale-[0.99] transition-all" style={{ animationDelay: `${idx * 50}ms` }}>
+                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--primary)]/10 to-transparent flex items-center justify-center text-2xl shrink-0 border border-white/5 shadow-inner">
+                          🍽️
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <h4 className="font-semibold text-sm truncate">{p.nombre}</h4>
+                          </div>
+                          {p.descripcion && <p className="text-xs text-[var(--text-secondary)] mt-0.5 line-clamp-2">{p.descripcion}</p>}
+                          <div className="flex items-center justify-between mt-2">
+                            <span className="font-bold text-base gradient-text">${p.precio.toLocaleString()}</span>
+                            {qty === 0 ? (
+                              <button onClick={(e) => { e.stopPropagation(); addItem({ productId: p.id, negocioId: negocio.id, negocioNombre: negocio.nombre, nombre: p.nombre, precio: p.precio, descripcion: p.descripcion || "" }); }}
+                                className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--primary-dark)] text-black font-bold flex items-center justify-center hover:brightness-110 transition-all active:scale-90 shadow-lg shadow-[var(--primary)]/25">
+                                <Plus size={18} />
+                              </button>
+                            ) : (
+                              <div className="flex items-center gap-2 bg-[var(--bg-card)] rounded-xl p-0.5 border border-white/5">
+                                <button onClick={(e) => { e.stopPropagation(); updateQuantity(p.id, qty - 1); }}
+                                  className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--primary)] to-[var(--primary-dark)] text-black font-bold flex items-center justify-center hover:brightness-110 transition-all active:scale-90">
+                                  <Minus size={14} />
+                                </button>
+                                <span className="text-sm font-bold w-6 text-center text-[var(--text-primary)]">{qty}</span>
+                                <button onClick={(e) => { e.stopPropagation(); updateQuantity(p.id, qty + 1); }}
+                                  className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--primary)] to-[var(--primary-dark)] text-black font-bold flex items-center justify-center hover:brightness-110 transition-all active:scale-90">
+                                  <Plus size={14} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
+            );
+          })
+        ) : (
+          /* Single category - flat list */
+          <div className="grid gap-2">
+            {filtered.map((p, idx) => {
+              const qty = getItemQty(p.id);
+              return (
+                <div key={p.id} className="glass-card p-4 flex items-center gap-4 active:scale-[0.99] transition-all animate-fade-up" style={{ animationDelay: `${idx * 50}ms` }}>
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--primary)]/10 to-transparent flex items-center justify-center text-2xl shrink-0 border border-white/5 shadow-inner">
+                    🍽️
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-sm truncate">{p.nombre}</h4>
+                    {p.descripcion && <p className="text-xs text-[var(--text-secondary)] mt-0.5 line-clamp-2">{p.descripcion}</p>}
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="font-bold text-base gradient-text">${p.precio.toLocaleString()}</span>
+                      {qty === 0 ? (
+                        <button onClick={(e) => { e.stopPropagation(); addItem({ productId: p.id, negocioId: negocio.id, negocioNombre: negocio.nombre, nombre: p.nombre, precio: p.precio, descripcion: p.descripcion || "" }); }}
+                          className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--primary-dark)] text-black font-bold flex items-center justify-center hover:brightness-110 transition-all active:scale-90 shadow-lg shadow-[var(--primary)]/25">
+                          <Plus size={18} />
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-2 bg-[var(--bg-card)] rounded-xl p-0.5 border border-white/5">
+                          <button onClick={(e) => { e.stopPropagation(); updateQuantity(p.id, qty - 1); }}
+                            className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--primary)] to-[var(--primary-dark)] text-black font-bold flex items-center justify-center hover:brightness-110 transition-all active:scale-90">
+                            <Minus size={14} />
+                          </button>
+                          <span className="text-sm font-bold w-6 text-center">{qty}</span>
+                          <button onClick={(e) => { e.stopPropagation(); updateQuantity(p.id, qty + 1); }}
+                            className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--primary)] to-[var(--primary-dark)] text-black font-bold flex items-center justify-center hover:brightness-110 transition-all active:scale-90">
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Empty */}
+        {productos.length === 0 && (
+          <div className="text-center py-20 animate-fade-up">
+            <div className="w-20 h-20 rounded-3xl bg-[var(--bg-card)] flex items-center justify-center mx-auto mb-4">
+              🍽️
             </div>
-          );
-        })}
-        {filtered.length === 0 && (
-          <div className="text-center py-12"><p className="text-[var(--rappi-text-muted)] text-sm">No hay productos en esta categoría</p></div>
+            <p className="text-[var(--text-secondary)] font-medium">No hay productos disponibles</p>
+          </div>
         )}
       </div>
 
       {/* Floating cart */}
       {totalItems > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 p-4 pb-6 bg-gradient-to-t from-[var(--rappi-dark)] via-[var(--rappi-dark)] to-transparent pointer-events-none">
-          <button onClick={() => router.push("/cliente/carrito")} className="floating-cart pointer-events-auto mx-auto active:scale-[0.97] transition-all">
-            <ShoppingCart size={20} />
-            <span>Ver carrito ({totalItems})</span>
-            <span className="font-bold">${totalPrice.toLocaleString()}</span>
+        <div className="fixed bottom-20 left-0 right-0 z-40 p-4 pb-3 bg-gradient-to-t from-[var(--bg-primary)] via-[var(--bg-primary)] to-transparent pointer-events-none">
+          <button onClick={() => router.push("/cliente/carrito")}
+            className="floating-cart pointer-events-auto w-full active:scale-[0.97] transition-all">
+            <div className="w-8 h-8 rounded-lg bg-black/20 flex items-center justify-center">
+              <ShoppingCart size={16} />
+            </div>
+            <span className="font-semibold">Ver carrito</span>
+            <div className="flex items-center gap-2">
+              <span className="bg-black/20 px-2 py-0.5 rounded-md text-xs font-bold">{totalItems}</span>
+              <span className="font-bold">${totalPrice.toLocaleString()}</span>
+            </div>
           </button>
         </div>
       )}
