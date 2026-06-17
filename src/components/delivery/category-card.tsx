@@ -3,7 +3,6 @@
 import React from 'react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
-import { Card } from '@/components/ui/card';
 
 interface CategoryCardProps {
   name: string;
@@ -25,41 +24,43 @@ export function CategoryCard({
   className,
 }: CategoryCardProps) {
   return (
-    <Card
-      hover
+    <button
       onClick={onClick}
       className={cn(
-        'group cursor-pointer overflow-hidden transition-all duration-300',
-        active && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
+        'group relative flex flex-col items-center gap-2 transition-all duration-200',
+        active && 'scale-105',
         className,
       )}
     >
-      <div className="relative aspect-square w-full overflow-hidden bg-gradient-to-br from-muted to-muted/50">
+      <div
+        className={cn(
+          'relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl shadow-sm transition-all duration-300 group-hover:shadow-md group-hover:-translate-y-0.5',
+          active ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : 'bg-muted'
+        )}
+      >
         {image ? (
           <Image
             src={image}
             alt={name}
             fill
-            sizes="(max-width: 640px) 33vw, 25vw"
+            sizes="80px"
             className="object-cover transition-all duration-500 group-hover:scale-110"
             loading="lazy"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-4xl transition-transform duration-500 group-hover:scale-110">
-            {icon ?? <span className="text-3xl text-muted-foreground/30">📁</span>}
+          <div className="flex items-center justify-center text-2xl transition-transform duration-500 group-hover:scale-110">
+            {icon ?? <span className="text-muted-foreground/30">📁</span>}
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
       </div>
-
-      <div className="space-y-0.5 p-3 text-center">
-        <h4 className="text-sm font-semibold text-foreground truncate transition-colors duration-200 group-hover:text-primary">
+      <div className="text-center">
+        <span className="block text-xs font-semibold text-foreground truncate max-w-[80px] leading-tight">
           {name}
-        </h4>
+        </span>
         {productCount !== undefined && (
-          <p className="text-xs text-muted-foreground">{productCount} productos</p>
+          <span className="text-[10px] text-muted-foreground">{productCount} lugares</span>
         )}
       </div>
-    </Card>
+    </button>
   );
 }
