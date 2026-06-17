@@ -45,14 +45,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
   });
 
   /**
-   * Cargar perfil del usuario desde la base de datos
+   * Cargar perfil del usuario via API route (bypasses RLS con service_role)
    */
-  const loadUserProfile = useCallback(async (userId: string) => {
+  const loadUserProfile = useCallback(async (_userId: string) => {
     try {
-      const { profile, error } = await SupabaseAuthService.getUserProfile(userId);
-      if (error) {
-        throw error;
+      const res = await fetch('/api/profile');
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
       }
+      const { profile } = await res.json();
       return profile;
     } catch (error) {
       console.error('Error cargando perfil:', error);
@@ -245,14 +247,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         setAuthSession((prev) => ({ ...prev, isLoading: true, error: null }));
 
-        const { profile, error } = await SupabaseAuthService.updateUserProfile(
-          authSession.user.id,
-          updates
-        );
-
-        if (error) {
-          throw error;
+        const res = await fetch('/api/profile', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || `HTTP ${res.status}`);
         }
+        const { profile } = await res.json();
 
         setAuthSession({
           user: authSession.user,
