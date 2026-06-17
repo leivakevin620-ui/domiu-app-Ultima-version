@@ -3,13 +3,22 @@ import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { PermissionManager } from '@/lib/auth/permissions';
 
-export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
+export async function proxy(request: NextRequest) {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-    {
+    if (!supabaseUrl || !supabaseKey) {
+      const pathname = request.nextUrl.pathname;
+      if (PermissionManager.isProtectedRoute(pathname)) {
+        return NextResponse.redirect(new URL('/login', request.url));
+      }
+      return NextResponse.next({ request });
+    }
+
+    let supabaseResponse = NextResponse.next({ request });
+
+    const supabase = createServerClient(supabaseUrl, supabaseKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -20,10 +29,8 @@ export async function middleware(request: NextRequest) {
           cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options));
         },
       },
-    }
-  );
+    });
 
-  try {
     const { data } = await supabase.auth.getSession();
     const session = data?.session;
     const pathname = request.nextUrl.pathname;
@@ -43,8 +50,12 @@ export async function middleware(request: NextRequest) {
       request: { headers: requestHeaders },
     });
   } catch (error) {
-    console.error('Middleware error:', error);
-    return supabaseResponse;
+    console.error('Proxy error:', error);
+    const pathname = request.nextUrl.pathname;
+    if (PermissionManager.isProtectedRoute(pathname)) {
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+    return NextResponse.next({ request });
   }
 }
 
