@@ -3,8 +3,6 @@ import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { PermissionManager } from '@/lib/auth/permissions';
 
-const PUBLIC_ROUTES = ['/', '/login', '/register', '/forgot-password'];
-
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -37,28 +35,8 @@ export async function middleware(request: NextRequest) {
       return supabaseResponse;
     }
 
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', session.user.id)
-      .single();
-
-    const userRole = profileData?.role;
-
-    if (!userRole) {
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
-
-    const permission = PermissionManager.canAccessRoute(userRole, pathname);
-
-    if (!permission.isAllowed) {
-      const dashboard = PermissionManager.getDashboardRoute(userRole);
-      return NextResponse.redirect(new URL(dashboard, request.url));
-    }
-
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set('x-user-id', session.user.id);
-    requestHeaders.set('x-user-role', userRole);
     requestHeaders.set('x-user-email', session.user.email || '');
 
     return NextResponse.next({

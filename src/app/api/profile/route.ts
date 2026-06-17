@@ -1,35 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
 import { getServiceClient } from '@/lib/db/supabase';
 
-async function getAuthSession() {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
+async function getUserFromToken(req: NextRequest): Promise<{ userId: string } | null> {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const token = authHeader.slice(7);
+  if (!token) return null;
+  const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll(); },
-        setAll() {},
-      },
-    }
+    { global: { headers: { Authorization: `Bearer ${token}` } } }
   );
-  const { data: { session }, error } = await supabase.auth.getSession();
-  if (error || !session) return null;
-  return session;
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return null;
+  return { userId: user.id };
 }
 
-export async function GET() {
-  const session = await getAuthSession();
-  if (!session) {
+export async function GET(req: NextRequest) {
+  const auth = await getUserFromToken(req);
+  if (!auth) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
   }
   const serviceClient = getServiceClient();
   const { data: profile, error } = await serviceClient
     .from('profiles')
     .select('*')
-    .eq('id', session.user.id)
+    .eq('id', auth.userId)
     .single();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -38,8 +35,8 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const session = await getAuthSession();
-  if (!session) {
+  const auth = await getUserFromToken(req);
+  if (!auth) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
   }
   const updates = await req.json();
@@ -47,7 +44,7 @@ export async function PATCH(req: NextRequest) {
   const { data: profile, error } = await serviceClient
     .from('profiles')
     .update(updates)
-    .eq('id', session.user.id)
+    .eq('id', auth.userId)
     .select()
     .single();
   if (error) {

@@ -49,7 +49,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
    */
   const loadUserProfile = useCallback(async (_userId: string) => {
     try {
-      const res = await fetch('/api/profile');
+      const sessionRes = await SupabaseAuthService.getSession();
+      const token = sessionRes.session?.access_token;
+      const res = await fetch('/api/profile', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `HTTP ${res.status}`);
@@ -247,9 +251,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         setAuthSession((prev) => ({ ...prev, isLoading: true, error: null }));
 
+        const sessionRes = await SupabaseAuthService.getSession();
+        const token = sessionRes.session?.access_token;
         const res = await fetch('/api/profile', {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify(updates),
         });
         if (!res.ok) {
