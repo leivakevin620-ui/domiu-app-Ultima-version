@@ -1,0 +1,7 @@
+{
+  "name": "domiu-app",
+  "buildCommand": "next build",
+  "framework": "nextjs",
+  "outputDirectory": ".next",
+  "installCommand": "npm install"
+}
