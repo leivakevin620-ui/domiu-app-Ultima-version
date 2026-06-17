@@ -30,15 +30,7 @@ export default function LoginPage() {
 
     try {
       await login(formData);
-      const role = await new Promise<string>((resolve) => {
-        const check = setInterval(() => {
-          const r = document.cookie.includes('sb-') ? null : null;
-          const el = document.getElementById('__NEXT_DATA__');
-          clearInterval(check);
-          resolve('customer');
-        }, 100);
-        setTimeout(() => resolve('customer'), 2000);
-      });
+      router.push('/');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Credenciales inválidas';
       setFormError(msg);
@@ -49,9 +41,25 @@ export default function LoginPage() {
 
   const roleCards = [
     { role: 'customer' as const, label: 'Cliente', desc: 'Pide comida rápido', bg: 'from-primary/5 to-primary/0', border: 'border-primary/10' },
+    { role: 'admin' as const, label: 'Admin', desc: 'Panel de control', bg: 'from-success/5 to-success/0', border: 'border-success/10' },
     { role: 'merchant' as const, label: 'Negocio', desc: 'Gestiona tu restaurante', bg: 'from-warning/5 to-warning/0', border: 'border-warning/10' },
     { role: 'courier' as const, label: 'Repartidor', desc: 'Gana dinero deliveries', bg: 'from-info/5 to-info/0', border: 'border-info/10' },
   ];
+
+  const DEMO_CREDENTIALS: Record<string, { email: string; password: string }> = {
+    customer: { email: 'leivakevin620@gmail.com', password: '1193042104' },
+    admin: { email: 'leivakevin@gmail.com', password: '1193042104' },
+    merchant: { email: 'carlos@cevicheria.com', password: 'demo1234' },
+    courier: { email: 'carlos.mendoza@courier.com', password: 'demo1234' },
+  };
+
+  const fillDemo = (role: string) => {
+    const creds = DEMO_CREDENTIALS[role];
+    if (creds) {
+      setFormData(creds);
+      setFormError(null);
+    }
+  };
 
   return (
     <div className="flex min-h-screen">
@@ -197,26 +205,22 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-8">
-            <p className="mb-3 text-center text-xs text-muted-foreground">Acceso rápido como:</p>
-            <div className="grid grid-cols-3 gap-2">
+            <p className="mb-3 text-center text-xs text-muted-foreground">Acceso rápido:</p>
+            <div className="grid grid-cols-4 gap-2">
               {roleCards.map((role) => (
                 <button
                   key={role.role}
                   type="button"
-                  onClick={() => {
-                    const email = role.role === 'customer' ? 'leivakevin620@gmail.com' : role.role === 'merchant' ? 'carlos@cevicheria.com' : 'carlos.mendoza@courier.com';
-                    setFormData({ email, password: 'demo1234' });
-                    setFormError(null);
-                  }}
-                  className={`rounded-xl border ${role.border} ${role.bg} bg-card p-3 text-center transition-all hover:shadow-sm hover:-translate-y-0.5`}
+                  onClick={() => fillDemo(role.role)}
+                  className={`rounded-xl border ${role.border} ${role.bg} bg-card p-2.5 text-center transition-all hover:shadow-sm hover:-translate-y-0.5`}
                 >
                   <p className="text-xs font-medium text-foreground">{role.label}</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">{role.desc}</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground leading-tight">{role.desc}</p>
                 </button>
               ))}
             </div>
             <p className="mt-2 text-[10px] text-center text-muted-foreground">
-              Rellena credenciales demo automáticamente
+              Click para rellenar credenciales
             </p>
           </div>
 
