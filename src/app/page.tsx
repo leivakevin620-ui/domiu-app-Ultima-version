@@ -59,7 +59,8 @@ export default function HomePage() {
   const [recommended, setRecommended] = useState<MarketplaceBusiness[]>([]);
 
   useEffect(() => {
-    if (isAuthenticated && profile && !isLoading) {
+    if (!isAuthenticated || isLoading) return;
+    if (profile) {
       const dashboardMap: Record<string, string> = {
         customer: '/cliente',
         merchant: '/negocio',
@@ -67,6 +68,8 @@ export default function HomePage() {
         admin: '/admin',
       };
       router.push(dashboardMap[profile.role] || '/cliente');
+    } else {
+      router.push('/cliente');
     }
   }, [isAuthenticated, profile, isLoading, router]);
 
