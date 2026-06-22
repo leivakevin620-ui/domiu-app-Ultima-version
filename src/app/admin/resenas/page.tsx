@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import { reviewService } from '@/services/reviews';
+import { logger } from '@/lib/logger';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Star, Trash2, AlertTriangle, Search, Flag } from 'lucide-react';
 
@@ -22,19 +23,19 @@ export default function AdminResenas() {
         reviewService.getAllReports(),
       ]);
       setReviews(r); setReports(reps);
-    } catch (e) { console.error('Error:', e); }
+    } catch (e) { logger.error('Error loading reviews', e); }
     setLoading(false);
   }
 
   const handleDelete = async (reviewId: string) => {
     if (!confirm('¿Eliminar esta reseña permanentemente?')) return;
     try { await reviewService.softDeleteReview(reviewId); loadAll(); }
-    catch (e) { console.error('Error deleting review:', e); }
+    catch (e) { logger.error('Error deleting review', e); }
   };
 
   const handleDismissReport = async (reportId: string) => {
     try { await reviewService.updateReportStatus(reportId, 'dismissed', 'admin'); loadAll(); }
-    catch (e) { console.error('Error dismissing report:', e); }
+    catch (e) { logger.error('Error dismissing report', e); }
   };
 
   const handleApproveAndDelete = async (reportId: string, reviewId: string) => {
@@ -43,10 +44,10 @@ export default function AdminResenas() {
       await reviewService.softDeleteReview(reviewId);
       await reviewService.updateReportStatus(reportId, 'reviewed', 'admin');
       loadAll();
-    } catch (e) { console.error('Error:', e); }
+    } catch (e) { logger.error('Error approving review deletion', e); }
   };
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonCard />;
 
   const filteredReviews = reviews.filter(
     (r) =>

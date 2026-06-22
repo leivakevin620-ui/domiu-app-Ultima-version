@@ -4,11 +4,12 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { StatCard } from '@/components/ui/stat-card';
 import { Tabs } from '@/components/ui/tabs';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonStats } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { adminService, type FinanceSummary } from '@/services/admin';
 import { commissionService, type CommissionConfig, type CommissionTransaction, type BusinessPayout } from '@/services/commission';
 import { reportService } from '@/services/reports';
+import { logger } from '@/lib/logger';
 import { DollarSign, Percent, Banknote, Download, CheckCircle, ArrowUpCircle } from 'lucide-react';
 
 type TabId = 'comisiones' | 'transacciones' | 'pagos';
@@ -37,7 +38,7 @@ export default function AdminFinanzas() {
         setTransactions(txData);
         setPayouts(payoutData);
       })
-      .catch((e) => console.error(e))
+      .catch((e) => logger.error('Error loading finance data', e))
       .finally(() => setLoading(false));
   };
 
@@ -72,7 +73,7 @@ export default function AdminFinanzas() {
     reportService.downloadCSV('comisiones', csv);
   };
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonStats />;
 
   const tabs = [
     { id: 'comisiones' as TabId, label: 'Configuración' },

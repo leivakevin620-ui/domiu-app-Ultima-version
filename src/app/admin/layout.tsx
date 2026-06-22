@@ -2,11 +2,15 @@
 
 import React, { useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+
 import { useRouter } from 'next/navigation';
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
 import { AdminHeader } from '@/components/admin/admin-header';
+import { BottomNavigation } from '@/components/ui/bottom-navigation';
+import { LayoutDashboard, Users, Store, Truck, ClipboardList, Settings } from 'lucide-react';
 import { Footer } from '@/components/ui/footer';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard } from '@/components/ui/skeleton';
+import { ADMIN_ROLES } from '@/types/auth';
 import { cn } from '@/lib/utils';
 import { adminAuthService } from '@/services/admin-auth';
 import { auditService } from '@/services/audit';
@@ -25,16 +29,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (isLoading) return <LoadingState />;
+  if (isLoading) return <SkeletonCard />;
 
   if (!profile) {
     router.push('/login');
     return null;
   }
 
-  if (profile.role !== 'admin') {
+  if (!ADMIN_ROLES.includes(profile.role)) {
     const roleRoutes: Record<string, string> = {
       merchant: '/negocio',
+      business: '/negocio',
       courier: '/repartidor',
       customer: '/cliente',
     };
@@ -45,11 +50,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-background">
       <AdminSidebar />
-      <div className={cn('transition-all duration-300 lg:pl-64')}>
+      <div className={cn('transition-all duration-300 lg:pl-64 pb-16 lg:pb-0')}>
         <AdminHeader />
         <main className="p-6">{children}</main>
         <Footer />
       </div>
+      <BottomNavigation
+        items={[
+          { label: 'Dashboard', href: '/admin', icon: <LayoutDashboard className="h-5 w-5" /> },
+          { label: 'Usuarios', href: '/admin/usuarios', icon: <Users className="h-5 w-5" /> },
+          { label: 'Negocios', href: '/admin/negocios', icon: <Store className="h-5 w-5" /> },
+          { label: 'Repartidores', href: '/admin/repartidores', icon: <Truck className="h-5 w-5" /> },
+          { label: 'Pedidos', href: '/admin/pedidos', icon: <ClipboardList className="h-5 w-5" /> },
+          { label: 'Más', href: '/admin/configuracion', icon: <Settings className="h-5 w-5" /> },
+        ]}
+      />
     </div>
   );
 }

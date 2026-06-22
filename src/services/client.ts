@@ -217,18 +217,25 @@ function getBrowserClientCached() {
   return getBrowserClient();
 }
 
+import { getCached, setCache, clearCache } from '@/lib/supabase-cache';
+
 export const clientService = {
   // ============================================================
   // PROFILE
   // ============================================================
   async getProfile(userId: string): Promise<ClientProfile | null> {
+    const cacheKey = `profile:${userId}`;
+    const cached = getCached<ClientProfile | null>(cacheKey);
+    if (cached !== null) return cached;
     const supabase = getBrowserClientCached();
     const { data } = await supabase
       .from('profiles')
       .select('id, first_name, last_name, email, phone, avatar_url, status')
       .eq('id', userId)
       .single();
-    return data as ClientProfile | null;
+    const result = data as ClientProfile | null;
+    if (result) setCache(cacheKey, result, 300_000);
+    return result;
   },
 
   async updateProfile(userId: string, updates: Partial<ClientProfile>): Promise<void> {
@@ -238,6 +245,7 @@ export const clientService = {
       .update(updates)
       .eq('id', userId);
     if (error) throw new Error(error.message);
+    clearCache(`profile:${userId}`);
   },
 
   async getStats(userId: string): Promise<ClientStats> {
@@ -249,10 +257,10 @@ export const clientService = {
       supabase.from('profiles').select('created_at').eq('id', userId).single(),
     ]);
 
-    const orders = (ordersRes.data ?? []) as any[];
+    const orders = (ordersRes.data ?? []) as Record<string, unknown>[];
     const totalOrders = orders.length;
-    const totalSpent = orders.reduce((s: number, o: any) => s + Number(o.total_amount), 0);
-    const totalSavings = orders.filter((o: any) => o.status === 'delivered').length * 2;
+    const totalSpent = orders.reduce((s, o) => s + Number((o as { total_amount: number }).total_amount), 0);
+    const totalSavings = orders.filter((o) => o.status === 'delivered').length * 2;
     const totalPoints = (pointsRes.data as number) ?? 0;
     const activeCoupons = (couponsRes.data ?? []).length;
 
@@ -270,7 +278,7 @@ export const clientService = {
       totalSavings,
       loyaltyPoints: totalPoints,
       activeCoupons,
-      memberSince: (profileRes.data as any)?.created_at ?? new Date().toISOString(),
+      memberSince: ((profileRes.data as unknown as Record<string, unknown>)?.created_at as string) ?? new Date().toISOString(),
       tier,
       nextTier,
       tierProgress: Math.min(tierProgress, 100),
@@ -472,8 +480,8 @@ export const clientService = {
     ]);
 
     const totalPoints = (pointsRes.data as number) ?? 0;
-    const recent = (recentRes.data ?? []) as any[];
-    const lifetimePoints = recent.reduce((s: number, r: any) => r.points > 0 ? s + r.points : s, 0);
+    const recent = (recentRes.data ?? []) as Record<string, unknown>[];
+    const lifetimePoints = recent.reduce((s, r) => (r.points as number) > 0 ? s + (r.points as number) : s, 0);
 
     let tier = 'Bronce';
     let nextTier = 'Plata';
@@ -492,11 +500,11 @@ export const clientService = {
       tierProgress: Math.min(tierProgress, 100),
       pointsToNextTier: Math.max(pointsToNextTier, 0),
       recentTransactions: recent.map(r => ({
-        id: r.id,
-        points: r.points,
-        reason: r.reason,
-        reference_type: r.reference_type,
-        created_at: r.created_at,
+        id: r.id as string,
+        points: r.points as number,
+        reason: r.reason as string,
+        reference_type: r.reference_type as string | null,
+        created_at: r.created_at as string,
       })),
     };
   },
@@ -546,14 +554,15 @@ export const clientService = {
       .select('id, reward_id, points_spent, status, created_at, completed_at, rewards!reward_id(title)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
-    return ((data ?? []) as any[]).map(r => ({
-      id: r.id,
-      reward_id: r.reward_id,
+    type RedemptionRow = Record<string, unknown> & { rewards?: { title: string } };
+    return ((data ?? []) as unknown as RedemptionRow[]).map(r => ({
+      id: r.id as string,
+      reward_id: r.reward_id as string,
       reward_title: r.rewards?.title ?? 'Recompensa',
-      points_spent: r.points_spent,
-      status: r.status,
-      created_at: r.created_at,
-      completed_at: r.completed_at,
+      points_spent: r.points_spent as number,
+      status: r.status as string,
+      created_at: r.created_at as string,
+      completed_at: r.completed_at as string | null,
     }));
   },
 
@@ -566,13 +575,13 @@ export const clientService = {
       supabase.from('referrals').select('*, referred:profiles!referred_id(first_name, last_name)').eq('referrer_id', userId).order('created_at', { ascending: false }),
     ]);
 
-    const referrals = (referralRes.data ?? []) as any[];
-    const active = referrals.find((r: any) => r.code && !r.referred_id) ?? referrals[0];
+    const referrals = (referralRes.data ?? []) as Record<string, unknown>[];
+    const active = referrals.find((r) => r.code && !r.referred_id) ?? referrals[0];
     return {
-      code: active?.code ?? '',
+      code: (active?.code as string) ?? '',
       totalReferrals: referrals.length,
-      convertedReferrals: referrals.filter((r: any) => r.status === 'converted').length,
-      earnings: referrals.filter((r: any) => r.reward_given).length * 5,
+      convertedReferrals: referrals.filter((r) => r.status === 'converted').length,
+      earnings: referrals.filter((r) => r.reward_given).length * 5,
     };
   },
 
@@ -596,16 +605,16 @@ export const clientService = {
       .select('*')
       .eq('wallet_id', walletId)
       .order('created_at', { ascending: false });
-    return ((data ?? []) as any[]).map(t => ({
-      id: t.id,
-      transaction_type: t.transaction_type,
+    return ((data ?? []) as Record<string, unknown>[]).map(t => ({
+      id: t.id as string,
+      transaction_type: t.transaction_type as string,
       amount: Number(t.amount),
       balance_before: Number(t.balance_before),
       balance_after: Number(t.balance_after),
-      status: t.status,
-      reference_type: t.reference_type,
-      description: t.description ?? undefined,
-      created_at: t.created_at,
+      status: t.status as string,
+      reference_type: t.reference_type as string | null,
+      description: (t.description as string | undefined) ?? undefined,
+      created_at: t.created_at as string,
     }));
   },
 
@@ -670,15 +679,15 @@ export const clientService = {
       .select('*')
       .eq('user_id', userId)
       .single();
-    const prefs = data as any;
+    const prefs = data as Record<string, unknown> | null;
     return {
       language: 'es',
-      emailNotifications: prefs?.email_enabled ?? true,
-      pushNotifications: prefs?.push_enabled ?? true,
-      smsNotifications: prefs?.sms_enabled ?? true,
-      orderUpdates: prefs?.order_notifications ?? true,
-      promotions: prefs?.promotion_notifications ?? true,
-      paymentAlerts: prefs?.payment_notifications ?? true,
+      emailNotifications: (prefs?.email_enabled as boolean) ?? true,
+      pushNotifications: (prefs?.push_enabled as boolean) ?? true,
+      smsNotifications: (prefs?.sms_enabled as boolean) ?? true,
+      orderUpdates: (prefs?.order_notifications as boolean) ?? true,
+      promotions: (prefs?.promotion_notifications as boolean) ?? true,
+      paymentAlerts: (prefs?.payment_notifications as boolean) ?? true,
     };
   },
 

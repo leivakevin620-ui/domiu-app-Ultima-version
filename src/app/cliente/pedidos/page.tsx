@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { PageContainer } from '@/components/ui/page-container';
 import { EmptyState } from '@/components/ui/empty-state';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonList } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrders, OrderProvider } from '@/contexts/OrderContext';
-import { ClipboardList, Store, Clock, MapPin, ChevronRight, Search, Filter, RefreshCw } from 'lucide-react';
+import { ClipboardList, Store, Clock, MapPin, ChevronRight } from 'lucide-react';
 
 const ORDER_STATUSES = ['all', 'active', 'delivered', 'cancelled'] as const;
 
@@ -48,7 +48,7 @@ function PedidosContent() {
     return customerOrders.filter(o => o.status === 'cancelled');
   }, [customerOrders, filter]);
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonList />;
 
   return (
     <div className="px-4 sm:px-6 lg:px-8">

@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback, memo } from 'react';
+import React, { useEffect, useRef, useState, memo } from 'react';
 import { DynamicMapWrapper } from './DynamicMapWrapper';
-import { useMaps } from '@/contexts/MapsContext';
 
 export interface MapPoint {
   lat: number;
@@ -41,7 +40,6 @@ const MARKER_SVG = {
 
 function useGoogleMapRenderer(map: google.maps.Map | null, data: TrackingMapData, showTraffic: boolean) {
   const markersRef = useRef<google.maps.Marker[]>([]);
-  const directionsRef = useRef<google.maps.DirectionsRenderer | null>(null);
   const trafficRef = useRef<google.maps.TrafficLayer | null>(null);
 
   useEffect(() => {
@@ -137,7 +135,7 @@ function useGoogleMapRenderer(map: google.maps.Map | null, data: TrackingMapData
     }
 
     map.fitBounds(bounds, 80);
-  }, [map, data.business.lat, data.business.lng, data.customer.lat, data.customer.lng, data.driver?.lat, data.driver?.lng]);
+  }, [map, data.business.lat, data.business.lng, data.business.name, data.customer.lat, data.customer.lng, data.customer.name, data.driver, data.route]);
 
   const routesRef = useRef<google.maps.DirectionsRenderer | null>(null);
 

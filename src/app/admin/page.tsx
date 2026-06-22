@@ -6,7 +6,15 @@ import { adminService } from '@/services/admin';
 import { adminAuthService } from '@/services/admin-auth';
 import type { DashboardStats, AuditLog, HourlyOrders, CityOrders, TopBusiness, TopCourier, TopCustomer, SalesReport } from '@/services/admin';
 import type { SystemStatus } from '@/types/admin';
-import { ChartCard, RevenueLineChart, OrdersBarChart, StatusPieChart, CityBarChart, RegistrationAreaChart, StatusLegend } from '@/components/admin/dashboard-charts';
+import { SkeletonCard } from '@/components/ui/skeleton';
+import dynamic from 'next/dynamic';
+const ChartCard = dynamic(() => import('@/components/admin/dashboard-charts').then(m => ({ default: m.ChartCard })), { ssr: false, loading: () => <SkeletonCard /> });
+const RevenueLineChart = dynamic(() => import('@/components/admin/dashboard-charts').then(m => ({ default: m.RevenueLineChart })), { ssr: false, loading: () => <SkeletonCard /> });
+const OrdersBarChart = dynamic(() => import('@/components/admin/dashboard-charts').then(m => ({ default: m.OrdersBarChart })), { ssr: false, loading: () => <SkeletonCard /> });
+const StatusPieChart = dynamic(() => import('@/components/admin/dashboard-charts').then(m => ({ default: m.StatusPieChart })), { ssr: false, loading: () => <SkeletonCard /> });
+const CityBarChart = dynamic(() => import('@/components/admin/dashboard-charts').then(m => ({ default: m.CityBarChart })), { ssr: false, loading: () => <SkeletonCard /> });
+const RegistrationAreaChart = dynamic(() => import('@/components/admin/dashboard-charts').then(m => ({ default: m.RegistrationAreaChart })), { ssr: false, loading: () => <SkeletonCard /> });
+const StatusLegend = dynamic(() => import('@/components/admin/dashboard-charts').then(m => ({ default: m.StatusLegend })), { ssr: false, loading: () => <SkeletonCard /> });
 import {
   ShoppingCart, PackageCheck, XCircle, Store, Truck, Users, DollarSign, TrendingUp,
   Clock, Award, Server, CheckCircle, XCircle as XIcon, AlertTriangle,

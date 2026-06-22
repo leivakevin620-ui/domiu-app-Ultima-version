@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { z } from 'zod';
 import { getServiceClient } from '@/lib/db/supabase';
+
+interface ErrorResponse {
+  error: string;
+  message: string;
+  status: number;
+}
+
+function errorResponse(error: string, message: string, status: number): NextResponse<ErrorResponse> {
+  return NextResponse.json({ error, message, status }, { status });
+}
 
 async function getUserFromToken(req: NextRequest): Promise<{ userId: string } | null> {
   const authHeader = req.headers.get('Authorization');
@@ -17,10 +28,18 @@ async function getUserFromToken(req: NextRequest): Promise<{ userId: string } | 
   return { userId: user.id };
 }
 
+const profileUpdateSchema = z.object({
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
+  phone: z.string().optional(),
+  avatar_url: z.string().optional(),
+  email: z.string().email().optional(),
+});
+
 export async function GET(req: NextRequest) {
   const auth = await getUserFromToken(req);
   if (!auth) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    return errorResponse('Unauthorized', 'No autenticado', 401);
   }
   const serviceClient = getServiceClient();
   const { data: profile, error } = await serviceClient
@@ -28,8 +47,8 @@ export async function GET(req: NextRequest) {
     .select('*')
     .eq('id', auth.userId)
     .single();
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error || !profile) {
+    return errorResponse('NotFound', 'Perfil no encontrado', 404);
   }
   return NextResponse.json({ profile });
 }
@@ -38,11 +57,14 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await getUserFromToken(req);
     if (!auth) {
-      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+      return errorResponse('Unauthorized', 'No autenticado', 401);
     }
 
     const body = await req.json();
-    const { userId: _, ...profileData } = body;
+    const parsed = profileUpdateSchema.safeParse(body);
+    if (!parsed.success) {
+      return errorResponse('ValidationError', 'Datos inválidos', 422);
+    }
 
     const serviceClient = getServiceClient();
     const { data: existingProfile } = await serviceClient
@@ -54,38 +76,48 @@ export async function POST(req: NextRequest) {
     if (existingProfile) {
       const { data, error } = await serviceClient
         .from('profiles')
-        .update(profileData)
+        .update(parsed.data)
         .eq('id', auth.userId)
         .select()
         .single();
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) return errorResponse('InternalError', error.message, 500);
       return NextResponse.json({ profile: data });
     }
 
     const { data: profile, error } = await serviceClient
       .from('profiles')
-      .insert({ id: auth.userId, ...profileData })
+      .insert({ id: auth.userId, ...parsed.data })
       .select()
       .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return errorResponse('InternalError', error.message, 500);
     return NextResponse.json({ profile });
-  } catch (err) {
-    return NextResponse.json({ error: 'Error interno', details: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  } catch {
+    return errorResponse('InternalError', 'Error interno del servidor', 500);
   }
 }
 
 export async function PATCH(req: NextRequest) {
-  const auth = await getUserFromToken(req);
-  if (!auth) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-  const updates = await req.json();
-  const serviceClient = getServiceClient();
-  const { data: profile, error } = await serviceClient
-    .from('profiles')
-    .update(updates)
-    .eq('id', auth.userId)
-    .select()
-    .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ profile });
+  try {
+    const auth = await getUserFromToken(req);
+    if (!auth) return errorResponse('Unauthorized', 'No autenticado', 401);
+
+    const body = await req.json();
+    const parsed = profileUpdateSchema.safeParse(body);
+    if (!parsed.success) {
+      return errorResponse('ValidationError', 'Datos inválidos', 422);
+    }
+
+    const serviceClient = getServiceClient();
+    const { data: profile, error } = await serviceClient
+      .from('profiles')
+      .update(parsed.data)
+      .eq('id', auth.userId)
+      .select()
+      .single();
+    if (error) return errorResponse('InternalError', error.message, 500);
+    return NextResponse.json({ profile });
+  } catch {
+    return errorResponse('InternalError', 'Error interno del servidor', 500);
+  }
 }

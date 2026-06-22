@@ -6,7 +6,7 @@ import { clientService, FavoriteItem } from '@/services/client';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { EmptyState } from '@/components/ui/empty-state';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonList } from '@/components/ui/skeleton';
 import { Heart, Store, Package, Trash2, Star, ChevronRight } from 'lucide-react';
 
 export default function ClienteFavoritosPage() {
@@ -16,15 +16,13 @@ export default function ClienteFavoritosPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'all' | 'businesses' | 'products'>('all');
 
-  const load = useCallback(async () => {
+  useEffect(() => {
     if (!profile?.id) return;
-    setLoading(true);
-    const data = await clientService.getFavorites(profile.id);
-    setFavorites(data);
-    setLoading(false);
+    clientService.getFavorites(profile.id).then(data => {
+      setFavorites(data);
+      setLoading(false);
+    });
   }, [profile?.id]);
-
-  useEffect(() => { load(); }, [load]);
 
   const handleRemove = useCallback(async (id: string) => {
     await clientService.removeFavorite(id);
@@ -69,7 +67,7 @@ export default function ClienteFavoritosPage() {
         </div>
 
         {loading ? (
-          <LoadingState />
+          <SkeletonList />
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={<Heart className="h-6 w-6" />}

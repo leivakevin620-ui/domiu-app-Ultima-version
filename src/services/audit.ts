@@ -117,6 +117,7 @@ export const auditService = {
       .from('admin_audit_log')
       .select('action')
       .order('action');
-    return [...new Set((data || []).map((r: any) => r.action))] as string[];
+    const mapped = ((data ?? []) as { action: string }[]).map((r) => r.action);
+    return [...new Set(mapped)];
   },
 };

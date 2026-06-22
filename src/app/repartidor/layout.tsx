@@ -2,9 +2,10 @@
 
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+
 import { useRouter } from 'next/navigation';
 import { BottomNavigation } from '@/components/ui/bottom-navigation';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import { Home, ClipboardList, DollarSign, User, Bike, Navigation } from 'lucide-react';
 
 const navItems = [
@@ -19,7 +20,7 @@ export default function RepartidorLayout({ children }: { children: React.ReactNo
   const { isLoading, profile } = useAuth();
   const router = useRouter();
 
-  if (isLoading) return <LoadingState />;
+  if (isLoading) return <SkeletonCard />;
   if (!profile) { router.push('/login'); return null; }
   if (profile.role !== 'courier') { router.push('/?error=unauthorized'); return null; }
 

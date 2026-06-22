@@ -4,7 +4,9 @@ export const STORAGE_BUCKETS = {
   BUSINESS_LOGOS: 'business-logos',
   BUSINESS_BANNERS: 'business-banners',
   PRODUCT_IMAGES: 'product-images',
-  AVATARS: 'avatars',
+  AVATARS: 'user-avatars',
+  CHAT_FILES: 'chat-files',
+  RATINGS_IMAGES: 'ratings-images',
   PROMOTIONS: 'promotions',
   CATEGORIES: 'categories',
 } as const;

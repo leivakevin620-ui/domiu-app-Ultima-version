@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { clientService, NotificationItem } from '@/services/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { EmptyState } from '@/components/ui/empty-state';
-import { LoadingState } from '@/components/ui/loading-state';
-import { Bell, CheckCheck, Package, Star, Percent, Truck, MessageCircle, Wallet, Gift, Info, ChevronRight } from 'lucide-react';
+import { SkeletonList } from '@/components/ui/skeleton';
+import { Bell, CheckCheck, Package, Star, Percent, Truck, MessageCircle, Wallet, Gift, Info } from 'lucide-react';
 
-const TYPE_CONFIG: Record<string, { icon: any; color: string }> = {
+const TYPE_CONFIG: Record<string, { icon: React.ComponentType<{ className?: string }>; color: string }> = {
   order_confirmed: { icon: Package, color: 'text-blue-500 bg-blue-50' },
   order_preparing: { icon: Package, color: 'text-purple-500 bg-purple-50' },
   order_ready: { icon: Package, color: 'text-emerald-500 bg-emerald-50' },
@@ -28,15 +28,13 @@ export default function NotificacionesPage() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
     if (!profile?.id) return;
-    setLoading(true);
-    const data = await clientService.getNotifications(profile.id);
-    setNotifications(data);
-    setLoading(false);
+    clientService.getNotifications(profile.id).then(data => {
+      setNotifications(data);
+      setLoading(false);
+    });
   }, [profile?.id]);
-
-  useEffect(() => { load(); }, [load]);
 
   const handleMarkRead = async (id: string) => {
     await clientService.markNotificationRead(id);
@@ -73,7 +71,7 @@ export default function NotificacionesPage() {
 
       <div className="mx-auto max-w-3xl px-4 py-4 sm:px-6 lg:px-8">
         {loading ? (
-          <LoadingState />
+          <SkeletonList />
         ) : notifications.length === 0 ? (
           <EmptyState
             icon={<Bell className="h-6 w-6" />}

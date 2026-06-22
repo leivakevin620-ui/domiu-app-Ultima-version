@@ -270,13 +270,18 @@ async function buildConversation(
 async function buildConversationFromChat(chat: Chat): Promise<ChatConversation> {
   const supabase = await getClient();
 
-  const [p1Profile, p2Profile] = await Promise.all([
-    supabase.from('profiles').select('first_name, last_name').eq('id', chat.participant_1_id).single(),
-    supabase.from('profiles').select('first_name, last_name').eq('id', chat.participant_2_id).single(),
-  ]);
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, first_name, last_name')
+    .in('id', [chat.participant_1_id, chat.participant_2_id]);
 
-  const p1Name = [p1Profile.data?.first_name, p1Profile.data?.last_name].filter(Boolean).join(' ') || 'Usuario';
-  const p2Name = [p2Profile.data?.first_name, p2Profile.data?.last_name].filter(Boolean).join(' ') || 'Usuario';
+  const getProfileName = (id: string) => {
+    const p = profiles?.find(pr => pr.id === id);
+    return [p?.first_name, p?.last_name].filter(Boolean).join(' ') || 'Usuario';
+  };
+
+  const p1Name = getProfileName(chat.participant_1_id);
+  const p2Name = getProfileName(chat.participant_2_id);
 
   // Count unread
   const { count } = await supabase

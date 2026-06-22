@@ -6,9 +6,10 @@ import { PageContainer } from '@/components/ui/page-container';
 import { PageTitle } from '@/components/ui/page-title';
 import { DashboardCard } from '@/components/ui/dashboard-card';
 import { StatCard } from '@/components/ui/stat-card';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import { reviewService, type ReviewWithAuthor, type BusinessStats } from '@/services/reviews';
 import { Star, MessageSquare, Calendar } from 'lucide-react';
+import { logger } from '@/lib/logger';
 import type { Database } from '@/types/database';
 
 type Business = Database['public']['Tables']['businesses']['Row'];
@@ -41,7 +42,7 @@ export default function NegocioResenas() {
           setReviews(result[1]);
         }
       })
-      .catch((e) => console.error('Error loading reviews:', e))
+      .catch((e) => logger.error('Error loading reviews', e))
       .finally(() => setLoading(false));
   }, [profile?.id, refreshKey]);
 
@@ -53,12 +54,12 @@ export default function NegocioResenas() {
       setRespondText((p) => ({ ...p, [reviewId]: '' }));
       setRefreshKey((k) => k + 1);
     } catch (e) {
-      console.error('Error responding:', e);
+      logger.error('Error responding to review', e);
     }
     setResponding((p) => ({ ...p, [reviewId]: false }));
   };
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonCard />;
 
   return (
     <PageContainer>

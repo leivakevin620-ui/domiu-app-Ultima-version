@@ -1,7 +1,9 @@
 'use server';
 
+import { z } from 'zod';
 import { getServiceClient } from '@/lib/db/supabase';
 import { requireAuth } from '@/lib/auth/server-auth';
+import { serverAudit } from '@/lib/audit/server-audit';
 
 async function assertChatParticipant(chatId: string, userId: string) {
   const supabase = getServiceClient();
@@ -13,32 +15,43 @@ async function assertChatParticipant(chatId: string, userId: string) {
   return chat;
 }
 
+const sendMessageSchema = z.object({
+  chatId: z.string().uuid(),
+  senderId: z.string().uuid(),
+  content: z.string().min(1).max(5000),
+});
+
 export async function sendMessageAction(
   chatId: string,
   senderId: string,
   content: string,
 ) {
+  const parsed = sendMessageSchema.safeParse({ chatId, senderId, content });
+  if (!parsed.success) {
+    throw new Error('Datos inválidos');
+  }
+
   const result = await requireAuth();
   if (result.error) throw new Error(result.error.message);
-  if (result.session.user.id !== senderId) {
+  if (result.session.user.id !== parsed.data.senderId) {
     throw new Error('No autorizado para enviar mensajes como otro usuario');
   }
 
-  const chat = await assertChatParticipant(chatId, senderId);
+  const chat = await assertChatParticipant(parsed.data.chatId, parsed.data.senderId);
   const supabase = getServiceClient();
 
-  const receiverId = chat.participant_1_id === senderId
+  const receiverId = chat.participant_1_id === parsed.data.senderId
     ? chat.participant_2_id
     : chat.participant_1_id;
 
   const { data: message, error } = await supabase
     .from('messages')
     .insert({
-      chat_id: chatId,
-      sender_id: senderId,
+      chat_id: parsed.data.chatId,
+      sender_id: parsed.data.senderId,
       receiver_id: receiverId,
       message_type: 'text',
-      content,
+      content: parsed.data.content,
       is_read: false,
     })
     .select()
@@ -49,7 +62,9 @@ export async function sendMessageAction(
   await supabase
     .from('chats')
     .update({ last_message_at: new Date().toISOString() })
-    .eq('id', chatId);
+    .eq('id', parsed.data.chatId);
+
+  await serverAudit.logAction(result.session.user.id, result.session.user.email, result.session.profile.role, 'send_message', 'message', message?.id, { chatId: parsed.data.chatId });
 
   return message;
 }

@@ -37,7 +37,7 @@ export function RevenueLineChart({ data }: { data: { date: string; revenue: numb
         <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}`} />
         <Tooltip
           contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--card)', boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}
-          labelFormatter={(v: any) => { const d = new Date(v + 'T00:00:00'); return d.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }); }}
+          labelFormatter={(v: React.ReactNode) => { const d = new Date(String(v) + 'T00:00:00'); return d.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }); }}
         />
         <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ r: 3, fill: 'hsl(var(--primary))' }} activeDot={{ r: 5 }} />
         <Line type="monotone" dataKey="orders" stroke="hsl(var(--success))" strokeWidth={2} dot={{ r: 2, fill: 'hsl(var(--success))' }} />
@@ -72,14 +72,14 @@ export function StatusPieChart({ data }: { data: { status: string; count: number
   return (
     <ResponsiveContainer width="100%" height={220}>
       <PieChart>
-        <Pie data={data} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={3} dataKey="count" label={({ payload, percent }: any) => `${(percent * 100).toFixed(0)}%`}>
+        <Pie data={data} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={3} dataKey="count" label={(p: unknown) => `${(Number((p as Record<string, unknown>).percent ?? 0) * 100).toFixed(0)}%`}>
           {data.map((_, i) => (
             <Cell key={i} fill={COLORS[i % COLORS.length]} />
           ))}
         </Pie>
         <Tooltip
           contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--card)', fontSize: '12px' }}
-          formatter={(value: any, name: any) => [value, name]}
+          formatter={(value: unknown) => String(value)}
         />
       </PieChart>
     </ResponsiveContainer>

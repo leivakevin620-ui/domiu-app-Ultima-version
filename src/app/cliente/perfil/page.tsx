@@ -4,12 +4,12 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { clientService, ClientStats } from '@/services/client';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+import { logger } from '@/lib/logger';
 import {
   User, Mail, Phone, MapPin, Heart, CreditCard, Ticket, Settings,
-  Gift, Wallet, Users, HelpCircle, Bell, ChevronRight, LogOut,
-  Edit2, Save, X, Package, DollarSign, PiggyBank, Star, Award,
-  TrendingUp, Clock
+  Gift, Wallet, Users, HelpCircle, Bell,
+  Edit2, Save, Package, DollarSign, PiggyBank, Star, Award
 } from 'lucide-react';
 
 const QUICK_LINKS = [
@@ -35,13 +35,16 @@ export default function ClientePerfilPage() {
 
   useEffect(() => {
     if (!profile?.id) return;
-    setLoading(true);
-    clientService.getStats(profile.id).then(setStats).finally(() => setLoading(false));
+    clientService.getStats(profile.id).then(s => {
+      setStats(s);
+      setLoading(false);
+    });
   }, [profile?.id]);
 
   useEffect(() => {
     if (profile && !editing) {
-      setForm({ first_name: profile.first_name ?? '', last_name: profile.last_name ?? '', phone: profile.phone ?? '' });
+      const f = { first_name: profile.first_name ?? '', last_name: profile.last_name ?? '', phone: profile.phone ?? '' };
+      Promise.resolve().then(() => setForm(f));
     }
   }, [profile, editing]);
 
@@ -52,7 +55,7 @@ export default function ClientePerfilPage() {
       await updateProfile({ first_name: form.first_name, last_name: form.last_name, phone: form.phone });
       setEditing(false);
     } catch (e) {
-      console.error(e);
+      logger.error('Error updating profile', e);
     } finally {
       setSaving(false);
     }
@@ -205,7 +208,7 @@ export default function ClientePerfilPage() {
   );
 }
 
-function StatCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: string; color: string }) {
+function StatCard({ icon: Icon, label, value, color }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string; color: string }) {
   return (
     <div className="rounded-2xl border border-border/30 bg-card/50 p-4 text-center transition-all hover:border-primary/10">
       <Icon className={`mx-auto mb-1.5 h-5 w-5 ${color}`} />
@@ -215,7 +218,7 @@ function StatCard({ icon: Icon, label, value, color }: { icon: any; label: strin
   );
 }
 
-function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+function InfoRow({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-border/30 bg-card/50 p-4">
       <Icon className="h-4 w-4 text-muted-foreground shrink-0" />

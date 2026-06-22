@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { loadGoogleMaps, hasApiKey, isMapsLoaded } from '@/lib/maps/loader';
 
 interface MapsContextValue {
@@ -27,12 +27,12 @@ export function MapsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hasApiKey()) {
-      setState(prev => ({ ...prev, error: 'API key de Google Maps no configurada', isReady: false }));
+      setTimeout(() => setState(prev => ({ ...prev, error: 'API key de Google Maps no configurada', isReady: false })));
       return;
     }
 
     if (isMapsLoaded() && window.google?.maps) {
-      setState(prev => ({ ...prev, isReady: true, maps: window.google.maps }));
+      setTimeout(() => setState(prev => ({ ...prev, isReady: true, maps: window.google.maps })));
       return;
     }
 

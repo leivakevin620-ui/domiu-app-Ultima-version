@@ -6,7 +6,7 @@ import { StatCard } from '@/components/ui/stat-card';
 import { Tabs } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import { coverageService } from '@/services/coverage';
 import type { City, Zone, DeliveryRate } from '@/services/coverage';
 import { MapPin, Globe, Plus } from 'lucide-react';
@@ -68,7 +68,7 @@ export default function AdminCobertura() {
     setEditRate({}); setShowRateForm(false); loadAll();
   };
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonCard />;
 
   const tabs = [
     { id: 'ciudades' as TabId, label: 'Ciudades' },

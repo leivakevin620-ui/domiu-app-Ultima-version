@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { clientService, PaymentMethod } from '@/services/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { EmptyState } from '@/components/ui/empty-state';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard } from '@/components/ui/skeleton';
+import { logger } from '@/lib/logger';
 import { CreditCard, Plus, Trash2, Star, Shield } from 'lucide-react';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -34,15 +35,17 @@ export default function MetodosPagoPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ type: 'credit_card', brand: '', last_four: '', holder_name: '', expires_at: '', is_default: false });
 
-  const load = useCallback(async () => {
+  const load = () => {
     if (!profile?.id) return;
-    setLoading(true);
-    const data = await clientService.getPaymentMethods(profile.id);
-    setMethods(data);
-    setLoading(false);
-  }, [profile?.id]);
+    clientService.getPaymentMethods(profile.id).then(data => {
+      setMethods(data);
+      setLoading(false);
+    });
+  };
 
-  useEffect(() => { load(); }, [load]);
+  const loadRef = useRef(load);
+  useEffect(() => { loadRef.current = load; });
+  useEffect(() => { loadRef.current(); }, [profile?.id]);
 
   const handleSave = async () => {
     if (!profile?.id || saving) return;
@@ -56,7 +59,7 @@ export default function MetodosPagoPage() {
       setShowForm(false);
       load();
     } catch (e) {
-      console.error(e);
+      logger.error('Error al guardar método de pago', e);
     } finally {
       setSaving(false);
     }
@@ -126,7 +129,7 @@ export default function MetodosPagoPage() {
         )}
 
         {loading ? (
-          <LoadingState />
+          <SkeletonCard />
         ) : methods.length === 0 && !showForm ? (
           <EmptyState
             icon={<CreditCard className="h-6 w-6" />}

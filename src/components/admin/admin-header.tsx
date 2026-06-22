@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, usePathname } from 'next/navigation';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
-import { LogOut, User, Settings, ChevronRight, Home } from 'lucide-react';
+import { LogOut, Settings, ChevronRight, Home } from 'lucide-react';
 
 const breadcrumbMap: Record<string, string> = {
   admin: 'Dashboard',

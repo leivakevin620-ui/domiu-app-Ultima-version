@@ -2,12 +2,13 @@
 
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+
 import { useCart } from '@/contexts/CartContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { BottomNavigation } from '@/components/ui/bottom-navigation';
 import { Footer } from '@/components/ui/footer';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import { Home, ClipboardList, Heart, User, ShoppingBag, Ticket } from 'lucide-react';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 
@@ -25,7 +26,7 @@ export default function ClienteLayout({ children }: { children: React.ReactNode 
   const router = useRouter();
 
   if (isLoading) {
-    return <LoadingState />;
+    return <SkeletonCard />;
   }
 
   if (!profile) {

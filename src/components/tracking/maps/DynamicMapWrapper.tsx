@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback, memo, type ReactNode } from 'react';
+import React, { useEffect, useRef, useState, memo, type ReactNode } from 'react';
 import { useMaps } from '@/contexts/MapsContext';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonMap } from '@/components/ui/skeleton';
 import { MapPin } from 'lucide-react';
 
 export interface MapConfig {
@@ -22,13 +22,12 @@ interface MapWrapperProps {
 function DynamicMapInner({ config, children, className = 'w-full h-full min-h-[300px]', onLoad }: MapWrapperProps) {
   const { isReady, maps, error, hasKey } = useMaps();
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
 
   useEffect(() => {
-    if (!isReady || !maps || !containerRef.current || mapRef.current) return;
+    if (!isReady || !maps || !containerRef.current || map) return;
 
-    const map = new maps.Map(containerRef.current, {
+    const instance = new maps.Map(containerRef.current, {
       center: config.center,
       zoom: config.zoom ?? 14,
       styles: config.styles ?? defaultMapStyle,
@@ -40,10 +39,9 @@ function DynamicMapInner({ config, children, className = 'w-full h-full min-h-[3
       ...config.options,
     });
 
-    mapRef.current = map;
-    setLoaded(true);
-    onLoad?.(map);
-  }, [isReady, maps, config.center.lat, config.center.lng, config.zoom]);
+    setMap(instance);
+    onLoad?.(instance);
+  }, [isReady, maps, config, map, onLoad]);
 
   if (!hasKey || error) {
     return (
@@ -64,7 +62,7 @@ function DynamicMapInner({ config, children, className = 'w-full h-full min-h-[3
   if (!isReady) {
     return (
       <div className={className}>
-        <LoadingState />
+        <SkeletonMap />
       </div>
     );
   }
@@ -72,7 +70,7 @@ function DynamicMapInner({ config, children, className = 'w-full h-full min-h-[3
   return (
     <div className={`relative ${className}`}>
       <div ref={containerRef} className="absolute inset-0 rounded-2xl" />
-      {loaded && children?.(mapRef.current!)}
+      {map && children?.(map)}
     </div>
   );
 }

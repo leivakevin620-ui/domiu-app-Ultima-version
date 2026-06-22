@@ -7,6 +7,7 @@ import React, {
   useState,
   ReactNode,
   useCallback,
+  useMemo,
 } from 'react';
 import {
   AuthSession,
@@ -56,38 +57,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, []);
 
-  const initializeSession = useCallback(async () => {
-    try {
-      setAuthSession(prev => ({ ...prev, isLoading: true }));
-      const { session, error } = await SupabaseAuthService.getSession();
-
-      if (error) throw error;
-
-      if (session?.user) {
-        const profile = await loadUserProfile();
-        if (profile) {
-          setAuthSession({
-            user: session.user, profile, isAuthenticated: true, isLoading: false, error: null,
-          });
-        } else if (session.user.email_confirmed_at) {
-          await SupabaseAuthService.logout();
-          setAuthSession({ user: null, profile: null, isAuthenticated: false, isLoading: false, error: 'Sesión inválida' });
-        } else {
-          setAuthSession({ user: null, profile: null, isAuthenticated: false, isLoading: false, error: null });
-        }
-      } else {
-        setAuthSession({ user: null, profile: null, isAuthenticated: false, isLoading: false, error: null });
-      }
-    } catch (error) {
-      setAuthSession({
-        user: null, profile: null, isAuthenticated: false, isLoading: false,
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
-    }
-  }, [loadUserProfile]);
-
   useEffect(() => {
-    initializeSession();
+    const init = async () => {
+      try {
+        const { session, error } = await SupabaseAuthService.getSession();
+        if (error) throw error;
+        if (session?.user) {
+          const profile = await loadUserProfile();
+          if (profile) {
+            return { user: session.user, profile, isAuthenticated: true, isLoading: false, error: null } as AuthSession;
+          } else if (session.user.email_confirmed_at) {
+            await SupabaseAuthService.logout();
+            return { user: null, profile: null, isAuthenticated: false, isLoading: false, error: 'Sesión inválida' } as AuthSession;
+          } else {
+            return { user: null, profile: null, isAuthenticated: false, isLoading: false, error: null } as AuthSession;
+          }
+        } else {
+          return { user: null, profile: null, isAuthenticated: false, isLoading: false, error: null } as AuthSession;
+        }
+      } catch (error) {
+        return {
+          user: null, profile: null, isAuthenticated: false, isLoading: false,
+          error: error instanceof Error ? error.message : 'Error desconocido',
+        } as AuthSession;
+      }
+    };
+    init().then(setAuthSession);
     const unsubscribe = SupabaseAuthService.onAuthStateChange(async (_session, user) => {
       if (_session && user) {
         const profile = await loadUserProfile();
@@ -99,7 +94,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     });
     return () => { unsubscribe?.data?.subscription?.unsubscribe(); };
-  }, [initializeSession, loadUserProfile]);
+  }, [loadUserProfile]);
 
   const login = useCallback(async (credentials: LoginCredentials) => {
     setAuthSession(prev => ({ ...prev, isLoading: true, error: null }));
@@ -155,10 +150,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     await SupabaseAuthService.resendVerificationEmail(authSession.user.email);
   }, [authSession.user]);
 
+  const value = useMemo(() => ({
+    ...authSession, login, register, logout, resetPassword, updateProfile, resendVerificationEmail,
+  }), [authSession, login, register, logout, resetPassword, updateProfile, resendVerificationEmail]);
+
   return (
-    <AuthContext.Provider value={{
-      ...authSession, login, register, logout, resetPassword, updateProfile, resendVerificationEmail,
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

@@ -68,7 +68,8 @@ export default function AdminConfig() {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        setValues(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        setTimeout(() => setValues(parsed));
       }
     } catch {}
   }, []);

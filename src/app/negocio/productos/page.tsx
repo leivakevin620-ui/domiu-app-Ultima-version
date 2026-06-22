@@ -3,15 +3,17 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { businessService, type BusinessProduct } from '@/services/business';
-import { LoadingState } from '@/components/ui/loading-state';
-import { Package, Plus, Search, Edit3, Copy, Trash2, ToggleLeft, ToggleRight, Image, Clock, Tag } from 'lucide-react';
+import type { Category } from '@/types/database';
+import { SkeletonCard } from '@/components/ui/skeleton';
+import NextImage from 'next/image';
+import { Package, Plus, Search, Edit3, Copy, Trash2, ToggleLeft, ToggleRight, Image as ImageIcon, Clock, Tag } from 'lucide-react';
 
 const formatCurrency = (n: number) => '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0 });
 
 export default function NegocioProductos() {
   const { profile } = useAuth();
   const [products, setProducts] = useState<BusinessProduct[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -23,7 +25,7 @@ export default function NegocioProductos() {
     const bizId = await businessService.getBusinessId(profile.id);
     if (bizId) {
       setProducts(await businessService.getProducts(bizId));
-      setCategories(await businessService.getCategories(bizId));
+      setCategories(await businessService.getCategories(bizId) as unknown as Category[]);
     }
   };
 
@@ -63,7 +65,7 @@ export default function NegocioProductos() {
 
   const filtered = products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonCard />;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -115,7 +117,7 @@ export default function NegocioProductos() {
               <label className="mb-1 block text-xs text-muted-foreground">Categoría</label>
               <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })} className="h-10 w-full rounded-xl border border-border bg-background/50 px-3 text-sm text-foreground">
                 <option value="">Sin categoría</option>
-                {categories.map((cat: any) => (
+                {categories.map((cat: Category) => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
@@ -143,9 +145,9 @@ export default function NegocioProductos() {
             <div key={product.id} className="group rounded-2xl border border-border bg-card shadow-card overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
               <div className="relative h-36 bg-gradient-to-br from-muted/50 to-muted/30 flex items-center justify-center overflow-hidden">
                 {product.image_url ? (
-                  <img src={product.image_url} alt={product.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                  <NextImage src={product.image_url} alt={product.name} fill className="object-cover transition-transform duration-300 group-hover:scale-105" sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw" />
                 ) : (
-                  <Image className="h-8 w-8 text-muted-foreground/40" />
+                  <ImageIcon className="h-8 w-8 text-muted-foreground/40" aria-hidden="true" />
                 )}
                 <div className="absolute top-2 right-2 flex gap-1">
                   {product.status === 'available' ? (

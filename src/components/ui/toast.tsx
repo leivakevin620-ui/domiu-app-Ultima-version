@@ -39,7 +39,7 @@ export function Toast({ open, onClose, title, description, variant = 'info', dur
           <p className="text-sm font-medium text-foreground">{title}</p>
           {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
         </div>
-        <button onClick={onClose} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={onClose} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors" aria-label="Cerrar notificación">
           <X className="h-4 w-4" />
         </button>
       </div>

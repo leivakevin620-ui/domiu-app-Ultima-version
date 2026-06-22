@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard, Package, ClipboardList, Users, BarChart3, Settings,
-  Star, LogOut, ChevronLeft, Search, Store, Globe,
+  Star, LogOut, ChevronLeft, Store, Globe,
 } from 'lucide-react';
 
 const sidebarItems = [

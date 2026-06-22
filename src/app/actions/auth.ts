@@ -1,28 +1,53 @@
 'use server';
 
+import { z } from 'zod';
 import { getServiceClient } from '@/lib/db/supabase';
 import { requireAuth } from '@/lib/auth/server-auth';
+import { ADMIN_ROLES, type UserRole } from '@/types/auth';
+import { serverAudit } from '@/lib/audit/server-audit';
 
-export async function registerUserAction(data: {
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  role: 'customer' | 'merchant' | 'courier';
-}) {
+const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  role: z.enum(['customer', 'business', 'merchant', 'courier']),
+});
+
+const updateProfileSchema = z.object({
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
+  phone: z.string().optional(),
+  avatar_url: z.string().optional(),
+});
+
+const createDriverSchema = z.object({
+  license_number: z.string().min(1),
+  vehicle_type: z.enum(['bike', 'motorcycle', 'car', 'van']),
+  vehicle_plate: z.string().min(1),
+});
+
+export async function registerUserAction(data: z.infer<typeof registerSchema>) {
+  const parsed = registerSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new Error('Datos inválidos');
+  }
+
   const result = await requireAuth();
   if (result.error) throw new Error(result.error.message);
-  if (result.session.profile.role !== 'admin') {
+
+  if (!ADMIN_ROLES.includes(result.session.profile.role)) {
+    await serverAudit.logError(result.session.user.id, result.session.user.email, result.session.profile.role, 'register_user', 'user', 'Solo administradores pueden registrar usuarios');
     throw new Error('Solo administradores pueden registrar usuarios');
   }
 
   const supabase = getServiceClient();
 
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-    email: data.email,
-    password: data.password,
+    email: parsed.data.email,
+    password: parsed.data.password,
     email_confirm: true,
-    user_metadata: { firstName: data.firstName, lastName: data.lastName },
+    user_metadata: { firstName: parsed.data.firstName, lastName: parsed.data.lastName },
   });
 
   if (authError) throw new Error(authError.message);
@@ -30,10 +55,10 @@ export async function registerUserAction(data: {
 
   const { error: profileError } = await supabase.from('profiles').insert({
     id: authData.user.id,
-    email: data.email,
-    role: data.role,
-    first_name: data.firstName,
-    last_name: data.lastName,
+    email: parsed.data.email,
+    role: parsed.data.role,
+    first_name: parsed.data.firstName,
+    last_name: parsed.data.lastName,
     status: 'active',
   });
 
@@ -42,54 +67,59 @@ export async function registerUserAction(data: {
     throw new Error(profileError.message);
   }
 
+  await serverAudit.logAction(result.session.user.id, result.session.user.email, result.session.profile.role, 'register_user', 'profile', authData.user.id, { email: parsed.data.email, role: parsed.data.role });
+
   return { userId: authData.user.id };
 }
 
-export async function updateUserProfileAction(userId: string, updates: {
-  first_name?: string;
-  last_name?: string;
-  phone?: string;
-  avatar_url?: string;
-}) {
+export async function updateUserProfileAction(userId: string, updates: z.infer<typeof updateProfileSchema>) {
+  const parsed = updateProfileSchema.safeParse(updates);
+  if (!parsed.success) {
+    throw new Error('Datos inválidos');
+  }
+
   const result = await requireAuth();
   if (result.error) throw new Error(result.error.message);
 
   const { session } = result;
-  if (session.profile.role !== 'admin' && session.user.id !== userId) {
+  if (!ADMIN_ROLES.includes(session.profile.role as UserRole) && session.user.id !== userId) {
     throw new Error('No autorizado para actualizar este perfil');
   }
 
   const supabase = getServiceClient();
   const { error } = await supabase
     .from('profiles')
-    .update(updates)
+    .update(parsed.data)
     .eq('id', userId);
 
   if (error) throw new Error(error.message);
+
+  await serverAudit.logAction(session.user.id, session.user.email, session.profile.role, 'update_profile', 'profile', userId);
 }
 
 export async function createDriverProfileAction(
   userId: string,
-  data: {
-    license_number: string;
-    vehicle_type: 'bike' | 'motorcycle' | 'car' | 'van';
-    vehicle_plate: string;
-  },
+  data: z.infer<typeof createDriverSchema>,
 ) {
+  const parsed = createDriverSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new Error('Datos inválidos');
+  }
+
   const result = await requireAuth();
   if (result.error) throw new Error(result.error.message);
 
   const { session } = result;
-  if (session.profile.role !== 'admin' && session.user.id !== userId) {
+  if (!ADMIN_ROLES.includes(session.profile.role as UserRole) && session.user.id !== userId) {
     throw new Error('No autorizado para crear perfil de repartidor');
   }
 
   const supabase = getServiceClient();
   const { error } = await supabase.from('drivers').insert({
     id: userId,
-    license_number: data.license_number,
-    vehicle_type: data.vehicle_type,
-    vehicle_plate: data.vehicle_plate,
+    license_number: parsed.data.license_number,
+    vehicle_type: parsed.data.vehicle_type,
+    vehicle_plate: parsed.data.vehicle_plate,
     status: 'offline',
     is_active: false,
     is_verified: false,
@@ -101,4 +131,6 @@ export async function createDriverProfileAction(
   });
 
   if (error) throw new Error(error.message);
+
+  await serverAudit.logAction(session.user.id, session.user.email, session.profile.role, 'create_driver', 'driver', userId);
 }

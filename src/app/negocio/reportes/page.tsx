@@ -3,9 +3,12 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { businessService, type BusinessReport } from '@/services/business';
-import { LoadingState } from '@/components/ui/loading-state';
-import { BarChart3, TrendingUp, Clock, Package, Download, Calendar } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { SkeletonStats } from '@/components/ui/skeleton';
+import { BarChart3, TrendingUp, Clock, Package, Download } from 'lucide-react';
+import dynamic from 'next/dynamic';
+const SalesLineChart = dynamic(() => import('@/components/charts/business-report-charts').then(m => ({ default: m.SalesLineChart })), { ssr: false, loading: () => <div className="h-72 animate-pulse rounded-xl bg-muted" /> });
+const TopProductsBarChart = dynamic(() => import('@/components/charts/business-report-charts').then(m => ({ default: m.TopProductsBarChart })), { ssr: false, loading: () => <div className="h-72 animate-pulse rounded-xl bg-muted" /> });
+const PeakHoursBarChart = dynamic(() => import('@/components/charts/business-report-charts').then(m => ({ default: m.PeakHoursBarChart })), { ssr: false, loading: () => <div className="h-72 animate-pulse rounded-xl bg-muted" /> });
 
 const formatCurrency = (n: number) => '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0 });
 
@@ -22,7 +25,7 @@ export default function NegocioReportes() {
       if (bizId) setReport(await businessService.getReport(bizId));
       setLoading(false);
     })();
-  }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [profile?.id]);
 
   const exportCSV = () => {
     if (!report) return;
@@ -34,7 +37,7 @@ export default function NegocioReportes() {
     URL.revokeObjectURL(url);
   };
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonStats />;
   if (!report) return <div className="p-12 text-center text-muted-foreground">Sin datos disponibles</div>;
 
   const totalRevenue = report.dailySales.reduce((s, d) => s + d.revenue, 0);
@@ -63,7 +66,7 @@ export default function NegocioReportes() {
           { key: 'products', label: 'Productos Top', icon: Package },
           { key: 'hours', label: 'Horas Pico', icon: Clock },
         ].map((tab) => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key as any)} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === tab.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+          <button key={tab.key} onClick={() => setActiveTab(tab.key as 'sales' | 'products' | 'hours')} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === tab.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
             <tab.icon className="h-4 w-4" /> {tab.label}
           </button>
         ))}
@@ -73,15 +76,7 @@ export default function NegocioReportes() {
         <div className="rounded-2xl border border-border bg-card p-6">
           <h3 className="text-sm font-semibold text-foreground mb-4">Ventas Diarias (30 días)</h3>
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={report.dailySales}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(v) => v.slice(5)} />
-                <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '12px', fontSize: 12 }} formatter={(v: any) => formatCurrency(Number(v) || 0)} />
-                <Line type="monotone" dataKey="revenue" stroke="hsl(var(--warning))" strokeWidth={2} dot={{ r: 3, fill: 'hsl(var(--warning))' }} activeDot={{ r: 5 }} />
-              </LineChart>
-            </ResponsiveContainer>
+            <SalesLineChart data={report.dailySales} />
           </div>
         </div>
       )}
@@ -93,15 +88,7 @@ export default function NegocioReportes() {
             <p className="text-sm text-muted-foreground">No hay datos de productos en este período.</p>
           ) : (
             <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={report.topProducts} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-                  <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 10, fill: 'hsl(var(--foreground))' }} />
-                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '12px', fontSize: 12 }} formatter={(v: any) => `${Number(v) || 0} vendidos`} />
-                  <Bar dataKey="total" fill="hsl(var(--warning))" radius={[0, 6, 6, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <TopProductsBarChart data={report.topProducts} />
             </div>
           )}
         </div>
@@ -114,15 +101,7 @@ export default function NegocioReportes() {
             <p className="text-sm text-muted-foreground">No hay datos de horas en este período.</p>
           ) : (
             <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={report.peakHours}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                  <XAxis dataKey="hour" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(v) => `${v}:00`} />
-                  <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '12px', fontSize: 12 }} formatter={(v: any) => `${Number(v) || 0} pedidos`} />
-                  <Bar dataKey="orders" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <PeakHoursBarChart data={report.peakHours} />
             </div>
           )}
         </div>

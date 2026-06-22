@@ -7,7 +7,7 @@
 // ENUMS
 // ============================================================================
 
-export type UserRole = 'admin' | 'merchant' | 'customer' | 'courier';
+export type UserRole = 'super_admin' | 'admin_general' | 'admin_financiero' | 'admin_operativo' | 'admin_comercial' | 'admin_soporte' | 'business' | 'merchant' | 'customer' | 'courier' | 'guest';
 export type UserStatus = 'active' | 'inactive' | 'suspended' | 'banned';
 export type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'ready' | 'assigned' | 'picked_up' | 'in_transit' | 'delivered' | 'cancelled' | 'refunded';
 export type PaymentStatus = 'pending' | 'completed' | 'failed' | 'refunded';

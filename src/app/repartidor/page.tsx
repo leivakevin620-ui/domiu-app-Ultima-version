@@ -4,7 +4,7 @@ import React, { useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { CourierProvider, useCourier } from '@/contexts/CourierContext';
 import { courierProService, getCourierLevel, getNextLevel, COURIER_LEVELS } from '@/services/courier-pro';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonStats } from '@/components/ui/skeleton';
 import { Bike, Star, TrendingUp, Zap, MapPin, ChevronRight, Package } from 'lucide-react';
 
 const formatCurrency = (n: number) => '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0 });
@@ -70,7 +70,7 @@ function DashboardContent() {
   const activeOrder = activeDeliveries[0];
   const displayOrders = availableOrders.slice(0, 5);
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonStats />;
 
   return (
     <div className="space-y-5 animate-fade-in pb-4">

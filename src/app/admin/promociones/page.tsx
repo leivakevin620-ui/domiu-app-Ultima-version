@@ -6,7 +6,7 @@ import { StatCard } from '@/components/ui/stat-card';
 import { Tabs } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonStats } from '@/components/ui/skeleton';
 import { couponService } from '@/services/coupons';
 import { referralService, loyaltyService } from '@/services/referrals';
 import type { Coupon, CouponUsage } from '@/services/coupons';
@@ -89,7 +89,7 @@ export default function AdminPromociones() {
     setNewCode(''); setNewValue(''); setShowForm(false); loadAll();
   };
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonStats />;
 
   const tabs = [
     { id: 'cupones' as TabId, label: 'Cupones' },

@@ -1,17 +1,27 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { MapsProvider, useMaps } from '@/contexts/MapsContext';
-import { DynamicMapWrapper } from '@/components/tracking/maps/DynamicMapWrapper';
+import dynamic from 'next/dynamic';
+const DynamicMapWrapper = dynamic(() => import('@/components/tracking/maps/DynamicMapWrapper').then(m => ({ default: m.DynamicMapWrapper })), {
+  ssr: false,
+  loading: () => <SkeletonMap className="h-[400px]" />,
+});
 import { getBrowserClient } from '@/lib/db/supabase';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonMap } from '@/components/ui/skeleton';
 import { PageTitle } from '@/components/ui/page-title';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Globe, Store, Truck, ClipboardList, Filter, X, Users,
-  Circle, Search, Clock, ChevronDown, CircleDot,
-} from 'lucide-react';
+import { Globe, Search, Clock } from 'lucide-react';
+
+interface RawOrderData {
+  id: string;
+  order_number: string;
+  status: string;
+  business: { id: string; name: string; business_addresses: { latitude: number; longitude: number }[] } | null;
+  customer: { id: string; first_name: string | null; last_name: string | null } | null;
+  courier: { first_name: string | null; last_name: string | null } | null;
+  driver_locations: { driver_id: string; latitude: number; longitude: number }[] | null;
+}
 
 interface MapOrder {
   id: string;
@@ -41,11 +51,9 @@ function AdminMapContent() {
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  useEffect(() => {
     const supabase = getBrowserClient();
-    const { data: ordersData } = await supabase
-      .from('orders')
+    supabase.from('orders')
       .select(`
         id, order_number, status,
         business:businesses(id, name, business_addresses!inner(latitude, longitude)),
@@ -55,26 +63,24 @@ function AdminMapContent() {
       `)
       .in('status', ['confirmed', 'preparing', 'ready', 'assigned', 'picked_up', 'in_transit'])
       .order('created_at', { ascending: false })
-      .limit(100);
-
-    const mapped: MapOrder[] = ((ordersData ?? []) as any[]).map(o => ({
-      id: o.id,
-      order_number: o.order_number,
-      business_name: o.business?.name ?? '',
-      customer_name: o.customer ? `${o.customer.first_name ?? ''} ${o.customer.last_name ?? ''}`.trim() : '',
-      status: o.status,
-      business_lat: o.business?.business_addresses?.[0]?.latitude ?? 11.240,
-      business_lng: o.business?.business_addresses?.[0]?.longitude ?? -74.211,
-      driver_lat: o.driver_locations?.[0]?.latitude,
-      driver_lng: o.driver_locations?.[0]?.longitude,
-      driver_name: o.courier ? `${o.courier.first_name ?? ''} ${o.courier.last_name ?? ''}`.trim() : undefined,
-    }));
-
-    setOrders(mapped);
-    setLoading(false);
+      .limit(100)
+      .then(({ data: ordersData }) => {
+        const mapped: MapOrder[] = ((ordersData ?? []) as unknown as RawOrderData[]).map(o => ({
+          id: o.id,
+          order_number: o.order_number,
+          business_name: o.business?.name ?? '',
+          customer_name: o.customer ? `${o.customer.first_name ?? ''} ${o.customer.last_name ?? ''}`.trim() : '',
+          status: o.status,
+          business_lat: o.business?.business_addresses?.[0]?.latitude ?? 11.240,
+          business_lng: o.business?.business_addresses?.[0]?.longitude ?? -74.211,
+          driver_lat: o.driver_locations?.[0]?.latitude,
+          driver_lng: o.driver_locations?.[0]?.longitude,
+          driver_name: o.courier ? `${o.courier.first_name ?? ''} ${o.courier.last_name ?? ''}`.trim() : undefined,
+        }));
+        setOrders(mapped);
+        setLoading(false);
+      });
   }, []);
-
-  useEffect(() => { loadData(); }, [loadData]);
 
   const filtered = useMemo(() => {
     let result = orders;
@@ -188,7 +194,7 @@ function AdminMapContent() {
 
           <div className="space-y-2 max-h-[600px] overflow-y-auto">
             {loading ? (
-              <LoadingState />
+              <SkeletonMap />
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40 text-center">
                 <Globe className="h-8 w-8 text-muted-foreground mb-2" />

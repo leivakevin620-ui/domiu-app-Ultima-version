@@ -3,8 +3,21 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getBrowserClient } from '@/lib/db/supabase';
-import { LoadingState } from '@/components/ui/loading-state';
-import { Settings, Store, Clock, CreditCard, Truck, Percent, Image, Users, Bell, Save } from 'lucide-react';
+import { SkeletonCard } from '@/components/ui/skeleton';
+import NextImage from 'next/image';
+import { Settings, Store, Clock, CreditCard, Truck, Percent, Image as ImageIcon, Users, Bell, Save } from 'lucide-react';
+
+interface BusinessConfig {
+  id?: string;
+  name?: string;
+  phone?: string;
+  address?: string;
+  description?: string;
+  tax_id?: string;
+  logo_url?: string;
+  cover_url?: string;
+  [key: string]: unknown;
+}
 
 const TABS = [
   { key: 'general', label: 'General', icon: Store },
@@ -12,7 +25,7 @@ const TABS = [
   { key: 'coverage', label: 'Cobertura', icon: Truck },
   { key: 'payments', label: 'Pagos', icon: CreditCard },
   { key: 'taxes', label: 'Impuestos', icon: Percent },
-  { key: 'images', label: 'Imágenes', icon: Image },
+  { key: 'images', label: 'Imágenes', icon: ImageIcon },
   { key: 'staff', label: 'Personal', icon: Users },
   { key: 'notifications', label: 'Notificaciones', icon: Bell },
 ] as const;
@@ -25,31 +38,31 @@ export default function NegocioConfiguracion() {
   const [activeTab, setActiveTab] = useState<TabKey>('general');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [business, setBusiness] = useState<any>(null);
+  const [business, setBusiness] = useState<BusinessConfig | null>(null);
 
   useEffect(() => {
     (async () => {
       if (!profile?.id) return;
       const supabase = await getBrowserClient();
       const { data } = await supabase.from('businesses').select('*').eq('owner_id', profile.id).maybeSingle();
-      setBusiness(data || {});
+      setBusiness((data || {}) as BusinessConfig);
       setLoading(false);
     })();
-  }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [profile?.id]);
 
-  const updateField = (key: string, value: any) => setBusiness((prev: any) => ({ ...prev, [key]: value }));
+  const updateField = (key: string, value: unknown) => setBusiness((prev) => ({ ...(prev ?? {}), [key]: value } as BusinessConfig));
 
   const handleSave = async () => {
     if (!business?.id) return;
     setSaving(true);
     const supabase = await getBrowserClient();
-    await supabase.from('businesses').update(business).eq('id', business.id);
+    await supabase.from('businesses').update(business as never).eq('id', business.id as string);
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonCard />;
   if (!business) return <div className="p-12 text-center text-muted-foreground">No se encontró tu negocio</div>;
 
   return (
@@ -194,12 +207,12 @@ export default function NegocioConfiguracion() {
             <div className="grid gap-6 sm:grid-cols-2">
               <div>
                 <label className="mb-2 block text-xs text-muted-foreground">Logo</label>
-                <div className="flex h-40 items-center justify-center rounded-2xl border-2 border-dashed border-border bg-background/30">
+                <div className="relative flex h-40 items-center justify-center rounded-2xl border-2 border-dashed border-border bg-background/30">
                   {business.logo_url ? (
-                    <img src={business.logo_url} alt="Logo" className="h-full w-full object-contain rounded-2xl" />
+                    <NextImage src={business.logo_url} alt="Logo del negocio" fill className="object-contain rounded-2xl" sizes="160px" />
                   ) : (
                     <div className="text-center">
-                      <Image className="mx-auto h-6 w-6 text-muted-foreground/50" />
+                      <ImageIcon className="mx-auto h-6 w-6 text-muted-foreground/50" aria-hidden="true" />
                       <p className="mt-2 text-xs text-muted-foreground">Sube tu logo</p>
                     </div>
                   )}
@@ -207,12 +220,12 @@ export default function NegocioConfiguracion() {
               </div>
               <div>
                 <label className="mb-2 block text-xs text-muted-foreground">Portada</label>
-                <div className="flex h-40 items-center justify-center rounded-2xl border-2 border-dashed border-border bg-background/30">
+                <div className="relative flex h-40 items-center justify-center rounded-2xl border-2 border-dashed border-border bg-background/30">
                   {business.cover_url ? (
-                    <img src={business.cover_url} alt="Cover" className="h-full w-full object-cover rounded-2xl" />
+                    <NextImage src={business.cover_url} alt="Portada del negocio" fill className="object-cover rounded-2xl" sizes="160px" />
                   ) : (
                     <div className="text-center">
-                      <Image className="mx-auto h-6 w-6 text-muted-foreground/50" />
+                      <ImageIcon className="mx-auto h-6 w-6 text-muted-foreground/50" aria-hidden="true" />
                       <p className="mt-2 text-xs text-muted-foreground">Sube tu portada</p>
                     </div>
                   )}

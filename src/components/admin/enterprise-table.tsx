@@ -13,7 +13,7 @@ export interface EnterpriseColumn<T> {
   exportable?: boolean;
 }
 
-interface EnterpriseTableProps<T> {
+export interface EnterpriseTableProps<T> {
   columns: EnterpriseColumn<T>[];
   data: T[];
   keyExtractor: (item: T) => string;
@@ -31,8 +31,7 @@ interface EnterpriseTableProps<T> {
   actions?: React.ReactNode;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function EnterpriseTable<T = any>({
+export function EnterpriseTable<T = Record<string, unknown>>({
   columns,
   data,
   keyExtractor,
@@ -58,9 +57,9 @@ export function EnterpriseTable<T = any>({
   const filtered = React.useMemo(() => {
     if (!query) return data;
     const q = query.toLowerCase();
-    return data.filter((item: any) =>
+    return data.filter((item: T) =>
       columns.some((col) => {
-        const val = item[col.key];
+        const val = (item as Record<string, unknown>)[col.key];
         return val != null && String(val).toLowerCase().includes(q);
       }),
     );
@@ -68,9 +67,9 @@ export function EnterpriseTable<T = any>({
 
   const sorted = React.useMemo(() => {
     if (!sortKey) return filtered;
-    return [...filtered].sort((a: any, b: any) => {
-      const aVal = String(a[sortKey!] ?? '');
-      const bVal = String(b[sortKey!] ?? '');
+    return [...filtered].sort((a: T, b: T) => {
+      const aVal = String((a as Record<string, unknown>)[sortKey!] ?? '');
+      const bVal = String((b as Record<string, unknown>)[sortKey!] ?? '');
       const cmp = aVal.localeCompare(bVal);
       return sortDir === 'asc' ? cmp : -cmp;
     });
@@ -84,9 +83,9 @@ export function EnterpriseTable<T = any>({
   const handleExport = () => {
     const exportCols = columns.filter((c) => c.exportable !== false);
     const headers = exportCols.map((c) => c.header).join(',');
-    const rows = data.map((item: any) =>
+    const rows = data.map((item: T) =>
       exportCols.map((col) => {
-        const val = item[col.key];
+        const val = (item as Record<string, unknown>)[col.key];
         const str = val != null ? String(val) : '';
         return str.includes(',') ? `"${str}"` : str;
       }).join(','),
@@ -193,7 +192,7 @@ export function EnterpriseTable<T = any>({
                 >
                   {columns.map((col) => (
                     <td key={col.key} className={cn('px-4 py-3 text-sm text-foreground', col.className)}>
-                      {col.render ? col.render(item) : String((item as any)[col.key] ?? '')}
+                      {col.render ? col.render(item) : String((item as Record<string, unknown>)[col.key] ?? '')}
                     </td>
                   ))}
                 </tr>

@@ -3,8 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { businessService, type BusinessCustomer } from '@/services/business';
-import { LoadingState } from '@/components/ui/loading-state';
-import { Users, Search, Star, ShoppingBag, DollarSign, Calendar, ArrowDownUp } from 'lucide-react';
+import { SkeletonList } from '@/components/ui/skeleton';
+import { Users, Search, Star } from 'lucide-react';
 
 const formatCurrency = (n: number) => '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0 });
 const formatDate = (s: string | null) => s ? new Date(s).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -23,7 +23,7 @@ export default function NegocioClientes() {
       if (bizId) setCustomers(await businessService.getCustomers(bizId));
       setLoading(false);
     })();
-  }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [profile?.id]);
 
   const filtered = [...customers]
     .filter((c) => `${c.first_name || ''} ${c.last_name || ''} ${c.email}`.toLowerCase().includes(search.toLowerCase()))
@@ -35,7 +35,7 @@ export default function NegocioClientes() {
 
   const totalSpent = customers.reduce((s, c) => s + c.total_spent, 0);
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonList />;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -62,7 +62,7 @@ export default function NegocioClientes() {
             { key: 'orders', label: 'Pedidos' },
             { key: 'recent', label: 'Reciente' },
           ].map((opt) => (
-            <button key={opt.key} onClick={() => setSortBy(opt.key as any)} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${sortBy === opt.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{opt.label}</button>
+            <button key={opt.key} onClick={() => setSortBy(opt.key as 'spent' | 'orders' | 'recent')} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${sortBy === opt.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{opt.label}</button>
           ))}
         </div>
       </div>

@@ -1,14 +1,19 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { MapsProvider } from '@/contexts/MapsContext';
-import { DynamicMapWrapper } from '@/components/tracking/maps/DynamicMapWrapper';
+import dynamic from 'next/dynamic';
+const DynamicMapWrapper = dynamic(() => import('@/components/tracking/maps/DynamicMapWrapper').then(m => ({ default: m.DynamicMapWrapper })), {
+  ssr: false,
+  loading: () => <SkeletonMap className="h-[400px]" />,
+});
 import { trackingService } from '@/services/tracking';
 import { orderService } from '@/services/orders';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonMap } from '@/components/ui/skeleton';
+import type { OrderData } from '@/services/orders';
 import { useRouter } from 'next/navigation';
-import { Navigation, ArrowLeft, Store, MapPin, Truck, Clock, Route } from 'lucide-react';
+import { Navigation, ArrowLeft, Store, MapPin, Truck, Clock } from 'lucide-react';
 
 interface ActiveDelivery {
   orderId: string;
@@ -23,24 +28,23 @@ interface ActiveDelivery {
 function CourierMapContent() {
   const { profile } = useAuth();
   const router = useRouter();
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<OrderData[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeDelivery, setActiveDelivery] = useState<ActiveDelivery | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
-  const [directions, setDirections] = useState<google.maps.DirectionsRenderer | null>(null);
+  const directionsRef = useRef<google.maps.DirectionsRenderer | null>(null);
   const [eta, setEta] = useState<{ text: string; distance: string } | null>(null);
   const [step, setStep] = useState<'to_business' | 'to_customer'>('to_business');
 
   useEffect(() => {
     if (!profile?.id) return;
-    setLoading(true);
     orderService.getCourierOrders(profile.id).then(data => {
       setOrders(data);
       setLoading(false);
     });
   }, [profile?.id]);
 
-  const activeOrder = orders.find((o: any) => ['assigned', 'picked_up', 'in_transit'].includes(o.status));
+  const activeOrder = orders.find((o: OrderData) => ['assigned', 'picked_up', 'in_transit'].includes(o.status));
 
   useEffect(() => {
     if (!activeOrder || !profile?.id) return;
@@ -58,11 +62,11 @@ function CourierMapContent() {
       });
     };
     loadLocations();
-  }, [activeOrder?.id, profile?.id]);
+  }, [activeOrder, profile?.id]);
 
   useEffect(() => {
     if (!map || !activeDelivery || !window.google?.maps) return;
-    if (directions) { directions.setMap(null); }
+    if (directionsRef.current) { directionsRef.current.setMap(null); }
 
     const origin = step === 'to_business'
       ? { lat: 11.240, lng: -74.211 }
@@ -92,7 +96,7 @@ function CourierMapContent() {
       (result, status) => {
         if (status === 'OK' && result) {
           renderer.setDirections(result);
-          setDirections(renderer);
+          directionsRef.current = renderer;
           const leg = result.routes[0].legs[0];
           setEta({ text: leg.duration?.text ?? '', distance: leg.distance?.text ?? '' });
         }
@@ -113,9 +117,9 @@ function CourierMapContent() {
     });
 
     return () => { renderer.setMap(null); };
-  }, [map, activeDelivery, step]);
+  }, [map, activeDelivery, step, directionsRef]);
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonMap />;
 
   if (!activeOrder || !activeDelivery) {
     return (
@@ -169,7 +173,7 @@ function CourierMapContent() {
           className="w-full h-full"
           onLoad={setMap}
         >
-          {(m) => null}
+          {() => null}
         </DynamicMapWrapper>
 
         <div className="absolute bottom-6 left-4 right-4 space-y-3">

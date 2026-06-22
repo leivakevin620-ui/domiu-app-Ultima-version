@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { clientService, CouponAvailable, CouponUsageRecord } from '@/services/client';
 import { motion } from 'framer-motion';
 import { EmptyState } from '@/components/ui/empty-state';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import { Ticket, Percent, DollarSign, Truck, Clock, Copy, Check } from 'lucide-react';
 
-const TYPE_ICONS: Record<string, any> = {
+const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   percentage: Percent,
   fixed: DollarSign,
   free_shipping: Truck,
@@ -22,19 +22,17 @@ export default function CuponesPage() {
   const [tab, setTab] = useState<'available' | 'used'>('available');
   const [copied, setCopied] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
     if (!profile?.id) return;
-    setLoading(true);
-    const [c, u] = await Promise.all([
+    Promise.all([
       clientService.getAvailableCoupons(),
       clientService.getCouponUsage(profile.id),
-    ]);
-    setCoupons(c);
-    setUsageHistory(u);
-    setLoading(false);
+    ]).then(([c, u]) => {
+      setCoupons(c);
+      setUsageHistory(u);
+      setLoading(false);
+    });
   }, [profile?.id]);
-
-  useEffect(() => { load(); }, [load]);
 
   const handleCopy = async (code: string) => {
     try {
@@ -44,7 +42,7 @@ export default function CuponesPage() {
     } catch {}
   };
 
-  if (loading) return <div className="min-h-screen bg-background pb-16 lg:pb-0"><div className="mx-auto max-w-7xl px-4 py-8"><LoadingState /></div></div>;
+  if (loading) return <div className="min-h-screen bg-background pb-16 lg:pb-0"><div className="mx-auto max-w-7xl px-4 py-8"><SkeletonCard /></div></div>;
 
   return (
     <div className="min-h-screen bg-background pb-16 lg:pb-0">

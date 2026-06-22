@@ -4,25 +4,37 @@ import React, { useEffect, useState } from 'react';
 import { getBrowserClient } from '@/lib/db/supabase';
 import { Wallet, Search, RefreshCw } from 'lucide-react';
 
+interface WalletRow {
+  id: string;
+  balance: number;
+  total_credited: number;
+  total_debited: number;
+  is_active: boolean;
+  profiles: { email: string; first_name: string; last_name: string } | null;
+}
+
 const formatCurrency = (n: number) => '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 export default function AdminWallets() {
-  const [wallets, setWallets] = useState<any[]>([]);
+  const [wallets, setWallets] = useState<WalletRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
   const loadWallets = async () => {
-    setLoading(true);
     const supabase = getBrowserClient();
     const { data } = await supabase
       .from('wallets')
       .select('*, profiles!inner(email, first_name, last_name)')
       .order('balance', { ascending: false });
-    if (data) setWallets(data);
-    setLoading(false);
+    return (data ?? []) as unknown as WalletRow[];
   };
 
-  useEffect(() => { loadWallets(); }, []);
+  useEffect(() => {
+    loadWallets().then(items => {
+      setWallets(items);
+      setLoading(false);
+    });
+  }, []);
 
   const filtered = wallets.filter((w) =>
     (w.profiles?.email || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -36,7 +48,7 @@ export default function AdminWallets() {
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Wallets</h1>
           <p className="mt-1 text-sm text-muted-foreground">Billeteras digitales del sistema</p>
         </div>
-        <button onClick={loadWallets} className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-muted/50">
+        <button onClick={() => { setLoading(true); loadWallets().then(() => setLoading(false)); }} className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-muted/50">
           <RefreshCw className="h-4 w-4" /> Actualizar
         </button>
       </div>

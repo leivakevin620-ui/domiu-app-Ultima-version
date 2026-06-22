@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PageContainer } from '@/components/ui/page-container';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { BusinessCardPremium } from '../_components/BusinessCardPremium';
 import { marketplaceService } from '@/services/marketplace';
@@ -122,7 +122,7 @@ export default function SearchPage() {
         <AnimatePresence mode="wait">
           {loading ? (
             <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <LoadingState text="Buscando..." />
+              <SkeletonCard />
             </motion.div>
           ) : totalResults === 0 ? (
             <motion.div key="empty" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>

@@ -1,319 +1,159 @@
-# DomiU — Entorno Completo: Guía de Reconstrucción Desde Cero
+# DomiU App 1.2 - Environment Guide
 
-Este documento explica cómo reconstruir todo el entorno del proyecto DomiU App 1.0 desde cero, incluyendo variables de entorno, Supabase, y Vercel.
+Esta guia documenta las variables y verificaciones necesarias para reconstruir y validar el entorno.
 
----
+## Requisitos
 
-##  Pre-requisitos
+- Node.js 20+
+- Git
+- Supabase CLI o acceso al SQL Editor de Supabase
+- Vercel CLI opcional para verificar variables remotas
 
-| Herramienta | Cómo instalar |
-|---|---|
-| Node.js >= 18 | `winget install OpenJS.NodeJS` o [nodejs.org](https://nodejs.org) |
-| `supabase` CLI | `npm install -g supabase` o `winget install supabase` |
-| `vercel` CLI | `npm install -g vercel` |
-| Git | `winget install Git.Git` |
+## Variables locales minimas
 
----
-
-## 1. Clonar el Repositorio
-
-```bash
-git clone https://github.com/leivakevin620-ui/domiu-app-Ultima-version.git
-cd domiu-app-ultima-version
-```
-
-> Si no tienes `gh` CLI, usa git directamente.  
-> Rama principal: `master`
-
----
-
-## 2. Instalar Dependencias
-
-```bash
-npm install
-```
-
----
-
-## 3. Autenticar Herramientas CLI
-
-### 3.1. Autenticar Vercel CLI
-
-```bash
-vercel login
-```
-
-Sigue el flujo de autenticación (email o GitHub). Luego vincula el proyecto:
-
-```bash
-vercel link --project domiu-app-ultima-version
-```
-
-### 3.2. Autenticar Supabase CLI
-
-```bash
-supabase login
-```
-
-Genera un token de acceso en [app.supabase.com/account/tokens](https://app.supabase.com/account/tokens) e ingrésalo cuando se solicite.
-
-Vincula el proyecto correcto:
-
-```bash
-supabase link --project-ref vuwaqmwgvldqmmgkpyjh
-```
-
-Verifica:
-
-```bash
-supabase projects list
-```
-
-El proyecto `vuwaqmwgvldqmmgkpyjh` debe mostrar `"linked": true`.
-
----
-
-## 4. Variables de Entorno
-
-### 4.1. Obtener credenciales de Supabase
-
-Las claves se obtienen del proyecto Supabase conectado:
-
-```bash
-supabase projects api-keys
-```
-
-Esto devuelve el `anon` key, `service_role` key, y otras.  
-La URL del proyecto es: `https://vuwaqmwgvldqmmgkpyjh.supabase.co`
-
-### 4.2. Crear `.env.local`
-
-Copia el archivo de ejemplo:
-
-```bash
-cp .env.example .env.local
-```
-
-Llena al menos estas 4 variables obligatorias:
+Crear `.env.local` a partir de `.env.example`.
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://vuwaqmwgvldqmmgkpyjh.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon_key>
 SUPABASE_SERVICE_ROLE_KEY=<service_role_key>
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=<google_maps_key_optional_for_local>
 ```
 
-### 4.3. Verificar variables
+## Variables opcionales para verificacion SQL
 
-```bash
-node scripts/check-environment.cjs
+El checker puede verificar Storage policies y Realtime publication si existe una de estas variables:
+
+```env
+DATABASE_URL=<postgres_connection_string>
+SUPABASE_DB_URL=<postgres_connection_string>
+SUPABASE_DB_PASSWORD=<database_password>
 ```
 
-Debe mostrar todos los checks en verde.
+Si ninguna existe, `npm run check:env` marca policies y Realtime como no verificables, no como aprobadas.
 
----
+## Supabase Storage
 
-## 5. Supabase — Migraciones
+Buckets esperados:
 
-Verifica que las migraciones estén al día:
+- `business-logos`
+- `business-banners`
+- `product-images`
+- `promotions`
+- `categories`
+- `user-avatars`
+- `chat-files`
+- `ratings-images`
 
-```bash
-supabase db push --dry-run
-```
+Visibilidad:
 
-Si dice "Remote database is up to date", estás listo.  
-Si hay migraciones pendientes, aplícalas:
+- Publicos: `business-logos`, `business-banners`, `product-images`, `promotions`, `categories`, `user-avatars`, `ratings-images`
+- Privado: `chat-files`
+
+Migracion de hardening:
 
 ```bash
 supabase db push
 ```
 
-Las migraciones están en `supabase/migrations/` (22 archivos actualmente).
+O ejecutar en SQL Editor:
 
----
+```text
+supabase/migrations/2025062105_remote_storage_realtime_hardening.sql
+```
 
-## 6. Supabase — Verificaciones Post-Migración
+Alternativa con `psql` si existe `DATABASE_URL`:
 
-### Buckets de Storage
+```bash
+psql "%DATABASE_URL%" -f supabase/migrations/2025062105_remote_storage_realtime_hardening.sql
+```
 
-Los buckets deben crearse desde el Dashboard de Supabase (Settings > Storage):
+En PowerShell:
 
-| Bucket | Propósito |
-|---|---|
-| `product-images` | Imágenes de productos |
-| `business-logos` | Logos de negocios |
-| `user-avatars` | Avatares de usuarios |
-| `chat-files` | Archivos de chat |
-| `ratings-images` | Imágenes de reseñas |
+```powershell
+psql $env:DATABASE_URL -f .\supabase\migrations\2025062105_remote_storage_realtime_hardening.sql
+```
 
-### Realtime
+## Realtime
 
-Habilitar Realtime para tablas críticas en Dashboard (Settings > Realtime):
-- `messages`
+Tablas esperadas en publication `supabase_realtime`:
+
 - `notifications`
-- `driver_locations`
+- `messages`
 - `orders`
+- `driver_locations`
 
----
+Verificacion SQL:
 
-## 7. Vercel — Configurar Variables
-
-Las variables deben configurarse en Vercel para que el build funcione en producción:
-
-### 7.1. Agregar una variable
-
-```bash
-vercel env add <NOMBRE> <environment> --value "<valor>" --yes
+```sql
+select schemaname, tablename
+from pg_publication_tables
+where pubname = 'supabase_realtime'
+  and schemaname = 'public'
+order by tablename;
 ```
 
-### 7.2. Variables requeridas en Production
+## Google Maps
 
-| Variable | Dónde obtenerla |
-|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase Dashboard > Settings > API |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase Dashboard > Settings > API |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase Dashboard > Settings > API |
-| `NEXT_PUBLIC_APP_URL` | `https://domiu-app-ultima-version.vercel.app` |
-| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Google Cloud Console > APIs & Services |
+Variable:
 
-### 7.3. Listar variables existentes
+```env
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=<key>
+```
+
+Debe configurarse en:
+
+- Local Development si se van a probar mapas localmente
+- Vercel Development
+- Vercel Preview
+- Vercel Production
+
+APIs recomendadas:
+
+- Maps JavaScript API
+- Places API
+- Directions API
+- Geocoding API
+
+## Vercel
+
+Verificar variables remotas si `vercel` CLI esta disponible:
 
 ```bash
 vercel env ls
 ```
 
-### 7.4. Pull de variables de desarrollo (si configuradas)
+Variables criticas:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_APP_URL`
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
+
+Si `vercel` CLI no esta instalado:
 
 ```bash
-vercel env pull
+npm install -g vercel
+vercel login
+vercel link
+vercel env ls
 ```
 
-Esto descarga las variables del entorno Development y crea `.env.local`.
-
----
-
-## 8. Configuración de Supabase CLI
-
-El archivo `supabase/config.toml` ya está configurado con:
-
-- `project_id = "domiu-app-10"`
-- PostgreSQL v17
-- Auth, Storage, Realtime habilitados
-- Studio en puerto 54323
-
-No es necesario modificarlo a menos que necesites cambios locales.
-
----
-
-## 9. Construir y Verificar
+## Validacion local
 
 ```bash
+npm run lint
 npm run build
+npm run check:env
+npm run test
+npm run test:coverage
 ```
 
-Debe compilar sin errores:
+## Estado conocido al 2026-06-21
 
-```
-✓ Compiled successfully
-✓ 57/57 pages generated
-Proxy (Middleware) activo
-```
-
----
-
-## 10. Deploy en Vercel
-
-### 10.1. Deploy manual
-
-```bash
-vercel --prod
-```
-
-Esto construye y despliega a producción usando las variables configuradas en el paso 7.
-
-### 10.2. Deploy preview
-
-```bash
-vercel
-```
-
-### 10.3. Verificar deploy
-
-```bash
-vercel list
-```
-
-El último deploy de producción debe mostrar `● Ready`.
-
----
-
-## 11. Post-Deploy
-
-1. Verificar que la app carga en `https://domiu-app-ultima-version.vercel.app`
-2. Probar registro de usuario
-3. Probar login
-4. Verificar que el proxy (middleware) redirige correctamente según el rol
-5. Verificar que el Super Admin (`domiumagdalena@gmail.com`) puede acceder a `/admin`
-
----
-
-##   Troubleshooting
-
-### Error: "failed to parse config"
-
-El archivo `supabase/config.toml` tiene formato incorrecto. Regenerar desde el template:
-
-```bash
-# En un directorio temporal
-cd /tmp && mkdir supabase-fix && cd supabase-fix
-supabase init --force
-# Copiar el config.toml generado al proyecto
-```
-
-### Error: "required flag(s) 'project-ref' not set"
-
-El enlace de Supabase no está completo:
-
-```bash
-supabase link --project-ref vuwaqmwgvldqmmgkpyjh
-```
-
-### Error: Environment Variable no encontrada en Vercel
-
-Verificar que la variable existe en el entorno correcto:
-
-```bash
-vercel env ls
-```
-
-Si falta, agregarla con `vercel env add`.
-
-### Build falla con errores de TypeScript
-
-Ejecutar el checker de entorno primero:
-
-```bash
-node scripts/check-environment.cjs
-```
-
-Si las variables están bien, el build debería pasar.
-
----
-
-##   Referencias Rápidas
-
-| Item | Valor |
-|---|---|
-| Repositorio GitHub | `https://github.com/leivakevin620-ui/domiu-app-Ultima-version.git` |
-| Proyecto Vercel | `domiu-app-ultima-version` |
-| URL Producción | `https://domiu-app-ultima-version.vercel.app` |
-| Proyecto Supabase | `vuwaqmwgvldqmmgkpyjh` |
-| Supabase URL | `https://vuwaqmwgvldqmmgkpyjh.supabase.co` |
-| Base de datos host | `db.vuwaqmwgvldqmmgkpyjh.supabase.co` |
-| Región | `us-west-2` |
-| PostgreSQL | v17.6.1 |
-| Migraciones | 22 aplicadas (local = remote) |
-
----
-
-*Última actualización: 20 de junio de 2026*
+- Buckets esperados creados/verificados via Storage API.
+- Bucket legado `avatars` existe y aparece vacio; no se elimino.
+- Policies y Realtime tienen SQL preparado, pero requieren credencial SQL o ejecucion manual en SQL Editor para confirmacion remota.
+- Vercel CLI no esta disponible en este entorno; variables remotas deben verificarse manualmente.

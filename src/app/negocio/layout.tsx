@@ -2,18 +2,19 @@
 
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+
 import { useRouter } from 'next/navigation';
 import { BusinessSidebar } from '@/components/business/business-sidebar';
 import { BusinessHeader } from '@/components/business/business-header';
 import { Footer } from '@/components/ui/footer';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 export default function NegocioLayout({ children }: { children: React.ReactNode }) {
   const { isLoading, profile } = useAuth();
   const router = useRouter();
 
-  if (isLoading) return <LoadingState />;
+  if (isLoading) return <SkeletonCard />;
 
   if (!profile) {
     router.push('/login');

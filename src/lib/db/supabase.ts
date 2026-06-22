@@ -1,16 +1,17 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getEnv } from '@/lib/env';
 
-let browserClient: ReturnType<typeof createClient> | null = null;
-let serviceClient: ReturnType<typeof createClient> | null = null;
+type SupabaseClientType = SupabaseClient;
+let browserClient: SupabaseClientType | null = null;
+let serviceClient: SupabaseClientType | null = null;
 
-function buildMockClient() {
+function buildMockClient(): SupabaseClientType {
   return new Proxy({} as Record<string, unknown>, {
     get(_target, prop) {
       if (prop === 'then') return undefined;
       return () => buildMockClient();
     },
-  });
+  }) as unknown as SupabaseClientType;
 }
 
 export function getBrowserClient() {
@@ -21,8 +22,8 @@ export function getBrowserClient() {
   }
   browserClient = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
     auth: { persistSession: true, autoRefreshToken: true },
-  }) as any;
-  return browserClient as any;
+  }) as unknown as SupabaseClientType;
+  return browserClient;
 }
 
 export function getServiceClient() {
@@ -33,8 +34,8 @@ export function getServiceClient() {
   }
   serviceClient = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
-  }) as any;
-  return serviceClient as any;
+  }) as unknown as SupabaseClientType;
+  return serviceClient;
 }
 
 export { isSupabaseConfigured } from '@/lib/env';

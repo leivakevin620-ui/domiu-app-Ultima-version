@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { CourierProvider, useCourier } from '@/contexts/CourierContext';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonList } from '@/components/ui/skeleton';
 import { ClipboardList, Navigation, MapPin, Store, User, Package, DollarSign, MessageSquare, CheckCircle2, Circle, ArrowRight, Phone } from 'lucide-react';
 
 const formatCurrency = (n: number) => '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0 });
@@ -67,7 +67,7 @@ function PedidosContent() {
 
   const nextAction = getNextAction();
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonList />;
 
   return (
     <div className="space-y-5 animate-fade-in pb-4">

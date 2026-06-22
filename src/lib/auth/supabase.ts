@@ -1,4 +1,4 @@
-import { AuthError, Session, User } from '@supabase/supabase-js';
+import { AuthChangeEvent, AuthError, Session, User } from '@supabase/supabase-js';
 import { getBrowserClient } from '@/lib/db/supabase';
 import { getEnv } from '@/lib/env';
 
@@ -120,7 +120,7 @@ export class SupabaseAuthService {
     }
   }
 
-  static async getUserProfile(userId: string): Promise<{ profile: UserProfile | null; error: any | null }> {
+  static async getUserProfile(userId: string): Promise<{ profile: UserProfile | null; error: unknown }> {
     try {
       const supabase = getBrowserClient();
       const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
@@ -165,12 +165,12 @@ export class SupabaseAuthService {
 
   static onAuthStateChange(callback: (session: Session | null, user: User | null) => void) {
     const supabase = getBrowserClient();
-    return supabase.auth.onAuthStateChange((_event: any, session: any) => {
+    return supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       callback(session, session?.user || null);
     });
   }
 
-  static async updateUserProfile(userId: string, updates: Partial<UserProfile>): Promise<{ profile: UserProfile | null; error: any | null }> {
+  static async updateUserProfile(userId: string, updates: Partial<UserProfile>): Promise<{ profile: UserProfile | null; error: unknown }> {
     try {
       const supabase = getBrowserClient();
       const { data, error } = await supabase.from('profiles').update(updates).eq('id', userId).select().single();

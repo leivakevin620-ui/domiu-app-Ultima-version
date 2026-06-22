@@ -26,8 +26,8 @@ export function Drawer({ open, onClose, title, children, side = 'right', classNa
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50">
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={onClose} />
+    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-labelledby={title ? 'drawer-title' : undefined}>
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={onClose} aria-label="Cerrar" />
       <div
         className={cn(
           'fixed inset-y-0 z-10 flex w-full max-w-md flex-col border-border bg-card shadow-drawer animate-slide-up',
@@ -37,8 +37,8 @@ export function Drawer({ open, onClose, title, children, side = 'right', classNa
       >
         {title && (
           <div className="flex items-center justify-between border-b border-border px-6 py-4">
-            <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-            <button onClick={onClose} className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+            <h2 id="drawer-title" className="text-lg font-semibold text-foreground">{title}</h2>
+            <button onClick={onClose} className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" aria-label="Cerrar panel">
               <X className="h-5 w-5" />
             </button>
           </div>

@@ -2,7 +2,7 @@
 
 import React, { useRef, useEffect, useState, useCallback, memo } from 'react';
 import { useMaps } from '@/contexts/MapsContext';
-import { Search, MapPin, Loader2 } from 'lucide-react';
+import { Search, Loader2 } from 'lucide-react';
 
 interface PlaceResult {
   lat: number;

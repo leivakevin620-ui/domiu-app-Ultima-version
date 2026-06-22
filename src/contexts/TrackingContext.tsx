@@ -46,9 +46,20 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   // Smooth interpolation animation loop
   useEffect(() => {
     let running = true;
+    let idleTimeout: ReturnType<typeof setTimeout> | null = null;
+
     function animate() {
       if (!running) return;
       const targets = targetDataRef.current;
+      const keys = Object.keys(targets);
+
+      if (keys.length === 0) {
+        idleTimeout = setTimeout(() => {
+          if (running) animRef.current = requestAnimationFrame(animate);
+        }, 500);
+        return;
+      }
+
       const smooth = smoothDataRef.current;
       let changed = false;
 
@@ -82,7 +93,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       animRef.current = requestAnimationFrame(animate);
     }
     animRef.current = requestAnimationFrame(animate);
-    return () => { running = false; cancelAnimationFrame(animRef.current); };
+    return () => { running = false; if (idleTimeout) clearTimeout(idleTimeout); cancelAnimationFrame(animRef.current); };
   }, []);
 
   // Subscribe to live location updates

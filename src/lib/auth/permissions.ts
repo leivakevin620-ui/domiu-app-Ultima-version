@@ -34,9 +34,11 @@ export class PermissionManager {
       return { isAllowed: true };
     }
 
-    // Rutas protegidas: validar que sean del rol del usuario
+    const adminRoles: UserRole[] = ['super_admin', 'admin_general', 'admin_financiero', 'admin_operativo', 'admin_comercial', 'admin_soporte'];
+    const businessRoles: UserRole[] = ['business', 'merchant'];
+
     if (pathname.startsWith('/admin')) {
-      if (role !== 'admin') {
+      if (!adminRoles.includes(role)) {
         return {
           isAllowed: false,
           reason: 'Solo administradores pueden acceder al panel de administración',
@@ -46,7 +48,7 @@ export class PermissionManager {
     }
 
     if (pathname.startsWith('/negocio')) {
-      if (role !== 'merchant') {
+      if (!businessRoles.includes(role)) {
         return {
           isAllowed: false,
           reason: 'Solo comerciantes pueden acceder al panel de negocio',
@@ -86,13 +88,15 @@ export class PermissionManager {
    * Obtener la ruta principal del dashboard del usuario según su rol
    */
   static getDashboardRoute(role: UserRole): string {
-    const routes: { [key in UserRole]: string } = {
-      admin: '/admin',
-      merchant: '/negocio',
-      customer: '/cliente',
-      courier: '/repartidor',
-    };
-    return routes[role] || '/';
+    if (['super_admin', 'admin_general', 'admin_financiero', 'admin_operativo', 'admin_comercial', 'admin_soporte'].includes(role)) {
+      return '/admin';
+    }
+    if (['business', 'merchant'].includes(role)) {
+      return '/negocio';
+    }
+    if (role === 'customer') return '/cliente';
+    if (role === 'courier') return '/repartidor';
+    return '/';
   }
 
   /**
@@ -141,8 +145,7 @@ export class PermissionManager {
    * Verificar si el usuario puede cambiar su rol
    */
   static canChangeRole(currentRole: UserRole, _targetRole: UserRole): boolean { // eslint-disable-line @typescript-eslint/no-unused-vars
-    // Solo admin puede cambiar roles
-    return currentRole === 'admin';
+    return currentRole === 'super_admin' || currentRole === 'admin_general';
   }
 
   /**

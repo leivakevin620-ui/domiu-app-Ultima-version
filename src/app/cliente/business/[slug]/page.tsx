@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PageContainer } from '@/components/ui/page-container';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { marketplaceService } from '@/services/marketplace';
 import { useCart } from '@/contexts/CartContext';
@@ -60,7 +60,7 @@ export default function BusinessPage() {
     sectionRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonCard />;
 
   if (!business) {
     return (

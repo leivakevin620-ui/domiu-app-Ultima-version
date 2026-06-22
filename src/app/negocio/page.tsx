@@ -3,8 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { businessService, type BusinessDashboardStats } from '@/services/business';
-import { LoadingState } from '@/components/ui/loading-state';
-import { DollarSign, ShoppingCart, Package, TrendingUp, Star, Clock, Users, AlertCircle, CheckCircle, XCircle, BarChart3, Wallet, Store, Award } from 'lucide-react';
+import { SkeletonStats } from '@/components/ui/skeleton';
+import { DollarSign, ShoppingCart, Package, TrendingUp, Star, Clock, Users, CheckCircle, XCircle, BarChart3, Wallet, Store, Award } from 'lucide-react';
 
 const formatCurrency = (n: number) => '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
@@ -24,7 +24,7 @@ export default function NegocioDashboard() {
     })();
   }, [profile?.id]);
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonStats />;
 
   const kpis = [
     { icon: <DollarSign className="h-5 w-5" />, label: 'Ventas Hoy', value: formatCurrency(stats?.todayRevenue ?? 0), gradient: 'success' as const, subtitle: 'Ingresos del día' },

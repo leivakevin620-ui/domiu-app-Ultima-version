@@ -5,10 +5,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { permissionsService } from '@/services/permissions';
 import { adminAuthService } from '@/services/admin-auth';
 import { useRouter } from 'next/navigation';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import { Shield, Smartphone, Monitor, Globe, LogOut, AlertTriangle, History } from 'lucide-react';
 import type { AdminSession } from '@/types/admin';
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import { ADMIN_ROLES } from '@/types/auth';
 
 export default function AdminSeguridad() {
   const { profile, isLoading } = useAuth();
@@ -20,8 +20,8 @@ export default function AdminSeguridad() {
 
   useEffect(() => {
     if (isLoading) return;
-    if (!profile || profile.role !== 'admin') { router.push('/login'); return; }
-    if (!permissionsService.hasPermission(profile.admin_role as any, 'security.read', profile.email)) {
+    if (!profile || !ADMIN_ROLES.includes(profile.role)) { router.push('/login'); return; }
+    if (!permissionsService.hasPermission(profile.admin_role, 'security.read', profile.email)) {
       router.push('/admin');
       return;
     }
@@ -51,7 +51,7 @@ export default function AdminSeguridad() {
     setTerminatingId(null);
   };
 
-  if (isLoading) return <LoadingState />;
+  if (isLoading) return <SkeletonCard />;
 
   return (
     <div className="space-y-6 animate-fade-in">

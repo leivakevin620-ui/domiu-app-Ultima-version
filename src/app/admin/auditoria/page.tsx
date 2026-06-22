@@ -5,9 +5,10 @@ import { auditService } from '@/services/audit';
 import { useAuth } from '@/contexts/AuthContext';
 import { permissionsService } from '@/services/permissions';
 import { useRouter } from 'next/navigation';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import { Shield, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import { ADMIN_ROLES } from '@/types/auth';
+import type { AuditLog } from '@/services/audit';
 
 const ACTION_LABELS: Record<string, string> = {
   login: 'Inicio de sesión',
@@ -27,7 +28,7 @@ const ACTION_LABELS: Record<string, string> = {
 export default function AdminAuditoria() {
   const { profile, isLoading } = useAuth();
   const router = useRouter();
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -41,8 +42,8 @@ export default function AdminAuditoria() {
 
   useEffect(() => {
     if (isLoading) return;
-    if (!profile || profile.role !== 'admin') { router.push('/login'); return; }
-    if (!permissionsService.hasPermission(profile.admin_role as any, 'audit.read', profile.email)) {
+    if (!profile || !ADMIN_ROLES.includes(profile.role)) { router.push('/login'); return; }
+    if (!permissionsService.hasPermission(profile.admin_role, 'audit.read', profile.email)) {
       router.push('/admin');
       return;
     }
@@ -52,7 +53,7 @@ export default function AdminAuditoria() {
     (async () => {
       setLoading(true);
       try {
-        const filters: any = {};
+        const filters: Record<string, string> = {};
         if (actionFilter) filters.action = actionFilter;
         if (entityFilter) filters.entityType = entityFilter;
         if (search) filters.search = search;
@@ -71,7 +72,7 @@ export default function AdminAuditoria() {
     })();
   }, []);
 
-  if (isLoading) return <LoadingState />;
+  if (isLoading) return <SkeletonCard />;
 
   return (
     <div className="space-y-6 animate-fade-in">

@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { clientService, AppSettings } from '@/services/client';
 import { motion } from 'framer-motion';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
 import {
-  Settings, Bell, Shield, Globe, LogOut, ChevronRight,
+  Bell, Shield, LogOut, ChevronRight,
   Mail, Smartphone, MessageSquare, ShoppingBag, Percent, CreditCard,
   User, Trash2
 } from 'lucide-react';
@@ -23,15 +23,13 @@ export default function ConfiguracionPage() {
   const [saving, setSaving] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
     if (!profile?.id) return;
-    setLoading(true);
-    const s = await clientService.getSettings(profile.id);
-    setSettings(s);
-    setLoading(false);
+    clientService.getSettings(profile.id).then(s => {
+      setSettings(s);
+      setLoading(false);
+    });
   }, [profile?.id]);
-
-  useEffect(() => { load(); }, [load]);
 
   const handleToggle = async (key: keyof AppSettings) => {
     if (!profile?.id || !settings) return;
@@ -47,13 +45,13 @@ export default function ConfiguracionPage() {
     router.push('/login');
   };
 
-  const tabs: { key: SettingsTab; label: string; icon: any }[] = [
+  const tabs: { key: SettingsTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { key: 'notifications', label: 'Notificaciones', icon: Bell },
     { key: 'security', label: 'Seguridad', icon: Shield },
     { key: 'account', label: 'Cuenta', icon: User },
   ];
 
-  if (loading) return <div className="min-h-screen bg-background pb-16 lg:pb-0"><LoadingState /></div>;
+  if (loading) return <div className="min-h-screen bg-background pb-16 lg:pb-0"><SkeletonCard /></div>;
 
   return (
     <div className="min-h-screen bg-background pb-16 lg:pb-0">
@@ -150,7 +148,7 @@ export default function ConfiguracionPage() {
 }
 
 function ToggleRow({ icon: Icon, label, description, checked, loading, onChange }: {
-  icon: any; label: string; description: string; checked: boolean; loading: boolean; onChange: () => void;
+  icon: React.ComponentType<{ className?: string }>; label: string; description: string; checked: boolean; loading: boolean; onChange: () => void;
 }) {
   return (
     <button onClick={onChange} disabled={loading} className="flex w-full items-center gap-3 rounded-2xl border border-border/30 bg-card/50 p-4 transition-all hover:border-primary/20 disabled:opacity-50">

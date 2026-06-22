@@ -4,10 +4,21 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { MapsProvider, useMaps } from '@/contexts/MapsContext';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonMap, SkeletonCard, SkeletonList } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { getBrowserClient } from '@/lib/db/supabase';
 import { MapPin, Navigation, Bike, Package, RefreshCw } from 'lucide-react';
+
+interface RawOrder {
+  id: string;
+  status: string;
+  created_at: string;
+  total_amount: number;
+  customer: { id: string; full_name: string | null } | null;
+  courier: { id: string; full_name: string | null } | null;
+  delivery_latitude: number | null;
+  delivery_longitude: number | null;
+}
 
 interface OrderItem {
   id: string;
@@ -35,74 +46,85 @@ function BusinessMapInner() {
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const { profile } = useAuth();
 
-  const loadOrders = useCallback(async () => {
+  const fetchOrders = useCallback(async (businessId: string) => {
+    const supabase = getBrowserClient();
+    const { data } = await supabase
+      .from('orders')
+      .select(`
+        id, status, created_at, total_amount,
+        customer:customer_id ( id, full_name ),
+        courier:courier_id ( id, full_name ),
+        delivery_latitude, delivery_longitude
+      `)
+      .eq('business_id', businessId)
+      .in('status', ['confirmed', 'preparing', 'ready', 'assigned', 'picked_up', 'in_transit'])
+      .order('created_at', { ascending: false });
+    const rawData = (data || []) as unknown as RawOrder[];
+    const items: OrderItem[] = rawData.map((o) => ({
+      id: o.id,
+      status: o.status,
+      created_at: o.created_at,
+      total_amount: o.total_amount,
+      customer: o.customer ? { id: o.customer.id, full_name: o.customer.full_name ?? undefined } : { id: '' },
+      courier: o.courier ? { id: o.courier.id, full_name: o.courier.full_name ?? undefined } : undefined,
+      delivery_lat: o.delivery_latitude ?? undefined,
+      delivery_lng: o.delivery_longitude ?? undefined,
+    }));
+    if (items.some(o => o.courier?.id)) {
+      const courierIds = [...new Set(items.filter(o => o.courier?.id).map(o => o.courier!.id))];
+      const { data: locs } = await supabase
+        .from('driver_locations')
+        .select('profile_id, latitude, longitude')
+        .in('profile_id', courierIds);
+      const locMap = new Map<string, { latitude: number; longitude: number }>();
+      for (const l of locs || []) {
+        const r = l as { profile_id: string; latitude: number; longitude: number };
+        locMap.set(r.profile_id, { latitude: r.latitude, longitude: r.longitude });
+      }
+      for (const o of items) {
+        if (o.courier?.id) {
+          const loc = locMap.get(o.courier.id);
+          if (loc) { o.courier_lat = loc.latitude; o.courier_lng = loc.longitude; }
+        }
+      }
+    }
+    const addrRow = await supabase
+      .from('business_addresses')
+      .select('latitude, longitude')
+      .eq('business_id', businessId)
+      .eq('is_primary', true)
+      .maybeSingle() as unknown as { data: { latitude: number; longitude: number } | null };
+    const businessData = addrRow.data;
+    if (businessData) {
+      for (const o of items) { o.business_lat = businessData.latitude; o.business_lng = businessData.longitude; }
+    }
+    return items;
+  }, []);
+
+  useEffect(() => {
     if (!profile?.id) return;
-    setLoading(true);
-    try {
-      const supabase = getBrowserClient();
-      const { data: business } = await supabase.from('businesses').select('id').eq('owner_id', profile.id).single();
+    const supabase = getBrowserClient();
+    (async () => {
+      const raw = await supabase.from('businesses').select('id').eq('owner_id', profile.id).single() as unknown as { data: { id: string } | null };
+      const business = raw.data;
       if (!business) { setOrders([]); setLoading(false); return; }
-
-      const { data } = await supabase
-        .from('orders')
-        .select(`
-          id, status, created_at, total_amount,
-          customer:customer_id ( id, full_name ),
-          courier:courier_id ( id, full_name ),
-          delivery_latitude, delivery_longitude
-        `)
-        .eq('business_id', business.id)
-        .in('status', ['confirmed', 'preparing', 'ready', 'assigned', 'picked_up', 'in_transit'])
-        .order('created_at', { ascending: false });
-
-      const items: OrderItem[] = (data || []).map((o: any) => ({
-        id: o.id,
-        status: o.status,
-        created_at: o.created_at,
-        total_amount: o.total_amount,
-        customer: o.customer || { id: '' },
-        courier: o.courier || undefined,
-        delivery_lat: o.delivery_latitude,
-        delivery_lng: o.delivery_longitude,
-      }));
-
-      if (items.some(o => o.courier?.id)) {
-        const courierIds = [...new Set(items.filter(o => o.courier?.id).map(o => o.courier!.id))];
-        const { data: locs } = await supabase
-          .from('driver_locations')
-          .select('profile_id, latitude, longitude')
-          .in('profile_id', courierIds);
-
-        const locMap = new Map<string, { latitude: number; longitude: number }>();
-        for (const l of locs || []) {
-          const r = l as { profile_id: string; latitude: number; longitude: number };
-          locMap.set(r.profile_id, { latitude: r.latitude, longitude: r.longitude });
-        }
-        for (const o of items) {
-          if (o.courier?.id) {
-            const loc = locMap.get(o.courier.id);
-            if (loc) { o.courier_lat = loc.latitude; o.courier_lng = loc.longitude; }
-          }
-        }
-      }
-
-      const { data: businessAddr } = await supabase
-        .from('business_addresses')
-        .select('latitude, longitude')
-        .eq('business_id', business.id)
-        .eq('is_primary', true)
-        .maybeSingle();
-      const businessData = businessAddr as { latitude: number; longitude: number } | null;
-
-      if (businessData) {
-        for (const o of items) { o.business_lat = businessData.latitude; o.business_lng = businessData.longitude; }
-      }
-
+      const items = await fetchOrders(business.id);
       setOrders(items);
-    } catch { setOrders([]); } finally { setLoading(false); }
-  }, [profile?.id]);
+      setLoading(false);
+    })();
+  }, [profile?.id, fetchOrders]);
 
-  useEffect(() => { loadOrders(); }, [loadOrders]);
+  const handleReload = async () => {
+    setLoading(true);
+    if (!profile?.id) { setOrders([]); setLoading(false); return; }
+    const supabase = getBrowserClient();
+    const raw = await supabase.from('businesses').select('id').eq('owner_id', profile.id).single() as unknown as { data: { id: string } | null };
+    const business = raw.data;
+    if (!business) { setOrders([]); setLoading(false); return; }
+    const items = await fetchOrders(business.id);
+    setOrders(items);
+    setLoading(false);
+  };
 
   const initMap = useCallback(() => {
     if (!isReady || !mapRef.current || mapInstanceRef.current) return;
@@ -193,11 +215,11 @@ function BusinessMapInner() {
       <div className="relative flex-1">
         {!isReady && (
           <div className="flex h-full items-center justify-center bg-muted/20">
-            <LoadingState />
+            <SkeletonMap />
           </div>
         )}
         <div ref={mapRef} className={`h-full w-full ${!isReady ? 'hidden' : ''}`} />
-        <button onClick={loadOrders} className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-xl bg-background/80 px-3 py-1.5 text-xs font-medium shadow-lg backdrop-blur-sm hover:bg-background">
+        <button onClick={handleReload} className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-xl bg-background/80 px-3 py-1.5 text-xs font-medium shadow-lg backdrop-blur-sm hover:bg-background">
           <RefreshCw className="h-3 w-3" /> Actualizar
         </button>
         <div className="absolute bottom-3 left-3 z-10 flex gap-2">
@@ -212,7 +234,7 @@ function BusinessMapInner() {
           <h2 className="text-sm font-bold">Pedidos activos ({orders.length})</h2>
         </div>
         <div className="h-[40vh] overflow-y-auto lg:h-[calc(100vh-9rem)]">
-          {loading ? <LoadingState /> : orders.length === 0 ? (
+          {loading ? <SkeletonList /> : orders.length === 0 ? (
             <EmptyState icon={<Package className="h-5 w-5" />} title="Sin pedidos activos" description="No hay pedidos en curso." />
           ) : orders.map(order => (
             <button key={order.id} onClick={() => setSelectedOrder(selectedOrder === order.id ? null : order.id)}
@@ -263,7 +285,7 @@ export default function BusinessMapPage() {
     if (profile && profile.role !== 'merchant') router.push('/login');
   }, [profile, router]);
 
-  if (!profile) return <LoadingState />;
+  if (!profile) return <SkeletonCard />;
 
   return (
     <MapsProvider>

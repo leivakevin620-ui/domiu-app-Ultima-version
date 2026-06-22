@@ -185,7 +185,96 @@ CREATE POLICY "Admins can read all wallets"
   USING (public.is_admin());
 
 -- ============================================================
--- 8. Ensure is_admin() and is_super_admin() functions have SET search_path
+-- 8. Fix SECURITY DEFINER functions missing SET search_path
+-- ============================================================
+CREATE OR REPLACE FUNCTION get_loyalty_balance(p_user_id UUID)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_balance INTEGER;
+BEGIN
+  SELECT COALESCE(SUM(points), 0) INTO v_balance
+  FROM loyalty_points
+  WHERE user_id = p_user_id;
+  RETURN v_balance;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION detect_geofence_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_order_status order_status;
+  v_dist_to_business NUMERIC;
+  v_dist_to_customer NUMERIC;
+BEGIN
+  SELECT status INTO v_order_status FROM orders WHERE id = NEW.order_id;
+  WITH business_loc AS (
+    SELECT ba.latitude, ba.longitude
+    FROM orders o
+    JOIN business_addresses ba ON ba.business_id = o.business_id
+    WHERE o.id = NEW.order_id
+    LIMIT 1
+  ), customer_loc AS (
+    SELECT a.latitude, a.longitude
+    FROM orders o
+    JOIN addresses a ON a.id = o.delivery_address_id
+    WHERE o.id = NEW.order_id
+  )
+  SELECT
+    COALESCE((
+      SELECT point(NEW.longitude, NEW.latitude) <@> point(bl.longitude, bl.latitude)
+      FROM business_loc bl
+    ), 999),
+    COALESCE((
+      SELECT point(NEW.longitude, NEW.latitude) <@> point(cl.longitude, cl.latitude)
+      FROM customer_loc cl
+    ), 999)
+  INTO v_dist_to_business, v_dist_to_customer;
+
+  IF v_dist_to_business < 0.001 AND v_order_status IN ('confirmed', 'preparing', 'ready') THEN
+    INSERT INTO geofence_events (order_id, driver_id, event_type, latitude, longitude, accuracy)
+    VALUES (NEW.order_id, NEW.driver_id, 'arrived_at_business', NEW.latitude, NEW.longitude, NEW.accuracy)
+    ON CONFLICT DO NOTHING;
+  END IF;
+
+  IF v_dist_to_customer < 0.001 AND v_order_status IN ('assigned', 'picked_up', 'in_transit') THEN
+    INSERT INTO geofence_events (order_id, driver_id, event_type, latitude, longitude, accuracy)
+    VALUES (NEW.order_id, NEW.driver_id, 'arrived_at_customer', NEW.latitude, NEW.longitude, NEW.accuracy)
+    ON CONFLICT DO NOTHING;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+-- ============================================================
+-- 9. Re-define is_super_admin with SET search_path
+-- ============================================================
+CREATE OR REPLACE FUNCTION is_super_admin()
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = auth.uid()
+    AND email = 'domiumagdalena@gmail.com'
+  );
+END;
+$$;
+
+-- ============================================================
+-- 10. Ensure is_admin() also has SET search_path (already correct)
+-- ============================================================
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN

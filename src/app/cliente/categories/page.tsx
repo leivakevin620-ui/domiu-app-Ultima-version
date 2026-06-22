@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { PageContainer } from '@/components/ui/page-container';
 import { PageTitle } from '@/components/ui/page-title';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import { marketplaceService } from '@/services/marketplace';
 import type { MarketplaceCategory, MarketplaceBusiness } from '@/services/marketplace';
 import { useRouter } from 'next/navigation';
@@ -20,7 +20,7 @@ export default function CategoriesPage() {
     });
   }, []);
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonCard />;
 
   return (
     <PageContainer>

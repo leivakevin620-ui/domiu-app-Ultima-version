@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { clientService, LoyaltySummary, Reward, RewardRedemption } from '@/services/client';
 import { motion } from 'framer-motion';
 import { EmptyState } from '@/components/ui/empty-state';
-import { LoadingState } from '@/components/ui/loading-state';
-import { Gift, Award, Star, Package, TrendingUp, Check, AlertCircle } from 'lucide-react';
+import { SkeletonCard } from '@/components/ui/skeleton';
+import { Gift, Award, Star, TrendingUp, Check, AlertCircle } from 'lucide-react';
 
-const TIER_CONFIG: Record<string, { color: string; gradient: string; icon: any }> = {
+const TIER_CONFIG: Record<string, { color: string; gradient: string; icon: React.ComponentType<{ className?: string }> }> = {
   Bronce: { color: 'text-amber-700', gradient: 'from-amber-400 to-amber-600', icon: Award },
   Plata: { color: 'text-slate-300', gradient: 'from-slate-300 to-slate-400', icon: Award },
   Oro: { color: 'text-yellow-500', gradient: 'from-yellow-400 to-yellow-600', icon: Star },
@@ -25,21 +25,23 @@ export default function FidelizacionPage() {
   const [redeemError, setRedeemError] = useState('');
   const [redeemSuccess, setRedeemSuccess] = useState('');
 
-  const load = useCallback(async () => {
+  const load = () => {
     if (!profile?.id) return;
-    setLoading(true);
-    const [s, r, rd] = await Promise.all([
+    Promise.all([
       clientService.getLoyaltySummary(profile.id),
       clientService.getRewards(),
       clientService.getRedemptions(profile.id),
-    ]);
-    setSummary(s);
-    setRewards(r);
-    setRedemptions(rd);
-    setLoading(false);
-  }, [profile?.id]);
+    ]).then(([s, r, rd]) => {
+      setSummary(s);
+      setRewards(r);
+      setRedemptions(rd);
+      setLoading(false);
+    });
+  };
 
-  useEffect(() => { load(); }, [load]);
+  const loadRef = useRef(load);
+  useEffect(() => { loadRef.current = load; });
+  useEffect(() => { loadRef.current(); }, [profile?.id]);
 
   const handleRedeem = async (rewardId: string) => {
     if (!profile?.id || redeeming) return;
@@ -50,14 +52,14 @@ export default function FidelizacionPage() {
       await clientService.redeemReward(profile.id, rewardId);
       setRedeemSuccess('Recompensa canjeada exitosamente');
       load();
-    } catch (e: any) {
-      setRedeemError(e.message);
+    } catch (e: unknown) {
+      setRedeemError(e instanceof Error ? e.message : 'Error desconocido');
     } finally {
       setRedeeming(null);
     }
   };
 
-  if (loading) return <div className="min-h-screen bg-background pb-16 lg:pb-0"><LoadingState /></div>;
+  if (loading) return <div className="min-h-screen bg-background pb-16 lg:pb-0"><SkeletonCard /></div>;
   if (!summary) return null;
 
   const tierConfig = TIER_CONFIG[summary.tier] ?? TIER_CONFIG.Bronce;

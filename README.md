@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DomiU App
 
-## Getting Started
+Plataforma de delivery multi-rol para cliente, negocio, repartidor y administracion.
 
-First, run the development server:
+## Stack
+
+- Next.js 16.2.9 con App Router y `src/proxy.ts`
+- React 19.2.4
+- TypeScript strict
+- Supabase Auth, Database, Storage y Realtime
+- Tailwind CSS 4
+- Zod 4
+- Recharts
+- Framer Motion
+
+## Comandos
 
 ```bash
+npm install
+npm run check:env
+npm run lint
+npm run build
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Estado actual
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Este repositorio esta en fase **DomiU App 1.2 - Release Candidate**.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Validaciones locales actuales:
 
-## Learn More
+- `npm run lint`: 0 errors, 0 warnings
+- `npm run build`: OK (59 rutas, 0 TS errors)
+- `npm run test`: OK (27 tests, 4 suites)
+- `npm run check:env`: checks criticos OK con warnings de infraestructura
 
-To learn more about Next.js, take a look at the following resources:
+## Modulo de Pagos Enterprise
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Arquitectura desacoplada en `src/lib/payments/` con 8 providers stub.
+No conectado al checkout existente. Ver [PROJECT_STATUS.md](./PROJECT_STATUS.md) para detalle.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Ver detalles en [PROJECT_STATUS.md](./PROJECT_STATUS.md).
 
-## Deploy on Vercel
+## Arquitectura
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```text
+src/
+├── app/          Next.js App Router
+├── components/   Componentes UI reutilizables
+├── contexts/     Contextos React
+├── services/     Servicios de dominio
+├── lib/          Supabase, pagos, mapas, storage, utilidades
+├── types/        Tipos TypeScript y DB
+└── hooks/        Hooks custom
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Notas RC
+
+- No agregar funcionalidades nuevas durante esta fase.
+- No implementar nuevos modulos de pagos, IA, SaaS o Realtime.
+- Antes de produccion se debe cerrar la brecha de Storage remoto y ejecutar auditoria Lighthouse final.

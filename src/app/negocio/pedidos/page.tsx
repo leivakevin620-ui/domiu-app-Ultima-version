@@ -3,8 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { businessService, type BusinessOrder } from '@/services/business';
-import { LoadingState } from '@/components/ui/loading-state';
-import { ClipboardList, Clock, ChevronRight, ChevronLeft, Phone, MapPin, User, Package } from 'lucide-react';
+import { SkeletonList } from '@/components/ui/skeleton';
+import { ClipboardList, MapPin, User, Package } from 'lucide-react';
 
 const COLUMNS = [
   { key: 'pending', label: 'Pendiente', color: 'border-l-warning', bg: 'bg-warning/5' },
@@ -47,18 +47,18 @@ export default function NegocioPedidos() {
     if (!next) return;
     const supabase = (await import('@/lib/db/supabase')).getBrowserClient;
     const client = await supabase();
-    await client.from('orders').update({ status: next }).eq('id', orderId);
+    await client.from('orders').update({ status: next } as never).eq('id', orderId);
     setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: next } : o));
   };
 
   const rejectOrder = async (orderId: string) => {
     const supabase = (await import('@/lib/db/supabase')).getBrowserClient;
     const client = await supabase();
-    await client.from('orders').update({ status: 'cancelled' }).eq('id', orderId);
+    await client.from('orders').update({ status: 'cancelled' } as never).eq('id', orderId);
     setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: 'cancelled' } : o));
   };
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonList />;
 
   return (
     <div className="space-y-6 animate-fade-in">

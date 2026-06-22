@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { clientService, WalletInfo, WalletTransaction } from '@/services/client';
 import { motion } from 'framer-motion';
 import { EmptyState } from '@/components/ui/empty-state';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import { Wallet, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, Plus } from 'lucide-react';
 
 export default function WalletPage() {
@@ -14,21 +14,20 @@ export default function WalletPage() {
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
     if (!profile?.id) return;
-    setLoading(true);
-    const w = await clientService.getWallet(profile.id);
-    setWallet(w);
-    if (w) {
-      const t = await clientService.getWalletTransactions(w.id);
-      setTransactions(t);
-    }
-    setLoading(false);
+    clientService.getWallet(profile.id).then(w => {
+      setWallet(w);
+      if (w) {
+        clientService.getWalletTransactions(w.id).then(t => {
+          setTransactions(t);
+        });
+      }
+      setLoading(false);
+    });
   }, [profile?.id]);
 
-  useEffect(() => { load(); }, [load]);
-
-  if (loading) return <div className="min-h-screen bg-background pb-16 lg:pb-0"><LoadingState /></div>;
+  if (loading) return <div className="min-h-screen bg-background pb-16 lg:pb-0"><SkeletonCard /></div>;
 
   return (
     <div className="min-h-screen bg-background pb-16 lg:pb-0">

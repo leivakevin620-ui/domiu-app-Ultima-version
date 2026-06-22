@@ -1,7 +1,7 @@
 // src/types/auth.ts
 // Tipos de autenticación y roles
 
-export type UserRole = 'admin' | 'merchant' | 'customer' | 'courier';
+export type UserRole = 'super_admin' | 'admin_general' | 'admin_financiero' | 'admin_operativo' | 'admin_comercial' | 'admin_soporte' | 'business' | 'merchant' | 'courier' | 'customer' | 'guest';
 export type UserStatus = 'active' | 'inactive' | 'suspended' | 'banned';
 
 export interface AuthUser {
@@ -28,6 +28,7 @@ export interface UserProfile {
   phone_verified_at: string | null;
   email_verified_at: string | null;
   last_login_at: string | null;
+  metadata: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -72,7 +73,19 @@ export interface RolePermissions {
 }
 
 export const ROLE_PERMISSIONS: RolePermissions = {
-  admin: ['*'], // Admin tiene acceso a todo
+  super_admin: ['*'],
+  admin_general: ['*'],
+  admin_financiero: ['view_orders', 'view_wallets', 'manage_payments', 'view_analytics'],
+  admin_operativo: ['view_orders', 'manage_orders', 'view_businesses', 'view_deliveries', 'manage_couriers'],
+  admin_comercial: ['view_businesses', 'manage_promotions', 'view_analytics', 'manage_categories'],
+  admin_soporte: ['view_orders', 'view_users', 'manage_disputes', 'chat'],
+  business: [
+    'view_business',
+    'manage_products',
+    'manage_orders',
+    'view_analytics',
+    'manage_deliveries',
+  ],
   merchant: [
     'view_business',
     'manage_products',
@@ -95,15 +108,25 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     'view_earnings',
     'chat',
   ],
+  guest: ['view_products'],
 };
 
 export const ROLE_ROUTES: { [key in UserRole]: string[] } = {
-  admin: ['/admin'],
+  super_admin: ['/admin'],
+  admin_general: ['/admin'],
+  admin_financiero: ['/admin'],
+  admin_operativo: ['/admin'],
+  admin_comercial: ['/admin'],
+  admin_soporte: ['/admin'],
+  business: ['/negocio'],
   merchant: ['/negocio'],
   customer: ['/cliente'],
   courier: ['/repartidor'],
+  guest: [],
 };
 
-export const PUBLIC_ROUTES = ['/', '/login', '/register', '/forgot-password'];
+export const PUBLIC_ROUTES = ['/', '/login', '/register', '/forgot-password', '/auth/reset-password'];
 
 export const PROTECTED_ROUTES = ['/cliente', '/negocio', '/repartidor', '/admin'];
+
+export const ADMIN_ROLES: UserRole[] = ['super_admin', 'admin_general', 'admin_financiero', 'admin_operativo', 'admin_comercial', 'admin_soporte'];

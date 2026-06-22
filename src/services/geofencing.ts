@@ -18,7 +18,7 @@ export interface GeofenceEvent {
   latitude: number;
   longitude: number;
   accuracy: number | null;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   created_at: string;
 }
 
@@ -78,7 +78,7 @@ class GeofencingService {
     latitude: number;
     longitude: number;
     accuracy?: number;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }): Promise<boolean> {
     const { error } = await this.client.from('geofence_events').insert({
       order_id: event.order_id,

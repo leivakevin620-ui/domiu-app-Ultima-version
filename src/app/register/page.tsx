@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { RegisterCredentials, UserRole } from '@/types/auth';
+import { logger } from '@/lib/logger';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, User, CheckCircle } from 'lucide-react';
 
 const ROLES: { label: string; value: UserRole; desc: string; icon: string }[] = [
@@ -60,7 +61,7 @@ export default function RegisterPage() {
       setTimeout(() => router.push('/login?message=verify_email'), 2000);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error('[RegisterPage] Error completo:', err);
+      logger.error('Register error', err);
       setFormError(msg);
     }
   };

@@ -90,7 +90,7 @@ export const businessService = {
     const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString();
     const monthAgo = new Date(now.getTime() - 30 * 86400000).toISOString();
 
-    const [{ data: biz }, { data: orders }, { data: todayOrders }, { data: products }, { data: ratings }, { data: commissions }] = await Promise.all([
+    const [{ data: biz }, { data: orders }, { data: todayOrders }, { data: products }, , { data: commissions }] = await Promise.all([
       supabase.from('businesses').select('id, rating, total_ratings').eq('id', businessId).single(),
       supabase.from('orders').select('total_amount, status, created_at').eq('business_id', businessId),
       supabase.from('orders').select('total_amount, status, created_at').eq('business_id', businessId).gte('created_at', today),
@@ -99,34 +99,34 @@ export const businessService = {
       supabase.from('commission_transactions').select('commission_amount').eq('business_id', businessId),
     ]);
 
-    const orderList = (orders || []) as any[];
-    const todayOrdersList = (todayOrders || []) as any[];
-    const weekOrders = orderList.filter((o: any) => o.created_at >= weekAgo);
-    const monthOrders = orderList.filter((o: any) => o.created_at >= monthAgo);
-    const delivered = orderList.filter((o: any) => o.status === 'delivered');
-    const cancelled = orderList.filter((o: any) => o.status === 'cancelled');
-    const active = orderList.filter((o: any) => !['delivered', 'cancelled', 'refunded'].includes(o.status));
-    const sum = (arr: any[]) => arr.reduce((s: number, r: any) => s + Number(r.total_amount || 0), 0);
-    const sumComm = (arr: any[]) => arr.reduce((s: number, r: any) => s + Number(r.commission_amount || 0), 0);
+    const orderList = (orders || []) as Record<string, unknown>[];
+    const todayOrdersList = (todayOrders || []) as Record<string, unknown>[];
+    const weekOrders = orderList.filter((o) => (o.created_at as string) >= weekAgo);
+    const monthOrders = orderList.filter((o) => (o.created_at as string) >= monthAgo);
+    const delivered = orderList.filter((o) => o.status === 'delivered');
+    const cancelled = orderList.filter((o) => o.status === 'cancelled');
+    const active = orderList.filter((o) => !['delivered', 'cancelled', 'refunded'].includes(o.status as string));
+    const sum = (arr: Record<string, unknown>[]) => arr.reduce((s, r) => s + Number((r.total_amount as number) || 0), 0);
+    const sumComm = (arr: Record<string, unknown>[]) => arr.reduce((s, r) => s + Number((r.commission_amount as number) || 0), 0);
     const avgTicket = delivered.length > 0 ? sum(delivered) / delivered.length : 0;
 
     const productSales = new Map<string, { total: number; name: string; image_url: string | null }>();
-    const items = orderList.flatMap((o: any) => o.items || []);
-    for (const item of (items as any[]) || []) {
-      const e = productSales.get(item.product_id || item.productId) || { total: 0, name: item.product_name || item.name || '', image_url: null };
-      e.total += Number(item.quantity || 1);
-      productSales.set(item.product_id || item.productId, e);
+    const items = orderList.flatMap((o) => (o.items as Record<string, unknown>[]) || []);
+    for (const item of items) {
+      const pid = (item.product_id as string) || (item.productId as string);
+      const e = productSales.get(pid) || { total: 0, name: (item.product_name as string) || (item.name as string) || '', image_url: null };
+      e.total += Number((item.quantity as number) || 1);
+      productSales.set(pid, e);
     }
     const topProducts = Array.from(productSales.entries())
       .map(([id, v]) => ({ id, ...v }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 10);
 
-    const customerIds = [...new Set(delivered.map((o: any) => o.customer_id))];
+    const customerIds = [...new Set(delivered.map((o) => o.customer_id as string))];
     const { data: allProfiles } = await supabase.from('profiles').select('id, created_at').in('id', customerIds);
-    const profileMap = new Map((allProfiles || []).map((p: any) => [p.id, p]));
     const frequentCustomers = customerIds.filter((id: string) => {
-      const customerOrders = delivered.filter((o: any) => o.customer_id === id);
+      const customerOrders = delivered.filter((o) => o.customer_id === id);
       return customerOrders.length >= 3;
     });
 
@@ -140,7 +140,7 @@ export const businessService = {
       avgTicket,
       avgPrepTime: 0,
       topProducts,
-      newCustomers: (allProfiles || []).filter((p: any) => p.created_at >= monthAgo).length,
+      newCustomers: (allProfiles || []).filter((p) => (p.created_at as string) >= monthAgo).length,
       frequentCustomers: frequentCustomers.length,
       rating: biz?.rating || 0,
       totalRatings: biz?.total_ratings || 0,
@@ -158,7 +158,7 @@ export const businessService = {
       .select('*, categories(name)')
       .eq('business_id', businessId)
       .order('created_at', { ascending: false });
-    return ((data || []) as any[]).map((p: any) => ({
+    return ((data || []) as (BusinessProduct & { categories?: { name: string } | null })[]).map((p) => ({
       ...p,
       category_name: p.categories?.name || 'Sin categoría',
       image_url: p.image_url,
@@ -197,7 +197,12 @@ export const businessService = {
     const supabase = await getBrowserClient();
     const { data: orig } = await supabase.from('products').select('*').eq('id', productId).single();
     if (!orig) return;
-    const { id, created_at, updated_at, deleted_at, slug, ...rest } = orig;
+    const rest = { ...orig };
+    delete rest.id;
+    delete rest.created_at;
+    delete rest.updated_at;
+    delete rest.deleted_at;
+    delete rest.slug;
     await supabase.from('products').insert({ ...rest, name: `${orig.name} (copia)`, slug: `${orig.slug}-copia-${Date.now()}` });
   },
 
@@ -209,37 +214,38 @@ export const businessService = {
       .eq('business_id', businessId)
       .eq('status', 'delivered')
       .order('created_at', { ascending: false });
-    const orderList = (orders || []) as any[];
+    const orderList = (orders || []) as Record<string, unknown>[];
     const custMap = new Map<string, { order_count: number; total_spent: number; last_order_at: string }>();
     for (const o of orderList) {
-      const e = custMap.get(o.customer_id) || { order_count: 0, total_spent: 0, last_order_at: '' };
+      const cid = o.customer_id as string;
+      const e = custMap.get(cid) || { order_count: 0, total_spent: 0, last_order_at: '' };
       e.order_count += 1;
       e.total_spent += Number(o.total_amount);
-      if (!e.last_order_at || o.created_at > e.last_order_at) e.last_order_at = o.created_at;
-      custMap.set(o.customer_id, e);
+      if (!e.last_order_at || (o.created_at as string) > e.last_order_at) e.last_order_at = o.created_at as string;
+      custMap.set(cid, e);
     }
     const ids = [...custMap.keys()];
     const { data: profiles } = await supabase.from('profiles').select('id, first_name, last_name, email, phone, avatar_url').in('id', ids);
-    const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+    const profileMap = new Map((profiles || []).map((p: Record<string, unknown>) => [p.id as string, p]));
     const { data: ratings } = await supabase.from('ratings').select('rater_id, rating').eq('rated_entity_id', businessId);
     const ratingMap = new Map<string, number[]>();
-    for (const r of (ratings || []) as any[]) {
-      const arr = ratingMap.get(r.rater_id) || [];
-      arr.push(r.rating);
-      ratingMap.set(r.rater_id, arr);
+    for (const r of (ratings || []) as Record<string, unknown>[]) {
+      const arr = ratingMap.get(r.rater_id as string) || [];
+      arr.push(r.rating as number);
+      ratingMap.set(r.rater_id as string, arr);
     }
     return ids.map((id) => {
-      const p: any = profileMap.get(id) || {};
+      const p: Record<string, unknown> = profileMap.get(id) || {};
       const stats = custMap.get(id)!;
       const custRatings = ratingMap.get(id) || [];
       const avgRating = custRatings.length > 0 ? custRatings.reduce((a, b) => a + b, 0) / custRatings.length : null;
       return {
         id,
-        first_name: p.first_name || null,
-        last_name: p.last_name || null,
-        email: p.email || '',
-        phone: p.phone || null,
-        avatar_url: p.avatar_url || null,
+        first_name: (p.first_name as string | null) || null,
+        last_name: (p.last_name as string | null) || null,
+        email: (p.email as string) || '',
+        phone: (p.phone as string | null) || null,
+        avatar_url: (p.avatar_url as string | null) || null,
         order_count: stats.order_count,
         total_spent: stats.total_spent,
         last_order_at: stats.last_order_at || null,
@@ -256,23 +262,28 @@ export const businessService = {
       .eq('business_id', businessId)
       .order('created_at', { ascending: false })
       .limit(100);
-    return ((orders || []) as any[]).map((o: any) => ({
-      id: o.id,
-      order_number: o.order_number,
-      customer_id: o.customer_id,
+    type OrderRow = Record<string, unknown> & {
+      profiles?: { first_name: string; last_name: string };
+      order_items?: { id: string; product_name: string; quantity: number; unit_price: number }[];
+      courier?: { id: string };
+    };
+    return ((orders || []) as OrderRow[]).map((o) => ({
+      id: o.id as string,
+      order_number: o.order_number as string,
+      customer_id: o.customer_id as string,
       customer_name: o.profiles ? [o.profiles.first_name, o.profiles.last_name].filter(Boolean).join(' ') : 'Cliente',
-      status: o.status,
-      total_amount: o.total_amount,
-      items: (o.order_items || []).map((i: any) => ({ id: i.id, name: i.product_name || 'Producto', quantity: i.quantity, unit_price: i.unit_price })),
-      created_at: o.created_at,
-      updated_at: o.updated_at,
-      delivery_address: o.delivery_address || '',
-      special_instructions: o.special_instructions || null,
+      status: o.status as string,
+      total_amount: o.total_amount as number,
+      items: (o.order_items || []).map((i) => ({ id: i.id, name: i.product_name || 'Producto', quantity: i.quantity, unit_price: i.unit_price })),
+      created_at: o.created_at as string,
+      updated_at: o.updated_at as string,
+      delivery_address: (o.delivery_address as string) || '',
+      special_instructions: (o.special_instructions as string | null) || null,
       courier_name: o.courier?.id ? 'Asignado' : null,
     }));
   },
 
-  async getCategories(businessId: string): Promise<any[]> {
+  async getCategories(businessId: string): Promise<Record<string, unknown>[]> {
     const supabase = await getBrowserClient();
     const { data } = await supabase.from('categories').select('*').eq('business_id', businessId).order('name');
     return data || [];
@@ -287,24 +298,25 @@ export const businessService = {
       .select('total_amount, status, created_at, items')
       .eq('business_id', businessId)
       .gte('created_at', thirtyDaysAgo);
-    const orderList = (orders || []) as any[];
+    const orderList = (orders || []) as Record<string, unknown>[];
     const dailyMap = new Map<string, { revenue: number; orders: number }>();
     const hourCount = new Array(24).fill(0);
-    const categoryCount = new Map<string, number>();
+    
     const productMap = new Map<string, { name: string; total: number; revenue: number }>();
     for (const o of orderList) {
-      const date = o.created_at.slice(0, 10);
+      const date = (o.created_at as string).slice(0, 10);
       const e = dailyMap.get(date) || { revenue: 0, orders: 0 };
       e.revenue += Number(o.total_amount);
       e.orders += 1;
       dailyMap.set(date, e);
-      const h = new Date(o.created_at).getHours();
+      const h = new Date(o.created_at as string).getHours();
       hourCount[h] += 1;
-      for (const item of (o.items || []) as any[]) {
-        const pe = productMap.get(item.product_id || item.productId) || { name: item.product_name || item.name || '', total: 0, revenue: 0 };
-        pe.total += Number(item.quantity || 1);
-        pe.revenue += Number(item.unit_price || 0) * Number(item.quantity || 1);
-        productMap.set(item.product_id || item.productId, pe);
+      for (const item of (o.items as Record<string, unknown>[]) || []) {
+        const pid = (item.product_id as string) || (item.productId as string);
+        const pe = productMap.get(pid) || { name: (item.product_name as string) || (item.name as string) || '', total: 0, revenue: 0 };
+        pe.total += Number((item.quantity as number) || 1);
+        pe.revenue += Number((item.unit_price as number) || 0) * Number((item.quantity as number) || 1);
+        productMap.set(pid, pe);
       }
     }
     const dailySales = Array.from(dailyMap.entries()).map(([date, v]) => ({ date, ...v })).sort((a, b) => a.date.localeCompare(b.date));

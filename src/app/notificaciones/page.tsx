@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { PageContainer } from '@/components/ui/page-container';
 import { PageTitle } from '@/components/ui/page-title';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonList } from '@/components/ui/skeleton';
 import { notificationService, type NotificationData } from '@/services/notifications';
 import { Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -51,7 +51,7 @@ export default function NotificacionesPage() {
     }
   };
 
-  if (loading) return <LoadingState />;
+  if (loading) return <SkeletonList />;
 
   return (
     <PageContainer>

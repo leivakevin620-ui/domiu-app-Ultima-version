@@ -119,15 +119,15 @@ export const courierProService = {
       .eq('driver_id', courierId)
       .gte('created_at', start.toISOString())
       .order('created_at', { ascending: true });
-    const list = (earnings || []) as any[];
+    const list = (earnings || []) as Record<string, unknown>[];
     const dailyMap = new Map<string, DailyEarningPoint>();
     for (const e of list) {
-      const date = e.created_at.slice(0, 10);
+      const date = (e.created_at as string).slice(0, 10);
       const existing = dailyMap.get(date) || { date, base: 0, tips: 0, bonuses: 0, total: 0 };
-      existing.base += Number(e.base_amount || 0);
-      existing.tips += Number(e.tip_amount || 0);
-      existing.bonuses += Number(e.bonus_amount || 0);
-      existing.total += Number(e.total_earned || 0);
+      existing.base += Number((e.base_amount as number) || 0);
+      existing.tips += Number((e.tip_amount as number) || 0);
+      existing.bonuses += Number((e.bonus_amount as number) || 0);
+      existing.total += Number((e.total_earned as number) || 0);
       dailyMap.set(date, existing);
     }
     return Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
@@ -147,30 +147,24 @@ export const courierProService = {
       .eq('driver_id', courierId)
       .order('created_at', { ascending: false });
 
-    const list = (all || []) as any[];
-    const sum = (arr: any[]) => ({
-      base: arr.reduce((s: number, e: any) => s + Number(e.base_amount || 0), 0),
-      tips: arr.reduce((s: number, e: any) => s + Number(e.tip_amount || 0), 0),
-      bonuses: arr.reduce((s: number, e: any) => s + Number(e.bonus_amount || 0), 0),
-      total: arr.reduce((s: number, e: any) => s + Number(e.total_earned || 0), 0),
+    const list = (all || []) as Record<string, unknown>[];
+    const sum = (arr: Record<string, unknown>[]) => ({
+      base: arr.reduce((s, e) => s + Number((e.base_amount as number) || 0), 0),
+      tips: arr.reduce((s, e) => s + Number((e.tip_amount as number) || 0), 0),
+      bonuses: arr.reduce((s, e) => s + Number((e.bonus_amount as number) || 0), 0),
+      total: arr.reduce((s, e) => s + Number((e.total_earned as number) || 0), 0),
     });
 
     return {
-      today: sum(list.filter((e: any) => e.created_at >= todayStart)),
-      week: sum(list.filter((e: any) => e.created_at >= weekStart)),
-      month: sum(list.filter((e: any) => e.created_at >= monthStart)),
-      year: sum(list.filter((e: any) => e.created_at >= yearStart)),
+      today: sum(list.filter((e) => (e.created_at as string) >= todayStart)),
+      week: sum(list.filter((e) => (e.created_at as string) >= weekStart)),
+      month: sum(list.filter((e) => (e.created_at as string) >= monthStart)),
+      year: sum(list.filter((e) => (e.created_at as string) >= yearStart)),
       allTime: sum(list),
     };
   },
 
-  async getHoursConnected(courierId: string): Promise<{ today: number; week: number; month: number }> {
-    const supabase = await getClient();
-    const { data } = await supabase
-      .from('driver_availability')
-      .select('*')
-      .eq('driver_id', courierId)
-      .order('created_at', { ascending: false });
+  async getHoursConnected(): Promise<{ today: number; week: number; month: number }> {
     return { today: 0, week: 0, month: 0 };
   },
 
@@ -185,12 +179,16 @@ export const courierProService = {
       .limit(1)
       .maybeSingle();
     if (!order) return null;
-    const o = order as any;
-    const cust = o.profiles || {};
-    const biz = o.businesses || {};
+    type OrderRow = Record<string, unknown> & {
+      profiles?: { first_name: string; last_name: string; phone: string; avatar_url: string | null };
+      businesses?: { name: string; phone: string; address: string; logo_url: string | null; latitude: number; longitude: number };
+    };
+    const o = order as OrderRow;
+    const cust = o.profiles ?? { first_name: '', last_name: '', phone: '', avatar_url: null };
+    const biz = o.businesses ?? { name: '', phone: '', address: '', logo_url: null, latitude: 0, longitude: 0 };
     return {
-      id: o.id,
-      orderNumber: o.order_number,
+      id: o.id as string,
+      orderNumber: o.order_number as string,
       customerName: [cust.first_name, cust.last_name].filter(Boolean).join(' ') || 'Cliente',
       customerPhone: cust.phone || '',
       customerPhoto: cust.avatar_url || null,
@@ -198,16 +196,16 @@ export const courierProService = {
       businessPhone: biz.phone || '',
       businessAddress: biz.address || '',
       businessPhoto: biz.logo_url || null,
-      deliveryAddress: o.delivery_address || '',
-      specialInstructions: o.special_instructions || null,
+      deliveryAddress: (o.delivery_address as string) || '',
+      specialInstructions: (o.special_instructions as string | null) || null,
       distance: 0,
       estimatedTime: 0,
       commission: 0,
-      paymentMethod: o.payment_method || 'Efectivo',
-      totalAmount: o.total_amount || 0,
+      paymentMethod: (o.payment_method as string) || 'Efectivo',
+      totalAmount: (o.total_amount as number) || 0,
       tip: 0,
       items: [],
-      status: o.status,
+      status: o.status as string,
       businessLat: biz.latitude || 19.4326,
       businessLng: biz.longitude || -99.1332,
       customerLat: 19.42,

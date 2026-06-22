@@ -1,4 +1,5 @@
 import { getBrowserClient } from '@/lib/db/supabase';
+import { getCached, setCache } from '@/lib/supabase-cache';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -68,6 +69,9 @@ const sharingIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
 
 export const trackingService = {
   getBusinessLocation: async (businessId: string): Promise<RoutePoint> => {
+    const cacheKey = `bizloc:${businessId}`;
+    const cached = getCached<RoutePoint>(cacheKey);
+    if (cached) return cached;
     const supabase = await getClient();
     const { data } = await supabase
       .from('business_addresses')
@@ -76,7 +80,9 @@ export const trackingService = {
       .eq('is_primary', true)
       .maybeSingle();
     if (data?.latitude && data?.longitude) {
-      return { lat: data.latitude, lng: data.longitude };
+      const result = { lat: data.latitude, lng: data.longitude };
+      setCache(cacheKey, result, 60_000);
+      return result;
     }
     return { lat: 19.4326, lng: -99.1332 };
   },

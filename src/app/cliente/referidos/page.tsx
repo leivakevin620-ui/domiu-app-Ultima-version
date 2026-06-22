@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { clientService } from '@/services/client';
 import { motion } from 'framer-motion';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import { Users, Copy, Check, Share2, Gift, TrendingUp } from 'lucide-react';
 
 export default function ReferidosPage() {
@@ -13,15 +13,13 @@ export default function ReferidosPage() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
     if (!profile?.id) return;
-    setLoading(true);
-    const data = await clientService.getReferralInfo(profile.id);
-    setInfo(data);
-    setLoading(false);
+    clientService.getReferralInfo(profile.id).then(data => {
+      setInfo(data);
+      setLoading(false);
+    });
   }, [profile?.id]);
-
-  useEffect(() => { load(); }, [load]);
 
   const handleCopy = async () => {
     if (!info?.code) return;
@@ -41,7 +39,7 @@ export default function ReferidosPage() {
     }
   };
 
-  if (loading) return <div className="min-h-screen bg-background pb-16 lg:pb-0"><LoadingState /></div>;
+  if (loading) return <div className="min-h-screen bg-background pb-16 lg:pb-0"><SkeletonCard /></div>;
 
   const referralLink = info?.code ? `https://domiu.app/referido/${info.code}` : '';
 

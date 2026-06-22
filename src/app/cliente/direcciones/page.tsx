@@ -1,16 +1,21 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { clientService, ClientAddress } from '@/services/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { EmptyState } from '@/components/ui/empty-state';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard, SkeletonList } from '@/components/ui/skeleton';
 import { MapsProvider } from '@/contexts/MapsContext';
-import { PlacesAutocomplete } from '@/components/tracking/maps/PlacesAutocomplete';
+import dynamic from 'next/dynamic';
+const PlacesAutocomplete = dynamic(() => import('@/components/tracking/maps/PlacesAutocomplete').then(m => ({ default: m.PlacesAutocomplete })), {
+  ssr: false,
+  loading: () => <SkeletonCard />,
+});
+import { logger } from '@/lib/logger';
 import { MapPin, Plus, Pencil, Trash2, Star, Home, Briefcase, Map } from 'lucide-react';
 
-const TYPE_ICONS: Record<string, any> = { home: Home, work: Briefcase, other: Map };
+const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = { home: Home, work: Briefcase, other: Map };
 
 export default function DireccionesPage() {
   const { profile } = useAuth();
@@ -21,15 +26,17 @@ export default function DireccionesPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ type: 'home', street_address: '', city: '', state_province: '', postal_code: '', country: 'Colombia', is_primary: false, label: '', latitude: 0, longitude: 0 });
 
-  const load = useCallback(async () => {
+  const load = () => {
     if (!profile?.id) return;
-    setLoading(true);
-    const data = await clientService.getAddresses(profile.id);
-    setAddresses(data);
-    setLoading(false);
-  }, [profile?.id]);
+    clientService.getAddresses(profile.id).then(data => {
+      setAddresses(data);
+      setLoading(false);
+    });
+  };
 
-  useEffect(() => { load(); }, [load]);
+  const loadRef = useRef(load);
+  useEffect(() => { loadRef.current = load; });
+  useEffect(() => { loadRef.current(); }, [profile?.id]);
 
   const handlePlaceSelected = useCallback((place: { lat: number; lng: number; formattedAddress: string; city?: string; state?: string; country?: string; postalCode?: string }) => {
     setForm(f => ({
@@ -76,7 +83,7 @@ export default function DireccionesPage() {
       resetForm();
       load();
     } catch (e) {
-      console.error(e);
+      logger.error('Error al guardar dirección', e);
     } finally {
       setSaving(false);
     }
@@ -162,7 +169,7 @@ export default function DireccionesPage() {
         )}
 
         {loading ? (
-          <LoadingState />
+          <SkeletonList />
         ) : addresses.length === 0 && !showForm ? (
           <EmptyState
             icon={<MapPin className="h-6 w-6" />}

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { PageContainer } from '@/components/ui/page-container';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SkeletonCard, SkeletonMap } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrders, OrderProvider } from '@/contexts/OrderContext';
@@ -12,17 +12,23 @@ import { ChatProvider, useChat } from '@/contexts/ChatContext';
 import { TrackingProvider, useTracking } from '@/contexts/TrackingContext';
 import { OrderTimeline } from '@/components/orders/OrderTimeline';
 import { DeliveryStatusTimeline } from '@/components/delivery/DeliveryStatusTimeline';
-import { GoogleTrackingMap } from '@/components/tracking/maps/GoogleTrackingMap';
+import dynamic from 'next/dynamic';
+const GoogleTrackingMap = dynamic(() => import('@/components/tracking/maps/GoogleTrackingMap').then(m => ({ default: m.GoogleTrackingMap })), {
+  ssr: false,
+  loading: () => <SkeletonMap className="h-[300px]" />,
+});
 import { ReviewModal } from '@/components/reviews/ReviewModal';
 import { reviewService } from '@/services/reviews';
+import type { MarketplaceProduct } from '@/services/marketplace';
 import { useCart } from '@/contexts/CartContext';
 import { MapsProvider } from '@/contexts/MapsContext';
 import { ChatWindow } from '@/components/chat/ChatWindow';
 import { EtaCard as TrackingInfo } from '@/components/tracking/EtaCard';
 import { DeliveryProgress } from '@/components/tracking/DeliveryProgress';
+import { logger } from '@/lib/logger';
 import {
   ArrowLeft, ClipboardList, Clock, MapPin, Truck, MessageCircle, Store,
-  RotateCcw, Download, DollarSign, Star, ChevronDown, Receipt
+  RotateCcw, Download, DollarSign, Star, Receipt
 } from 'lucide-react';
 
 const TIP_AMOUNTS = [1, 2, 3, 5];
@@ -82,8 +88,17 @@ function OrderDetailContent() {
     try {
       clearCart();
       for (const item of order.items) {
+        const product: MarketplaceProduct = {
+          id: item.product_id,
+          business_id: order.business_id,
+          name: item.product_name,
+          price: item.unit_price,
+          description: '',
+          image_url: null,
+          is_available: true,
+        };
         addItem(
-          { id: item.product_id, name: item.product_name, price: item.unit_price, quantity: item.quantity } as any,
+          product,
           order.business_id,
           order.business_name,
           item.quantity,
@@ -91,13 +106,13 @@ function OrderDetailContent() {
       }
       router.push('/cliente/cart');
     } catch (e) {
-      console.error(e);
+      logger.error('Error reordering', e);
     } finally {
       setReordering(false);
     }
   };
 
-  const handleTip = async (amount: number) => {
+  const handleTip = async () => {
     setTipping(true);
     try {
       await new Promise(r => setTimeout(r, 800));
@@ -113,7 +128,7 @@ function OrderDetailContent() {
     setShowInvoice(true);
   };
 
-  if (orderLoading) return <LoadingState />;
+  if (orderLoading) return <SkeletonCard />;
 
   if (!order) {
     return (
@@ -322,7 +337,7 @@ function OrderDetailContent() {
                   {TIP_AMOUNTS.map(a => (
                     <button
                       key={a}
-                      onClick={() => handleTip(a)}
+                      onClick={handleTip}
                       disabled={tipping}
                       className="flex-1 rounded-xl bg-white py-3 text-center text-sm font-bold text-amber-700 shadow-sm transition-all hover:shadow-md hover:bg-amber-50 border border-amber-200 disabled:opacity-50"
                     >

@@ -1,7 +1,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { ChartCard, RevenueLineChart, OrdersBarChart, RegistrationAreaChart } from '@/components/admin/dashboard-charts';
+import { SkeletonCard } from '@/components/ui/skeleton';
+import dynamic from 'next/dynamic';
+const ChartCard = dynamic(() => import('@/components/admin/dashboard-charts').then(m => ({ default: m.ChartCard })), { ssr: false, loading: () => <SkeletonCard /> });
+const RevenueLineChart = dynamic(() => import('@/components/admin/dashboard-charts').then(m => ({ default: m.RevenueLineChart })), { ssr: false, loading: () => <SkeletonCard /> });
+const OrdersBarChart = dynamic(() => import('@/components/admin/dashboard-charts').then(m => ({ default: m.OrdersBarChart })), { ssr: false, loading: () => <SkeletonCard /> });
+const RegistrationAreaChart = dynamic(() => import('@/components/admin/dashboard-charts').then(m => ({ default: m.RegistrationAreaChart })), { ssr: false, loading: () => <SkeletonCard /> });
 import { adminService } from '@/services/admin';
 import type { SalesReport, TopBusiness, TopCourier } from '@/services/admin';
 import { Card } from '@/components/ui/card';

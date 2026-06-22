@@ -1,240 +1,99 @@
-# DomiU App — Project Status
+# DomiU App 1.2 - Release Candidate Status
 
-## Arquitectura Actual
+Fecha de auditoria: 2026-06-22
 
-```
-domiu-app-1-0/
-├── src/
-│   ├── app/              → Next.js 16 App Router (45 páginas)
-│   │   ├── admin/        → Admin Enterprise + Seguridad RBAC (15 páginas)
-│   │   ├── negocio/      → Business Enterprise (7 páginas)
-│   │   ├── repartidor/   → Courier Pro (4 páginas)
-│   │   ├── cliente/      → Marketplace (8 páginas)
-│   │   └── ...auth, landing, notificaciones, etc.
-│   ├── components/       → UI components reutilizables
-│   ├── contexts/         → Auth, Courier, Chat, Tracking
-│   ├── services/         → API clients (singleton pattern)
-│   ├── lib/              → Supabase client, utilities
-│   └── types/            → TypeScript interfaces
-├── supabase/
-│   └── migrations/       → 10 archivos SQL (31 tablas)
-└── public/               → Assets estáticos
-```
+## Estado actual
 
-## Módulos Completados
+El proyecto ha completado **todas las Fases 4.6-4.16 y Modulo 7 (Pagos Enterprise)**.
 
-| Módulo | Estado | Páginas | Build |
-|--------|--------|---------|-------|
-| Landing Premium | ✅ | `/` | 0 errors |
-| Marketplace Premium | ✅ | `/cliente/*` (8) | 0 errors |
-| Admin Enterprise | ✅ | `/admin/*` (15) | 0 errors |
-| Admin Seguridad (RBAC) | ✅ | `/admin/seguridad`, `/admin/auditoria` | 0 errors |
-| Business Enterprise | ✅ | `/negocio/*` (7) | 0 errors |
-| Courier Pro | ✅ | `/repartidor/*` (4) | 0 errors |
-| Login / Registro | ✅ | `/login`, `/register` | 0 errors |
-| Chat (base) | ✅ | Integrado en pedidos | 0 errors |
-| Tracking (base) | ✅ | Simulación GPS en tiempo real | 0 errors |
-| Reviews | ✅ | Admin + Courier + Business | 0 errors |
-| Dashboard (completo) | ✅ | Admin + Business + Courier KPIs | 0 errors |
-| CRUD Productos | ✅ | Admin + Business | 0 errors |
-| Kanban Pedidos | ✅ | Admin + Courier + Cliente | 0 errors |
+Estado local:
 
-## Base de Datos
+| Validacion | Estado |
+|---|---|
+| `npm run lint` | OK, 0 errors, 0 warnings |
+| `npm run build` | OK, 59 rutas (0 TS errors) |
+| `npm run test` | OK, 27 tests (4 suites) |
+| `npm run test:coverage` | OK |
+| `npm run check:env` | Sin errores criticos; warnings documentados |
 
-**31 tablas creadas en 10 migraciones:**
+## Fases completadas
 
-| Tabla | Propósito |
-|-------|-----------|
-| `roles` | Roles y permisos del sistema |
-| `profiles` | Perfiles de usuario extendidos |
-| `businesses` | Negocios registrados |
-| `business_hours` | Horarios de atención |
-| `business_addresses` | Direcciones de negocios |
-| `categories` | Categorías de productos |
-| `products` | Catálogo de productos |
-| `product_images` | Imágenes de productos |
-| `product_variants` | Variantes (talla, color) |
-| `orders` | Pedidos |
-| `order_items` | Items por pedido |
-| `order_tracking` | Historial de estados |
-| `addresses` | Direcciones de usuarios |
-| `drivers` | Repartidores |
-| `driver_locations` | Ubicaciones en tiempo real |
-| `driver_availability` | Disponibilidad programada |
-| `driver_earnings` | Ganancias y comisiones |
-| `payments` | Pagos |
-| `payment_methods` | Métodos de pago |
-| `wallets` | Billeteras digitales |
-| `wallet_transactions` | Transacciones de billetera |
-| `ratings` | Calificaciones y reseñas |
-| `review_reports` | Reportes de reseñas |
-| `favorites` | Favoritos de clientes |
-| `audit_logs` | Auditoría de administración |
-| `notifications` | Notificaciones |
-| `notification_preferences` | Preferencias de notificación |
-| `chat_conversations` | Conversaciones de chat |
-| `chat_messages` | Mensajes de chat |
-| `commission_transactions` | Transacciones de comisión |
-| `admin_sessions` | Sesiones de admin (RBAC) |
-| `admin_history` | Historial de acciones admin |
+| Fase | Descripcion | Estado |
+|---|---|---|
+| 4.6 | Supabase Optimization (cache in-memory con TTL) | Completado |
+| 4.7 | Context Optimization (AuthContext useMemo, RAF loop pause) | Completado |
+| 4.8 | Responsive Admin (sidebar drawer mobile, bottom nav, overlay) | Completado |
+| 4.9 | Accessibility (Modal/Drawer/Toast aria-labels, dialog roles) | Completado |
+| 4.10 | Images (ultimo `<img>` convertido a NextImage) | Completado |
+| 4.11 | Final Stabilization (esta auditoria) | Completado |
+| 4.14 | Logging (logger enterprise) | Completado |
+| 4.15 | Observability (page views, metrics, errors) | Completado |
+| 4.16 | Code Quality (reporte de deuda tecnica) | Completado |
+| 4.17 | Documentation (PROJECT_STATUS, README) | Completado |
+| D | exhaustive-deps (7/7 warnings eliminados) | Completado |
+| Modulo 7 | Payment System Enterprise (27 archivos) | Completado |
 
-**Enums:** `user_role`, `user_status`, `order_status`, `payment_status`, `payment_method`, `rating_type`, `product_status`, `address_type`, `driver_status`, `vehicle_type`, `transaction_type`, `wallet_transaction_status`, `message_type`, `notification_type`, `notification_channel`
+## Modulo 7 — Payments Enterprise
 
-**RLS:** Pendiente de implementar en migración final
+Arquitectura desacoplada implementada en `src/lib/payments/`:
 
-## Courier Pro — Detalle del Módulo
+- **27 archivos**: tipos, interfaces, errores, servicio singleton, 8 providers stub (Stripe, MP, Wompi, PayU, Nequi, Daviplata, PSE, Wallet), wallet service contra Supabase, webhook registry, HMAC security, idempotency in-memory, checkout adapter
+- **Tests**: 25 tests (PaymentService 10, Security 10, Wallet 5)
+- **No rompe checkout existente** — modulo aislado, sin imports desde el resto de la app
+- **Pendiente**: instalar SDKs reales, implementar providers concretos, endpoints webhook
 
-### Servicios
-- `src/services/courier-pro.ts` — Servicio premium: niveles (7 tiers), earnings breakdown, AI readiness, gestión vehículo/documentos
-- `src/services/assignment.ts` — Asignación de pedidos a repartidores
-- `src/services/orders.ts` — CRUD de pedidos con suscripción en memoria
-- `src/services/tracking.ts` — Simulación GPS con ruta generada entre negocio y cliente
-- `src/services/reviews.ts` — Calificaciones de courier con estadísticas
-- `src/services/reports.ts` — Exportación CSV de ganancias
+## Storage remoto
 
-### Contextos
-- `CourierContext` — Estado global: courier, pedidos activos, disponibles, historial, ganancias, disponibilidad
-- `ChatContext` — Chat courier ↔ cliente
-- `TrackingContext` — Compartir ubicación en vivo
+| Bucket | Estado remoto | Visibilidad |
+|---|---|---|
+| `business-logos` | Verificado | Publico |
+| `business-banners` | Verificado | Publico |
+| `product-images` | Verificado | Publico |
+| `promotions` | Verificado | Publico |
+| `categories` | Verificado | Publico |
+| `user-avatars` | Creado y verificado | Publico |
+| `chat-files` | Creado y verificado | Privado |
+| `ratings-images` | Creado y verificado | Publico |
 
-### Páginas
-| Ruta | Características |
-|------|-----------------|
-| `/repartidor` | Status toggle animado (ping, glow), earnings KPIs (hoy/semana/mes), stats grid (entregas, rating, nivel), barra de progreso de nivel, bonus tiers, pedido activo, pedidos disponibles |
-| `/repartidor/pedidos` | 3 tabs: Activo (mega-card con negocio/cliente/pago, timeline visual, navegación Google Maps, artículos), Disponibles (lista con aceptar), Historial |
-| `/repartidor/ganancias` | 4 KPIs con tendencia, área chart Recharts (hoy/semana/mes/año), desglose (base/propinas/bonificaciones), transacciones recientes, exportar CSV |
-| `/repartidor/perfil` | Avatar con gradiente, nivel, stats (rating/entregas/ganancias), info personal, formulario vehículo (tipo/placa/modelo), documentos/licencia, reseñas recibidas |
+Bucket legado `avatars`: existe y aparece vacio. No se elimino.
 
-### Niveles (Courier Pro)
-| Nivel | Entregas | Bonus |
-|-------|----------|-------|
-| 1. Novato | 0 | +0% |
-| 2. Bronce | 10 | +5% |
-| 3. Plata | 50 | +10% |
-| 4. Oro | 150 | +15% |
-| 5. Platino | 350 | +20% |
-| 6. Diamante | 600 | +30% |
-| 7. Élite | 1000 | +50% |
+## Storage policies / Realtime
 
-### AI Readiness (interfaces preparadas, sin implementación)
-- Predicción de demanda (`nextHourOrders`, `confidence`, `peakTimeToday`)
-- Zonas calientes (`hotZones` con `ordersPerHour`, `distanceKm`)
-- Rutas óptimas (`optimalRoute` con `estimatedSavings`, `recommendedStops`)
-- Ganancias estimadas (`estimatedEarnings` con proyecciones)
+Migracion `2025062105_remote_storage_realtime_hardening.sql` preparada. No aplicada remotamente por falta de `DATABASE_URL` / `SUPABASE_DB_PASSWORD` en entorno local.
 
-## Rutas Implementadas (45 total)
+## Google Maps
 
-```
-/                          → Landing Premium
-/login                     → Login
-/register                  → Registro
-/forgot-password           → Recuperar contraseña
-/auth/reset-password       → Reset password
-/admin/* (15)              → Admin Enterprise + Seguridad RBAC
-/negocio/* (7)             → Business Enterprise
-/repartidor/* (4)          → Courier Pro
-/cliente/* (8)             → Marketplace Premium
-/notificaciones            → Notificaciones
-/terminos                  → Términos y condiciones
-/privacidad                → Privacidad
-```
+`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` faltante en `.env.local`. Pages de mapa renderizan fallback. Verificar en Vercel.
 
-## Componentes Creados
+## Code Quality — Deuda tecnica
 
-### UI Base
-- `LoadingState`, `EmptyState`, `PageContainer`, `PageTitle`, `DashboardCard`
-- `StatCard`, `BottomNavigation`, `AppHeader`, `Footer`
-- `EnterpriseTable<T>` — genérico con search, sort, CSV export, skeleton, actions
+| Issue | Detalle |
+|---|---|
+| Services >200 lineas | 10 archivos (client.ts 717, admin.ts 636, orders.ts 337, etc.) |
+| Tipos `any` | 40+ ocurrencias en services/ (admin.ts, client.ts, assignment.ts, etc.) |
+| Orphaned | `src/services/geofencing.ts` (177 lines, 0 dependientes) |
+| WalletService | Tightly coupled a Supabase, no inyectable |
 
-### Admin
-- `AdminSidebar` — colapsable con búsqueda, tooltips, badge, filtrado por permisos
-- `AdminHeader` — breadcrumbs dinámicos, NotificationBell, perfil dropdown
-- `ReAuthModal` — re-autenticación con contraseña
-- `ConfirmModal` — confirmación universal (danger/warning/info) con reauth opcional
+## Testing
 
-### Delivery / Courier
-- `DriverCard` — avatar, nombre, estado, vehículo, rating
-- `DriverStatsCard` — label, valor, subtítulo, tendencia
-- `AssignmentCard` — nueva solicitud con aceptar/rechazar
-- `DeliveryStatusTimeline` — timeline 4 pasos (asignado → recogido → en camino → entregado)
+- Vitest + Testing Library + jsdom
+- 4 test suites, 27 tests, todos pasan
+- Cobertura limitada a foundation y payments
+- Wallet tests con mock de Supabase
 
-### Tracking
-- `EtaCard` — ETA, distancia, velocidad, indicador "En vivo"
+## Veredicto
 
-### Chat
-- `ChatWindow` — con quick replies, roles courier/cliente
+| Dimension | Estado |
+|---|---|
+| **Listo para commit** | SI ✅ |
+| **Listo para staging** | SI ✅ |
+| **Listo para produccion tecnica** | SI (con advertencias) |
+| **Listo para produccion comercial** | Pendiente de Google Maps, Lighthouse, y flujos reales |
 
-### Business
-- `BusinessSidebar` — colapsable con gradiente, logout, nombre negocio
-- `BusinessHeader` — badge abierto/cerrado, horas, notificaciones, perfil
-
-### Dashboard
-- `KPICard` — gradiente, hover animation, icono
-- `DashboardCharts` — 6 componentes Recharts (ventas, pedidos, top productos, etc.)
-
-## Servicios y Contextos
-
-### Services
-| Archivo | Líneas | Propósito |
-|---------|--------|-----------|
-| `admin.ts` | ~620 | CRUD admin: usuarios, negocios, repartidores, órdenes, auditoría, wallet, config, dashboard stats |
-| `audit.ts` | ~100 | Logging de auditoría con IP/browser/device/OS/result |
-| `permissions.ts` | ~70 | RBAC: hasPermission, hasAnyPermission, hasAllPermissions |
-| `admin-auth.ts` | ~120 | Sesiones admin, historial, reautenticación, system status |
-| `business.ts` | ~315 | Servicio negocio: dashboard stats, productos CRUD, clientes, órdenes, reportes |
-| `courier-pro.ts` | ~180 | Courier Pro: niveles, earnings breakdown, AI readiness, vehicle/docs management |
-| `assignment.ts` | ~224 | Asignación de pedidos a repartidores |
-| `orders.ts` | ~337 | CRUD órdenes con suscripción en memoria |
-| `tracking.ts` | ~210 | Simulación GPS, ubicaciones en tiempo real |
-| `reviews.ts` | ~245 | Calificaciones y reseñas |
-| `reports.ts` | ~94 | Exportación CSV |
-| `chat.ts` | ~309 | Chat con soporte multi-rol |
-
-### Contexts
-| Archivo | Propósito |
-|---------|-----------|
-| `AuthContext` | Auth global: login, register, logout, perfil, sesión |
-| `CourierContext` | Estado courier: pedidos activos, earnings, disponibilidad |
-| `ChatContext` | Chat en tiempo real por conversación |
-| `TrackingContext` | Compartir ubicación GPS |
-
-## Dependencias Instaladas
-
-### Core
-- `next` (16.2.9), `react`, `react-dom`
-- `@supabase/supabase-js`, `@supabase/ssr`
-
-### UI
-- `lucide-react` — iconos
-- `recharts` — gráficas (aprobado para admin y business)
-- `tailwindcss`, `postcss`, `autoprefixer`
-
-### Desarrollo
-- `typescript`, `@types/react`, `@types/node`
-- `eslint`, `eslint-config-next`
-
-## Variables de Entorno
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-```
-
-## Módulos Pendientes (Roadmap)
-
-| Prioridad | Módulo | Estado |
-|-----------|--------|--------|
-| Alta | Cliente Premium (perfil, direcciones, favoritos, historial, cupones) | ⏳ |
-| Alta | GPS y Tracking en tiempo real avanzado | ⏳ |
-| Alta | Pagos (Stripe / Wompi / Mercado Pago) | ⏳ |
-| Media | Notificaciones Push | ⏳ |
-| Media | PWA (instalable, haptic feedback) | ⏳ |
-| Media | SEO y rendimiento (Server Components, Dynamic Imports, next/image) | ⏳ |
-| Baja | IA (recomendaciones y analítica) | ⏳ |
-| Alta | Preparación producción (logs, monitoreo, backups, CI/CD) | ⏳ |
-| Alta | SQL migraciones RLS para todas las tablas | ⏳ |
-| Alta | Middleware de protección de rutas | ⏳ |
-
-## Próximo Módulo Recomendado
-
-**Cliente Premium** — perfil completo, direcciones múltiples, favoritos, historial de pedidos, cupones, gestión de métodos de pago.
+### Advertencias pre-produccion
+1. Google Maps API key no configurada en entornos
+2. Migraciones SQL no aplicadas remotamente (policies, Realtime)
+3. Providers de pago son stubs — conectar SDKs reales antes de produccion
+4. Idempotency store en memoria — migrar a Supabase/Redis para produccion
+5. Deuda tecnica: 40+ `any` types, services >200 lineas, geofencing.ts huerfano
+6. Lighthouse audit y validacion de flujos reales pendiente

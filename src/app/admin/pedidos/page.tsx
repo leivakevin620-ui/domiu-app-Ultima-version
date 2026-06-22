@@ -1,7 +1,13 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { EnterpriseTable, type EnterpriseColumn } from '@/components/admin/enterprise-table';
+import { SkeletonTable } from '@/components/ui/skeleton';
+import dynamic from 'next/dynamic';
+import type { EnterpriseColumn, EnterpriseTableProps } from '@/components/admin/enterprise-table';
+const EnterpriseTable = dynamic(() => import('@/components/admin/enterprise-table').then(m => ({ default: m.EnterpriseTable })), {
+  ssr: false,
+  loading: () => <SkeletonTable columns={5} rows={8} />,
+}) as <T>(props: EnterpriseTableProps<T>) => React.JSX.Element;
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
