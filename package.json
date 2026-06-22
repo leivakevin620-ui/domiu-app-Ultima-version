@@ -12,7 +12,8 @@
     "test:coverage": "vitest run --coverage",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check:env": "node scripts/check-environment.cjs"
+    "check:env": "node scripts/check-environment.cjs",
+    "create:super-admin": "node scripts/create-super-admin.cjs"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.15.0",

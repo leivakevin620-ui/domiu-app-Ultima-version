@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { getDashboardPathForRole } from '@/types/auth';
+import { logger } from '@/lib/logger';
 import { marketplaceService, MarketplaceBusiness, MarketplaceCategory } from '@/services/marketplace';
 import { Hero } from '@/components/landing/Hero';
 import { Benefits } from '@/components/landing/Benefits';
@@ -26,14 +28,11 @@ export default function HomePage() {
   useEffect(() => {
     if (!isAuthenticated || isLoading) return;
     if (profile?.role) {
-      const dashboardMap: Record<string, string> = {
-        customer: '/cliente',
-        merchant: '/negocio',
-        courier: '/repartidor',
-        admin: '/admin',
-      };
-      router.push(dashboardMap[profile.role] || '/cliente');
+      const path = getDashboardPathForRole(profile.role);
+      logger.debug('[HomePage] redirect', { role: profile.role, path });
+      router.push(path);
     } else {
+      logger.debug('[HomePage] no role, redirect to /login');
       router.push('/login');
     }
   }, [isAuthenticated, profile, isLoading, router]);

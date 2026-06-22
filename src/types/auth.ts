@@ -1,7 +1,7 @@
 // src/types/auth.ts
 // Tipos de autenticación y roles
 
-export type UserRole = 'super_admin' | 'admin_general' | 'admin_financiero' | 'admin_operativo' | 'admin_comercial' | 'admin_soporte' | 'business' | 'merchant' | 'courier' | 'customer' | 'guest';
+export type UserRole = 'super_admin' | 'admin_general' | 'admin_financiero' | 'admin_operativo' | 'admin_comercial' | 'admin_soporte' | 'admin' | 'business' | 'merchant' | 'courier' | 'customer' | 'guest';
 export type UserStatus = 'active' | 'inactive' | 'suspended' | 'banned';
 
 export interface AuthUser {
@@ -79,6 +79,7 @@ export const ROLE_PERMISSIONS: RolePermissions = {
   admin_operativo: ['view_orders', 'manage_orders', 'view_businesses', 'view_deliveries', 'manage_couriers'],
   admin_comercial: ['view_businesses', 'manage_promotions', 'view_analytics', 'manage_categories'],
   admin_soporte: ['view_orders', 'view_users', 'manage_disputes', 'chat'],
+  admin: ['*'],
   business: [
     'view_business',
     'manage_products',
@@ -118,6 +119,7 @@ export const ROLE_ROUTES: { [key in UserRole]: string[] } = {
   admin_operativo: ['/admin'],
   admin_comercial: ['/admin'],
   admin_soporte: ['/admin'],
+  admin: ['/admin'],
   business: ['/negocio'],
   merchant: ['/negocio'],
   customer: ['/cliente'],
@@ -129,4 +131,26 @@ export const PUBLIC_ROUTES = ['/', '/login', '/register', '/forgot-password', '/
 
 export const PROTECTED_ROUTES = ['/cliente', '/negocio', '/repartidor', '/admin'];
 
-export const ADMIN_ROLES: UserRole[] = ['super_admin', 'admin_general', 'admin_financiero', 'admin_operativo', 'admin_comercial', 'admin_soporte'];
+export const ADMIN_ROLES: UserRole[] = ['super_admin', 'admin_general', 'admin_financiero', 'admin_operativo', 'admin_comercial', 'admin_soporte', 'admin'];
+
+export const BUSINESS_ROLES: UserRole[] = ['business', 'merchant'];
+
+export const DASHBOARD_ROUTES: Record<string, string> = {
+  customer: '/cliente',
+  merchant: '/negocio',
+  business: '/negocio',
+  courier: '/repartidor',
+};
+
+export function getDashboardPathForRole(role: UserRole): string {
+  if (ADMIN_ROLES.includes(role)) return '/admin';
+  return DASHBOARD_ROUTES[role] || '/cliente';
+}
+
+export function isAdminRole(role: string): boolean {
+  return ADMIN_ROLES.includes(role as UserRole);
+}
+
+export function isBusinessRole(role: string): boolean {
+  return BUSINESS_ROLES.includes(role as UserRole);
+}

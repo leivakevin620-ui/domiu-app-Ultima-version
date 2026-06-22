@@ -11,6 +11,7 @@ import { LayoutDashboard, Users, Store, Truck, ClipboardList, Settings } from 'l
 import { Footer } from '@/components/ui/footer';
 import { SkeletonCard } from '@/components/ui/skeleton';
 import { ADMIN_ROLES } from '@/types/auth';
+import { logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
 import { adminAuthService } from '@/services/admin-auth';
 import { auditService } from '@/services/audit';
@@ -29,10 +30,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    logger.debug('[AdminLayout] render', { isLoading, hasProfile: !!profile, role: profile?.role, adminRoles: ADMIN_ROLES });
+  });
+
   if (isLoading) return <SkeletonCard />;
 
   if (!profile) {
-    router.push('/login');
+    logger.debug('[AdminLayout] no profile, redirect to /login');
+    router.replace('/login');
     return null;
   }
 
@@ -43,7 +49,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       courier: '/repartidor',
       customer: '/cliente',
     };
-    router.push(roleRoutes[profile.role] || '/login');
+    const dest = roleRoutes[profile.role] || '/login';
+    logger.debug('[AdminLayout] role not admin', { role: profile.role, redirectTo: dest });
+    router.replace(dest);
     return null;
   }
 

@@ -1,15 +1,24 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { LoginCredentials } from '@/types/auth';
+import { LoginCredentials, getDashboardPathForRole } from '@/types/auth';
+import { logger } from '@/lib/logger';
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, isLoading, error: authError } = useAuth();
+  const { login, isLoading, isAuthenticated, profile, error: authError } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated && profile?.role) {
+      const path = getDashboardPathForRole(profile.role);
+      logger.debug('[LoginPage] already authenticated, redirecting', { role: profile.role, path });
+      router.replace(path);
+    }
+  }, [isAuthenticated, profile, router]);
 
   const [formData, setFormData] = useState<LoginCredentials>({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
@@ -27,11 +36,17 @@ export default function LoginPage() {
     if (!formData.email) { setFormError('Ingresa tu email'); return; }
     if (!formData.password) { setFormError('Ingresa tu contraseña'); return; }
 
+    logger.debug('[LoginPage] handleSubmit', { email: formData.email });
     try {
-      await login(formData);
-      router.push('/');
+      const profile = await login(formData);
+      const path = getDashboardPathForRole(profile.role);
+      logger.debug('[LoginPage] login OK', { role: profile.role, redirectTo: path, currentPathname: window.location.pathname });
+      await new Promise(r => setTimeout(r, 0));
+      router.replace(path);
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Credenciales inválidas');
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.debug('[LoginPage] login FAIL', { message: msg });
+      setFormError(msg);
     }
   };
 

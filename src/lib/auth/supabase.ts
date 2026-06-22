@@ -1,6 +1,7 @@
 import { AuthChangeEvent, AuthError, Session, User } from '@supabase/supabase-js';
 import { getBrowserClient } from '@/lib/db/supabase';
 import { getEnv } from '@/lib/env';
+import { logger } from '@/lib/logger';
 
 import {
   LoginCredentials,
@@ -16,7 +17,10 @@ export class SupabaseAuthService {
     user: User | null;
     profile: UserProfile | null;
     error: AuthError | string | null;
+    requiresEmailConfirmation?: boolean;
+    message?: string;
   }> {
+    logger.debug('[Auth] register start', { email: credentials.email, role: credentials.role });
     try {
       const supabase = getBrowserClient();
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -27,18 +31,29 @@ export class SupabaseAuthService {
         },
       });
 
-      if (authError) return { user: null, profile: null, error: authError };
-      if (!authData.user) return { user: null, profile: null, error: new Error('No se pudo crear el usuario') as AuthError };
+      if (authError) {
+        logger.debug('[Auth] register supabase error', { message: authError.message });
+        return { user: null, profile: null, error: authError };
+      }
+      if (!authData.user) {
+        logger.debug('[Auth] register no user returned');
+        return { user: null, profile: null, error: new Error('No se pudo crear el usuario') as AuthError };
+      }
 
       const token = authData.session?.access_token;
 
       if (!token) {
+        logger.debug('[Auth] register requires email confirmation');
         return {
           user: authData.user,
           profile: null,
-          error: 'Registro exitoso. Revisa tu correo para verificar la cuenta antes de iniciar sesión.',
+          error: null,
+          requiresEmailConfirmation: true,
+          message: 'Registro exitoso. Revisa tu correo para confirmar tu cuenta antes de iniciar sesión.',
         };
       }
+
+      logger.debug('[Auth] register creating profile');
 
       const profileRes = await fetch('/api/profile', {
         method: 'POST',
@@ -56,14 +71,17 @@ export class SupabaseAuthService {
       });
 
       if (!profileRes.ok) {
+        logger.debug('[Auth] register profile API error', { status: profileRes.status });
         const body = await profileRes.json().catch(() => ({}));
         return { user: null, profile: null, error: body.error || body.details || `Error del servidor (HTTP ${profileRes.status})` };
       }
 
       const { profile } = await profileRes.json();
+      logger.debug('[Auth] register success with profile');
       return { user: authData.user, profile, error: null };
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Error desconocido';
+      logger.debug('[Auth] register unexpected error', { message: msg });
       return { user: null, profile: null, error: new Error(msg) as AuthError };
     }
   }
@@ -73,16 +91,23 @@ export class SupabaseAuthService {
     user: User | null;
     error: AuthError | null;
   }> {
+    const envUrl = getEnv().NEXT_PUBLIC_SUPABASE_URL;
+    logger.debug('[Auth] login start', { email: credentials.email, url: envUrl ? envUrl.replace(/^https?:\/\//, '').split('.')[0] : 'MOCK' });
     try {
       const supabase = getBrowserClient();
       const { data, error } = await supabase.auth.signInWithPassword({
         email: credentials.email,
         password: credentials.password,
       });
-      if (error) return { session: null, user: null, error };
+      if (error) {
+        logger.debug('[Auth] login error', { message: error.message });
+        return { session: null, user: null, error };
+      }
+      logger.debug('[Auth] login success');
       return { session: data.session, user: data.user, error: null };
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Error desconocido';
+      logger.debug('[Auth] login unexpected error', { message: msg });
       return { session: null, user: null, error: new Error(msg) as AuthError };
     }
   }
