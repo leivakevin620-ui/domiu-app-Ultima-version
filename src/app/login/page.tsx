@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoginCredentials, getDashboardPathForRole } from '@/types/auth';
 import { logger } from '@/lib/logger';
-import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, ShieldAlert } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -23,6 +23,8 @@ export default function LoginPage() {
   const [formData, setFormData] = useState<LoginCredentials>({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [recovering, setRecovering] = useState(false);
+  const [recoverDone, setRecoverDone] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -47,6 +49,29 @@ export default function LoginPage() {
       const msg = err instanceof Error ? err.message : String(err);
       logger.debug('[LoginPage] login FAIL', { message: msg });
       setFormError(msg);
+    }
+  };
+
+  const handleRecover = async () => {
+    setRecovering(true);
+    setRecoverDone(false);
+    try {
+      const res = await fetch('/api/auth/recover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email, password: formData.password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al recuperar');
+      setRecoverDone(true);
+      const profile = await login(formData);
+      const path = getDashboardPathForRole(profile.role);
+      router.replace(path);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setFormError(msg);
+    } finally {
+      setRecovering(false);
     }
   };
 
@@ -96,6 +121,29 @@ export default function LoginPage() {
           {displayError && (
             <div className="mb-6 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3">
               <p className="text-sm font-medium text-destructive">{displayError}</p>
+              {displayError === 'Credenciales incorrectas' && !recoverDone && (
+                <button
+                  type="button"
+                  disabled={recovering || isLoading}
+                  onClick={handleRecover}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
+                >
+                  {recovering ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-amber-700 border-t-transparent" />
+                      Recuperando...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <ShieldAlert className="h-3.5 w-3.5" />
+                      Recuperar acceso automáticamente
+                    </span>
+                  )}
+                </button>
+              )}
+              {recoverDone && (
+                <p className="mt-2 text-xs font-medium text-success">Cuenta recuperada. Iniciando sesión...</p>
+              )}
             </div>
           )}
 

@@ -129,6 +129,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
         'User is banned': 'Cuenta suspendida',
       };
       const friendly = messages[error.message] || error.message;
+      // Auto-recover: if credentials are invalid, try to create/reset the user via the server API
+      if (error.message === 'Invalid login credentials' && credentials.email && credentials.password) {
+        logger.debug('[AuthContext] login failed, attempting auto-recovery...');
+        try {
+          const res = await fetch('/api/auth/recover', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: credentials.email, password: credentials.password }),
+          });
+          if (res.ok) {
+            logger.debug('[AuthContext] auto-recovery succeeded, retrying login...');
+            isLoggingInRef.current = true;
+            const retry = await SupabaseAuthService.login(credentials);
+            if (retry.session && retry.user) {
+              const profile = await loadUserProfile('login-recovered');
+              if (profile) {
+                isLoggingInRef.current = false;
+                setAuthSession({ user: retry.user, profile, isAuthenticated: true, isLoading: false, error: null });
+                return profile;
+              }
+            }
+            isLoggingInRef.current = false;
+          }
+        } catch {
+          isLoggingInRef.current = false;
+        }
+      }
       setAuthSession(prev => ({ ...prev, isLoading: false, error: friendly }));
       throw new Error(friendly);
     }

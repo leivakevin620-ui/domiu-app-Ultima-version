@@ -33,7 +33,7 @@ CREATE POLICY "Admins can read all audit logs"
     EXISTS (
       SELECT 1 FROM profiles
       WHERE profiles.id = auth.uid()
-      AND (profiles.role IN ('super_admin', 'admin_general', 'admin_financiero', 'admin_operativo', 'admin_comercial', 'admin_soporte'))
+      AND profiles.role = 'admin'
     )
   );
 
