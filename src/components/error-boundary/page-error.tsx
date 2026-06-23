@@ -3,7 +3,7 @@
 import { AlertTriangle } from 'lucide-react';
 
 interface PageErrorProps {
-  error?: Error | null;
+  error?: { message: string; name: string; stack?: string } | Error | null;
   resetErrorBoundary?: () => void;
 }
 
@@ -16,16 +16,24 @@ export function PageError({ error, resetErrorBoundary }: PageErrorProps) {
         </div>
         <h2 className="mt-6 text-xl font-semibold text-foreground">Algo sali&oacute; mal</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          {error?.message || 'Ocurri\u00f3 un error inesperado. Por favor, intenta de nuevo.'}
+          {(error && typeof error === 'object' && 'message' in error ? error.message : null) || 'Ocurri\u00f3 un error inesperado. Por favor, intenta de nuevo.'}
         </p>
-        {resetErrorBoundary && (
+        <div className="mt-6 flex items-center justify-center gap-3">
           <button
-            onClick={resetErrorBoundary}
-            className="mt-6 inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/80 transition-colors"
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/80 transition-colors"
           >
-            Intentar de nuevo
+            Recargar p&aacute;gina
           </button>
-        )}
+          {resetErrorBoundary && (
+            <button
+              onClick={resetErrorBoundary}
+              className="inline-flex items-center justify-center rounded-lg border border-border bg-card px-5 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+            >
+              Reintentar
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

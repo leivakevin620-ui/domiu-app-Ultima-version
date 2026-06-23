@@ -3,7 +3,7 @@
 import React from 'react';
 
 interface ErrorBoundaryProps {
-  fallback?: React.ReactNode;
+  fallback?: React.ReactElement<{ resetErrorBoundary?: () => void }>;
   onReset?: () => void;
   children: React.ReactNode;
 }
@@ -24,7 +24,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[ErrorBoundary]', error, info.componentStack);
+    console.error('[ErrorBoundary]', error.message, error.stack, info.componentStack);
   }
 
   resetErrorBoundary = () => {
@@ -34,8 +34,16 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
   render() {
     if (this.state.hasError) {
+      const logError = {
+        message: this.state.error?.message,
+        name: this.state.error?.name,
+        stack: this.state.error?.stack,
+      };
       if (this.props.fallback) {
-        return this.props.fallback;
+        return React.cloneElement(this.props.fallback, {
+          resetErrorBoundary: this.resetErrorBoundary,
+          error: logError,
+        });
       }
       return (
         <div className="flex min-h-[400px] flex-col items-center justify-center p-8">
@@ -52,4 +60,12 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     }
     return this.props.children;
   }
+}
+
+export function getErrorMetadata(error: unknown): { message: string; name: string; stack: string | undefined } | null {
+  if (!error) return null;
+  if (error instanceof Error) {
+    return { message: error.message, name: error.name, stack: error.stack };
+  }
+  return { message: String(error), name: 'Unknown', stack: undefined };
 }
