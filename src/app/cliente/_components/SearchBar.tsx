@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Search, Mic, SlidersHorizontal, Map } from 'lucide-react';
+import { Search, Mic, SlidersHorizontal, Map as MapIcon } from 'lucide-react';
 
 export function SearchBar() {
   const router = useRouter();
@@ -41,7 +41,7 @@ export function SearchBar() {
           <SlidersHorizontal className="h-4 w-4" />
         </button>
         <button type="button" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border/50 bg-background/80 text-muted-foreground backdrop-blur-xl transition-all hover:border-primary/30 hover:text-primary hover:shadow-sm">
-          <Map className="h-4 w-4" />
+          <MapIcon className="h-4 w-4" />
         </button>
       </form>
     </motion.div>

@@ -13,9 +13,9 @@ const PlacesAutocomplete = dynamic(() => import('@/components/tracking/maps/Plac
   loading: () => <SkeletonCard />,
 });
 import { logger } from '@/lib/logger';
-import { MapPin, Plus, Pencil, Trash2, Star, Home, Briefcase, Map } from 'lucide-react';
+import { MapPin, Plus, Pencil, Trash2, Star, Home, Briefcase, Map as MapIcon } from 'lucide-react';
 
-const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = { home: Home, work: Briefcase, other: Map };
+const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = { home: Home, work: Briefcase, other: MapIcon };
 
 export default function DireccionesPage() {
   const { profile } = useAuth();

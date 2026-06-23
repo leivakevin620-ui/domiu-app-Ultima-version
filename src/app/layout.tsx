@@ -46,10 +46,10 @@ export const metadata: Metadata = {
       "La plataforma de delivery inteligente que conecta usuarios, negocios y repartidores.",
   },
   robots: { index: true, follow: true },
-  icons: { icon: "/favicon.ico", apple: "/apple-icon.png" },
+  icons: { icon: "/favicon.svg", apple: "/apple-icon.png" },
   manifest: "/manifest.json",
   other: {
-    "apple-mobile-web-app-capable": "yes",
+    "mobile-web-app-capable": "yes",
     "apple-mobile-web-app-status-bar-style": "default",
     "theme-color": "#6366f1",
   },
