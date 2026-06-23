@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -28,20 +28,21 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: Tooltip
 export function CourierWeeklyStats() {
   const { profile } = useAuth();
   const [data, setData] = useState<{ date: string; total: number; label: string }[]>([]);
-  const [loading, setLoading] = useState(true);
+  const mounted = useRef(true);
 
   useEffect(() => {
+    if (!profile?.id) return;
+    mounted.current = true;
     (async () => {
-      if (!profile?.id) return;
       try {
         const history = await courierProService.getEarningsHistory(profile.id, 7);
+        if (!mounted.current) return;
         if (history.length > 0) {
-          const mapped = history.map(h => ({
+          setData(history.map(h => ({
             date: h.date,
             total: h.total,
             label: getDayName(new Date(h.date).getDay()).slice(0, 3),
-          }));
-          setData(mapped);
+          })));
         } else {
           setData(fallbackEarningsHistory().map(h => ({
             date: h.date,
@@ -50,14 +51,15 @@ export function CourierWeeklyStats() {
           })));
         }
       } catch {
+        if (!mounted.current) return;
         setData(fallbackEarningsHistory().map(h => ({
           date: h.date,
           total: h.total,
           label: getDayName(new Date(h.date).getDay()).slice(0, 3),
         })));
       }
-      setLoading(false);
     })();
+    return () => { mounted.current = false; };
   }, [profile?.id]);
 
   const bestDay = useMemo(() => {
@@ -66,8 +68,6 @@ export function CourierWeeklyStats() {
   }, [data]);
 
   const total = useMemo(() => data.reduce((s, d) => s + d.total, 0), [data]);
-
-  if (loading) return null;
 
   return (
     <motion.section

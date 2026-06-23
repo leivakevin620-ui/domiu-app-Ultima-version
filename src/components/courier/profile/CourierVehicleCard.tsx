@@ -25,6 +25,7 @@ const iconColors: Record<string, string> = {
 export function CourierVehicleCard() {
   const { profile } = useAuth();
   const [vehicle, setVehicle] = useState({ type: 'motorcycle', plate: '', model: '' });
+  const [brand, setBrand] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -37,11 +38,14 @@ export function CourierVehicleCard() {
         .eq('id', profile.id)
         .single();
       if (driver) {
+        const fullModel = driver.vehicle_model || '';
         setVehicle({
           type: driver.vehicle_type || 'motorcycle',
           plate: driver.vehicle_plate || '',
-          model: driver.vehicle_model || '',
+          model: fullModel,
         });
+        const parts = fullModel.split(' ');
+        setBrand(parts[0] || '');
       }
     })();
   }, [profile?.id]);
@@ -111,28 +115,38 @@ export function CourierVehicleCard() {
       </div>
 
       <label className="mt-2 block">
+        <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-slate-500">Marca</span>
+        <select
+          value={brand}
+          onChange={(e) => {
+            const selected = e.target.value;
+            setBrand(selected);
+            const rest = vehicle.model.split(' ').slice(1).join(' ');
+            setVehicle({ ...vehicle, model: selected + (rest ? ' ' + rest : '') });
+          }}
+          className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10"
+          aria-label="Marca del vehículo"
+        >
+          <option value="">Selecciona una marca</option>
+          {brands.map((b) => <option key={b} value={b}>{b}</option>)}
+        </select>
+      </label>
+      <label className="mt-2 block">
         <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-slate-500">Modelo</span>
-        <div className="flex gap-2">
-          <select
-            value={vehicle.model.split(' ')[0] || ''}
-            onChange={(e) => {
-              const rest = vehicle.model.split(' ').slice(1).join(' ');
-              setVehicle({ ...vehicle, model: e.target.value + ' ' + rest });
-            }}
-            className="h-10 w-1/2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10"
-            aria-label="Marca del vehículo"
-          >
-            <option value="">Marca</option>
-            {brands.map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
-          <input
-            value={vehicle.model}
-            onChange={(e) => setVehicle({ ...vehicle, model: e.target.value })}
-            placeholder="Ej: Yamaha XTZ 150 2024"
-            className="h-10 w-1/2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10"
-            aria-label="Modelo completo del vehículo"
-          />
-        </div>
+        <input
+          value={vehicle.model}
+          onChange={(e) => {
+            const newValue = e.target.value;
+            const firstWord = newValue.split(' ')[0] || '';
+            if (brand && firstWord !== brand && brands.includes(firstWord)) {
+              setBrand(firstWord);
+            }
+            setVehicle({ ...vehicle, model: newValue });
+          }}
+          placeholder="Ej: XTZ 150 2024"
+          className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10"
+          aria-label="Modelo completo del vehículo"
+        />
       </label>
 
       <button

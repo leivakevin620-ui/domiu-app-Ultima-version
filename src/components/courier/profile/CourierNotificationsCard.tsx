@@ -5,7 +5,8 @@ import { motion } from 'framer-motion';
 import { Bell, Package, Zap, AlertTriangle, MessageSquare, Info, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { notificationService, type NotificationData } from '@/services/notifications';
-import { fallbackNotifications, getRelativeTime } from '@/lib/mock/courier-profile';
+import { fallbackNotifications } from '@/lib/mock/courier-profile';
+import { getRelativeTime } from './shared';
 
 const notificationIcons: Record<string, React.ElementType> = {
   assignment: Package,
@@ -23,8 +24,6 @@ const iconColors: Record<string, string> = {
   info: 'bg-slate-50 text-slate-600',
 };
 
-const notificationCount = 3;
-
 export function CourierNotificationsCard() {
   const { profile } = useAuth();
   const [notifications, setNotifications] = React.useState<NotificationData[]>([]);
@@ -41,6 +40,8 @@ export function CourierNotificationsCard() {
     })();
   }, [profile?.id]);
 
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 15 }}
@@ -56,8 +57,8 @@ export function CourierNotificationsCard() {
             <h3 className="text-base font-black text-slate-900">Alertas recientes</h3>
           </div>
         </div>
-        {notificationCount > 0 && (
-          <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">{notificationCount}</span>
+        {unreadCount > 0 && (
+          <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">{unreadCount}</span>
         )}
       </div>
 

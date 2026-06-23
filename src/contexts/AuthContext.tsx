@@ -58,7 +58,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (!res.ok) return null;
       const { profile } = await res.json();
       return profile;
-    } catch {
+    } catch (err) {
+      logger.warn('[AuthContext] loadUserProfile error', err);
       return null;
     }
   }, []);
@@ -119,34 +120,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const login = useCallback(async (credentials: LoginCredentials) => {
     setAuthSession(prev => ({ ...prev, isLoading: true, error: null }));
     isLoggingInRef.current = true;
-    const { session, user, error } = await SupabaseAuthService.login(credentials);
-    if (error) {
-      isLoggingInRef.current = false;
-      const messages: Record<string, string> = {
-        'Invalid login credentials': 'Credenciales incorrectas',
-        'Email not confirmed': 'Email no confirmado. Revisa tu bandeja de entrada.',
-        'User is suspended': 'Cuenta suspendida',
-        'User is banned': 'Cuenta suspendida',
-      };
-      const friendly = messages[error.message] || error.message;
-      setAuthSession(prev => ({ ...prev, isLoading: false, error: friendly }));
-      throw new Error(friendly);
-    }
-    if (user && session) {
-      const profile = await loadUserProfile('login');
-      isLoggingInRef.current = false;
-      if (!profile) {
-        setAuthSession(prev => ({ ...prev, isLoading: false, error: 'Perfil no encontrado. Contacta a soporte.' }));
-        throw new Error('Perfil no encontrado');
+    try {
+      const { session, user, error } = await SupabaseAuthService.login(credentials);
+      if (error) {
+        const messages: Record<string, string> = {
+          'Invalid login credentials': 'Credenciales incorrectas',
+          'Email not confirmed': 'Email no confirmado. Revisa tu bandeja de entrada.',
+          'User is suspended': 'Cuenta suspendida',
+          'User is banned': 'Cuenta suspendida',
+        };
+        const friendly = messages[error.message] || error.message;
+        setAuthSession(prev => ({ ...prev, isLoading: false, error: friendly }));
+        throw new Error(friendly);
       }
-      if (profile.status === 'inactive' || profile.status === 'suspended' || profile.status === 'banned') {
-        setAuthSession(prev => ({ ...prev, isLoading: false, error: 'Cuenta suspendida. Contacta a soporte.' }));
-        throw new Error('Cuenta suspendida');
+      if (user && session) {
+        const profile = await loadUserProfile('login');
+        if (!profile) {
+          setAuthSession(prev => ({ ...prev, isLoading: false, error: 'Perfil no encontrado. Contacta a soporte.' }));
+          throw new Error('Perfil no encontrado');
+        }
+        if (profile.status === 'inactive' || profile.status === 'suspended' || profile.status === 'banned') {
+          setAuthSession(prev => ({ ...prev, isLoading: false, error: 'Cuenta suspendida. Contacta a soporte.' }));
+          throw new Error('Cuenta suspendida');
+        }
+        setAuthSession({ user, profile, isAuthenticated: true, isLoading: false, error: null });
+        return profile;
       }
-      setAuthSession({ user, profile, isAuthenticated: true, isLoading: false, error: null });
-      return profile;
+      throw new Error('Error inesperado al iniciar sesión');
+    } finally {
+      isLoggingInRef.current = false;
     }
-    throw new Error('Error inesperado al iniciar sesión');
   }, [loadUserProfile]);
 
   const register = useCallback(async (credentials: RegisterCredentials) => {

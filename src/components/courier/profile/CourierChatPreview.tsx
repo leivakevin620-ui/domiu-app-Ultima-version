@@ -6,6 +6,18 @@ import { MessageCircle, ChevronRight, Send, User, Store } from 'lucide-react';
 
 export function CourierChatPreview() {
   const [message, setMessage] = React.useState('');
+  const [sent, setSent] = React.useState(false);
+
+  const handleSend = () => {
+    if (!message.trim()) return;
+    setSent(true);
+    setMessage('');
+    setTimeout(() => setSent(false), 2000);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSend();
+  };
 
   return (
     <motion.section
@@ -52,12 +64,22 @@ export function CourierChatPreview() {
           type="text"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder="Escribe un mensaje rápido..."
           className="h-10 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-800 outline-none transition focus:border-violet-500 focus:ring-3 focus:ring-violet-500/10"
           aria-label="Escribir mensaje"
         />
-        <button className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600 text-white shadow transition hover:bg-violet-700" aria-label="Enviar mensaje">
-          <Send className="h-4 w-4" />
+        <button
+          onClick={handleSend}
+          disabled={!message.trim()}
+          className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600 text-white shadow transition hover:bg-violet-700 disabled:opacity-40"
+          aria-label="Enviar mensaje"
+        >
+          {sent ? (
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
         </button>
       </div>
 

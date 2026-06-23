@@ -8,6 +8,7 @@ import {
   PermissionCheckResult,
   PUBLIC_ROUTES,
   PROTECTED_ROUTES,
+  ADMIN_ROLES,
 } from '@/types/auth';
 
 export class PermissionManager {
@@ -34,7 +35,7 @@ export class PermissionManager {
       return { isAllowed: true };
     }
 
-    const adminRoles: UserRole[] = ['super_admin', 'admin_general', 'admin_financiero', 'admin_operativo', 'admin_comercial', 'admin_soporte'];
+    const adminRoles: UserRole[] = ADMIN_ROLES;
     const businessRoles: UserRole[] = ['business', 'merchant'];
 
     if (pathname.startsWith('/admin')) {
@@ -88,7 +89,7 @@ export class PermissionManager {
    * Obtener la ruta principal del dashboard del usuario según su rol
    */
   static getDashboardRoute(role: UserRole): string {
-    if (['super_admin', 'admin_general', 'admin_financiero', 'admin_operativo', 'admin_comercial', 'admin_soporte'].includes(role)) {
+    if (ADMIN_ROLES.includes(role)) {
       return '/admin';
     }
     if (['business', 'merchant'].includes(role)) {

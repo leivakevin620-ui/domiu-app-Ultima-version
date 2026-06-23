@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { getServiceClient } from '@/lib/db/supabase';
 import { logger } from '@/lib/logger';
+import { ADMIN_ROLES, type UserRole } from '@/types/auth';
 
 interface ErrorResponse {
   error: string;
@@ -47,8 +48,7 @@ const profileUpdateSchema = z.object({
   email: z.string().email().optional(),
 });
 
-const ADMIN_ROLES = ['super_admin', 'admin_general', 'admin_financiero', 'admin_operativo', 'admin_comercial', 'admin_soporte'];
-const SUPER_ADMIN_EMAIL = 'domiumagdalena@gmail.com';
+const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || 'domiumagdalena@gmail.com';
 
 export async function GET(req: NextRequest) {
   logger.debug('[API Profile] GET');
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser(token);
     const userEmail = user?.email || '';
 
-    if (parsed.data.role && ADMIN_ROLES.includes(parsed.data.role) && userEmail !== SUPER_ADMIN_EMAIL) {
+    if (parsed.data.role && ADMIN_ROLES.includes(parsed.data.role as UserRole) && userEmail !== SUPER_ADMIN_EMAIL) {
       logger.debug('[API Profile] POST forbidden admin role', { role: parsed.data.role });
       return errorResponse('Forbidden', 'No autorizado para crear este tipo de cuenta', 403);
     }
