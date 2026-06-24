@@ -265,56 +265,61 @@ export function ManualOrderForm() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const values = form.getValues();
-
-    if (values.deliveryFee <= 0) {
-      toast.error('Calcula el valor del domicilio antes de crear el pedido');
-      return;
-    }
-
     setCreating(true);
+    try {
+      const values = form.getValues();
 
-    const manualPriceUsed = !!values.manualPrice && values.manualPrice! > 0;
-    const finalFee: number = manualPriceUsed ? values.manualPrice! : values.deliveryFee;
+      if (values.deliveryFee <= 0) {
+        toast.error('Calcula el valor del domicilio antes de crear el pedido');
+        return;
+      }
 
-    const result = await createManualOrderAction({
-      customerName: values.customerName,
-      customerPhone: values.customerPhone,
-      deliveryAddress: values.deliveryAddress,
-      neighborhood: values.neighborhood || undefined,
-      addressNotes: values.addressNotes || undefined,
-      businessId: values.businessId,
-      businessName: selectedBusiness?.name || undefined,
-      businessAddress: selectedBusiness?.address || '',
-      businessNeighborhood: selectedBusiness?.neighborhood || undefined,
-      businessCity: selectedBusiness?.city || undefined,
-      businessLat: selectedBusiness?.latitude ?? undefined,
-      businessLng: selectedBusiness?.longitude ?? undefined,
-      distanceKm: values.distanceKm,
-      durationMinutes: values.durationMinutes,
-      deliveryFee: finalFee,
-      manualPriceUsed,
-      priceCalculationSource: priceResult?.calculationSource as any || 'manual',
-      paymentMethod: values.paymentMethod,
-      assignmentMode: values.assignmentMode as 'manual' | 'public',
-      courierId: values.assignmentMode === 'manual' && values.courierId ? values.courierId : undefined,
-      specialInstructions: values.specialInstructions || undefined,
-      rawWhatsAppText: whatsAppText || undefined,
-    });
+      const manualPriceUsed = !!values.manualPrice && values.manualPrice! > 0;
+      const finalFee: number = manualPriceUsed ? values.manualPrice! : values.deliveryFee;
 
-    setCreating(false);
+      const result = await createManualOrderAction({
+        customerName: values.customerName,
+        customerPhone: values.customerPhone,
+        deliveryAddress: values.deliveryAddress,
+        neighborhood: values.neighborhood || undefined,
+        addressNotes: values.addressNotes || undefined,
+        businessId: values.businessId,
+        businessName: selectedBusiness?.name || undefined,
+        businessAddress: selectedBusiness?.address || '',
+        businessNeighborhood: selectedBusiness?.neighborhood || undefined,
+        businessCity: selectedBusiness?.city || undefined,
+        businessLat: selectedBusiness?.latitude ?? undefined,
+        businessLng: selectedBusiness?.longitude ?? undefined,
+        distanceKm: values.distanceKm,
+        durationMinutes: values.durationMinutes,
+        deliveryFee: finalFee,
+        manualPriceUsed,
+        priceCalculationSource: priceResult?.calculationSource as any || 'manual',
+        paymentMethod: values.paymentMethod,
+        assignmentMode: values.assignmentMode as 'manual' | 'public',
+        courierId: values.assignmentMode === 'manual' && values.courierId ? values.courierId : undefined,
+        specialInstructions: values.specialInstructions || undefined,
+        rawWhatsAppText: whatsAppText || undefined,
+      });
 
-    if (result.error) {
-      toast.error(result.error);
-      return;
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      toast.success(`Pedido ${result.orderNumber} creado exitosamente`);
+      form.reset();
+      setWhatsAppText('');
+      setParsedData(null);
+      setPriceResult(null);
+      setSelectedBusiness(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido al crear pedido';
+      toast.error(msg);
+      console.error('[ManualOrderForm] Error:', err);
+    } finally {
+      setCreating(false);
     }
-
-    toast.success(`Pedido ${result.orderNumber} creado exitosamente`);
-    form.reset();
-    setWhatsAppText('');
-    setParsedData(null);
-    setPriceResult(null);
-    setSelectedBusiness(null);
   };
 
   const getConfidenceColor = (v: number) => {
