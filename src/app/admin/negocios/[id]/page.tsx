@@ -31,7 +31,7 @@ export default function BusinessDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="text-slate-500">Cargando...</div>
+        <div className="text-muted-foreground">Cargando...</div>
       </div>
     );
   }
@@ -40,8 +40,8 @@ export default function BusinessDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <Store className="mb-3 h-12 w-12 text-slate-600" />
-        <p className="text-lg text-slate-400">Negocio no encontrado</p>
-        <button onClick={() => router.push('/admin/negocios')} className="mt-4 text-sm text-emerald-400 hover:underline">Volver</button>
+        <p className="text-lg text-muted-foreground">Negocio no encontrado</p>
+        <button onClick={() => router.push('/admin/negocios')} className="mt-4 text-sm text-success hover:underline">Volver</button>
       </div>
     );
   }
@@ -51,19 +51,19 @@ export default function BusinessDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <button onClick={() => router.push('/admin/negocios')} className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700/50 text-slate-400 hover:text-white transition-colors">
+        <button onClick={() => router.push('/admin/negocios')} className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-900/50">
-          <Store className="h-5 w-5 text-emerald-400" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/20">
+          <Store className="h-5 w-5 text-success" />
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-white">{b.name}</h1>
-            {b.is_verified && <span className="rounded-full bg-emerald-900/40 px-2 py-0.5 text-[10px] font-medium text-emerald-400">Verificado</span>}
-            {!b.is_active && <span className="rounded-full bg-red-900/40 px-2 py-0.5 text-[10px] font-medium text-red-400">Suspendido</span>}
+            <h1 className="text-xl font-bold text-foreground">{b.name}</h1>
+            {b.is_verified && <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium text-success">Verificado</span>}
+            {!b.is_active && <span className="rounded-full bg-destructive/20 px-2 py-0.5 text-[10px] font-medium text-destructive">Suspendido</span>}
           </div>
-          <p className="text-sm text-slate-500">{b.slug} · {b.cuisine_type || 'Sin tipo'}</p>
+          <p className="text-sm text-muted-foreground">{b.slug} · {b.cuisine_type || 'Sin tipo'}</p>
         </div>
         <button
           onClick={async () => {
@@ -75,8 +75,8 @@ export default function BusinessDetailPage() {
           }}
           className={`rounded-lg px-3 py-2 text-xs font-medium border transition-all ${
             b.is_active
-              ? 'border-red-800/50 text-red-400 hover:bg-red-900/30'
-              : 'border-emerald-800/50 text-emerald-400 hover:bg-emerald-900/30'
+              ? 'border-destructive/30 text-destructive hover:bg-destructive/20'
+              : 'border-success/30 text-success hover:bg-success/20'
           }`}
         >
           {b.is_active ? 'Suspender' : 'Reactivar'}
@@ -85,23 +85,23 @@ export default function BusinessDetailPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
-          { label: 'Productos', value: data.products?.length || 0, icon: Package, color: 'text-blue-400' },
-          { label: 'Pedidos totales', value: data.totalOrders, icon: ShoppingCart, color: 'text-emerald-400' },
-          { label: 'Rating', value: `${b.rating} ⭐`, icon: Star, color: 'text-amber-400' },
-          { label: 'Categorías', value: data.categories?.length || 0, icon: FileText, color: 'text-purple-400' },
-          { label: 'Creado', value: new Date(b.created_at).toLocaleDateString('es-CO'), icon: Clock, color: 'text-slate-400' },
+          { label: 'Productos', value: data.products?.length || 0, icon: Package, color: 'text-info' },
+          { label: 'Pedidos totales', value: data.totalOrders, icon: ShoppingCart, color: 'text-success' },
+          { label: 'Rating', value: `${b.rating} ⭐`, icon: Star, color: 'text-warning' },
+          { label: 'Categorías', value: data.categories?.length || 0, icon: FileText, color: 'text-info' },
+          { label: 'Creado', value: new Date(b.created_at).toLocaleDateString('es-CO'), icon: Clock, color: 'text-muted-foreground' },
         ].map(s => (
-          <div key={s.label} className="rounded-lg border border-slate-700/50 bg-slate-800/30 p-3">
+          <div key={s.label} className="rounded-lg border border-border bg-card p-3">
             <div className="flex items-center gap-2">
               <s.icon className={`h-4 w-4 ${s.color}`} />
-              <p className="text-[10px] uppercase tracking-wider text-slate-500">{s.label}</p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{s.label}</p>
             </div>
-            <p className="mt-1 text-lg font-bold text-white">{s.value}</p>
+            <p className="mt-1 text-lg font-bold text-foreground">{s.value}</p>
           </div>
         ))}
       </div>
 
-      <div className="flex border-b border-slate-700/50">
+      <div className="flex border-b border-border">
         {[
           { key: 'info' as const, label: 'Información', icon: FileText },
           { key: 'products' as const, label: 'Productos', icon: Package },
@@ -113,8 +113,8 @@ export default function BusinessDetailPage() {
             onClick={() => setTab(t.key)}
             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all ${
               tab === t.key
-                ? 'border-emerald-500 text-emerald-400'
-                : 'border-transparent text-slate-500 hover:text-slate-300'
+                ? 'border-emerald-500 text-success'
+                : 'border-transparent text-muted-foreground hover:text-foreground/80'
             }`}
           >
             <t.icon className="h-4 w-4" /> {t.label}
@@ -125,7 +125,7 @@ export default function BusinessDetailPage() {
       {tab === 'info' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-slate-400 uppercase">Datos del Negocio</h3>
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase">Datos del Negocio</h3>
             <div className="space-y-2 text-sm">
               {[
                 ['Nombre', b.name],
@@ -141,16 +141,16 @@ export default function BusinessDetailPage() {
                 ['Creado', new Date(b.created_at).toLocaleString('es-CO')],
                 ['Actualizado', b.updated_at ? new Date(b.updated_at).toLocaleString('es-CO') : '—'],
               ].map(([label, value]) => (
-                <div key={label} className="flex justify-between rounded-lg bg-slate-800/30 px-3 py-2">
-                  <span className="text-slate-500">{label}</span>
-                  <span className="text-white font-medium">{String(value)}</span>
+                <div key={label} className="flex justify-between rounded-lg bg-card px-3 py-2">
+                  <span className="text-muted-foreground">{label}</span>
+                  <span className="text-foreground font-medium">{String(value)}</span>
                 </div>
               ))}
             </div>
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-slate-400 uppercase">Propietario</h3>
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase">Propietario</h3>
             {data.owner && (
               <div className="space-y-2 text-sm">
                 {[
@@ -160,24 +160,24 @@ export default function BusinessDetailPage() {
                   ['Rol', data.owner.role],
                   ['Estado', data.owner.status],
                 ].map(([label, value]) => (
-                  <div key={label} className="flex justify-between rounded-lg bg-slate-800/30 px-3 py-2">
-                    <span className="text-slate-500">{label}</span>
-                    <span className="text-white font-medium">{String(value)}</span>
+                  <div key={label} className="flex justify-between rounded-lg bg-card px-3 py-2">
+                    <span className="text-muted-foreground">{label}</span>
+                    <span className="text-foreground font-medium">{String(value)}</span>
                   </div>
                 ))}
               </div>
             )}
 
-            <h3 className="mt-6 text-sm font-semibold text-slate-400 uppercase">Direcciones</h3>
+            <h3 className="mt-6 text-sm font-semibold text-muted-foreground uppercase">Direcciones</h3>
             {data.addresses?.map((a: any) => (
-              <div key={a.id} className="rounded-lg bg-slate-800/30 p-3 text-sm">
+              <div key={a.id} className="rounded-lg bg-card p-3 text-sm">
                 <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-emerald-400" />
-                  <span className="text-white">{a.street_address}</span>
-                  {a.is_primary && <span className="text-[10px] text-emerald-400">PRINCIPAL</span>}
+                  <MapPin className="h-4 w-4 text-success" />
+                  <span className="text-foreground">{a.street_address}</span>
+                  {a.is_primary && <span className="text-[10px] text-success">PRINCIPAL</span>}
                 </div>
-                <p className="mt-1 text-xs text-slate-500">{a.city}, {a.country}</p>
-                {a.latitude && <p className="text-xs text-slate-500">Coord: {a.latitude}, {a.longitude}</p>}
+                <p className="mt-1 text-xs text-muted-foreground">{a.city}, {a.country}</p>
+                {a.latitude && <p className="text-xs text-muted-foreground">Coord: {a.latitude}, {a.longitude}</p>}
               </div>
             ))}
           </div>
@@ -187,28 +187,28 @@ export default function BusinessDetailPage() {
       {tab === 'products' && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-slate-400">{data.products?.length || 0} productos</p>
-            <button onClick={() => router.push(`/admin/negocios/${id}/productos`)} className="rounded-lg bg-emerald-900/50 px-3 py-2 text-xs font-medium text-emerald-400 border border-emerald-800/50 hover:bg-emerald-900/70">
+            <p className="text-sm text-muted-foreground">{data.products?.length || 0} productos</p>
+            <button onClick={() => router.push(`/admin/negocios/${id}/productos`)} className="rounded-lg bg-success/20 px-3 py-2 text-xs font-medium text-success border border-success/30 hover:bg-emerald-900/70">
               Gestionar Productos
             </button>
           </div>
           <div className="grid gap-2">
             {data.products?.map((p: any) => (
-              <div key={p.id} className="flex items-center justify-between rounded-lg border border-slate-700/50 bg-slate-800/30 p-3">
+              <div key={p.id} className="flex items-center justify-between rounded-lg border border-border bg-card p-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-700/50">
-                    <Package className="h-4 w-4 text-slate-400" />
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                    <Package className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{p.name}</p>
-                    <p className="text-xs text-slate-500">{p.category_name} · ${p.price?.toLocaleString('es-CO')}</p>
+                    <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
+                    <p className="text-xs text-muted-foreground">{p.category_name} · ${p.price?.toLocaleString('es-CO')}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                    p.status === 'available' ? 'bg-emerald-900/40 text-emerald-400' :
-                    p.status === 'unavailable' ? 'bg-amber-900/40 text-amber-400' :
-                    'bg-red-900/40 text-red-400'
+                    p.status === 'available' ? 'bg-success/15 text-success' :
+                    p.status === 'unavailable' ? 'bg-warning/20 text-warning' :
+                    'bg-destructive/20 text-destructive'
                   }`}>
                     {p.status === 'available' ? 'Disponible' : p.status === 'unavailable' ? 'No disponible' : 'Descontinuado'}
                   </span>
@@ -216,7 +216,7 @@ export default function BusinessDetailPage() {
               </div>
             ))}
             {(!data.products || data.products.length === 0) && (
-              <p className="text-sm text-slate-500 py-8 text-center">Este negocio no tiene productos aún</p>
+              <p className="text-sm text-muted-foreground py-8 text-center">Este negocio no tiene productos aún</p>
             )}
           </div>
         </div>
@@ -224,30 +224,30 @@ export default function BusinessDetailPage() {
 
       {tab === 'orders' && (
         <div>
-          <p className="text-sm text-slate-400 mb-4">{data.totalOrders} pedidos totales</p>
+          <p className="text-sm text-muted-foreground mb-4">{data.totalOrders} pedidos totales</p>
           <div className="grid gap-2">
             {data.recentOrders?.map((o: any) => (
-              <div key={o.id} className="flex items-center justify-between rounded-lg border border-slate-700/50 bg-slate-800/30 p-3">
+              <div key={o.id} className="flex items-center justify-between rounded-lg border border-border bg-card p-3">
                 <div className="flex items-center gap-3">
-                  <ShoppingCart className="h-4 w-4 text-slate-400" />
+                  <ShoppingCart className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-sm font-medium text-white">{o.order_number}</p>
-                    <p className="text-xs text-slate-500">{new Date(o.created_at).toLocaleString('es-CO')}</p>
+                    <p className="text-sm font-medium text-foreground">{o.order_number}</p>
+                    <p className="text-xs text-muted-foreground">{new Date(o.created_at).toLocaleString('es-CO')}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-white">${o.total_amount?.toLocaleString('es-CO')}</span>
+                  <span className="text-sm font-medium text-foreground">${o.total_amount?.toLocaleString('es-CO')}</span>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                    o.status === 'delivered' ? 'bg-emerald-900/40 text-emerald-400' :
-                    o.status === 'cancelled' ? 'bg-red-900/40 text-red-400' :
-                    o.status === 'pending' ? 'bg-amber-900/40 text-amber-400' :
-                    'bg-blue-900/40 text-blue-400'
+                    o.status === 'delivered' ? 'bg-success/15 text-success' :
+                    o.status === 'cancelled' ? 'bg-destructive/20 text-destructive' :
+                    o.status === 'pending' ? 'bg-warning/20 text-warning' :
+                    'bg-info/20 text-info'
                   }`}>{o.status}</span>
                 </div>
               </div>
             ))}
             {(!data.recentOrders || data.recentOrders.length === 0) && (
-              <p className="text-sm text-slate-500 py-8 text-center">No hay pedidos</p>
+              <p className="text-sm text-muted-foreground py-8 text-center">No hay pedidos</p>
             )}
           </div>
         </div>
@@ -256,12 +256,12 @@ export default function BusinessDetailPage() {
       {tab === 'hours' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {data.hours?.map((h: any) => (
-            <div key={h.day_of_week} className="flex items-center justify-between rounded-lg border border-slate-700/50 bg-slate-800/30 p-3">
-              <span className="text-sm font-medium text-white">{DAYS[h.day_of_week]}</span>
+            <div key={h.day_of_week} className="flex items-center justify-between rounded-lg border border-border bg-card p-3">
+              <span className="text-sm font-medium text-foreground">{DAYS[h.day_of_week]}</span>
               {h.is_closed ? (
-                <span className="text-xs text-red-400">Cerrado</span>
+                <span className="text-xs text-destructive">Cerrado</span>
               ) : (
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-muted-foreground">
                   {h.opens_at?.slice(0, 5)} — {h.closes_at?.slice(0, 5)}
                 </span>
               )}

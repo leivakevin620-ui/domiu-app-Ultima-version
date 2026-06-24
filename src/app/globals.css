@@ -44,6 +44,20 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
+  --color-input-bg: var(--input-bg);
+  --color-domiu-blue: #2563EB;
+  --color-domiu-blue-light: #3B82F6;
+  --color-domiu-dark: #0F172A;
+  --color-domiu-card: #1E293B;
+  --color-domiu-input-bg: #253244;
+  --color-domiu-border: #334155;
+  --color-domiu-text: #FFFFFF;
+  --color-domiu-muted: #94A3B8;
+  --color-domiu-success: #10B981;
+  --color-domiu-warning: #F59E0B;
+  --color-domiu-danger: #EF4444;
+  --color-domiu-light: #F8FAFC;
+
   --radius-sm: calc(var(--radius) * 0.5);
   --radius-md: calc(var(--radius) * 0.75);
   --radius-lg: var(--radius);
@@ -137,6 +151,7 @@
   --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
   --sidebar-border: oklch(0.278 0.033 256.848);
   --sidebar-ring: oklch(0.624 0.214 259.815);
+  --input-bg: oklch(0.2 0.03 264.695);
 }
 
 @layer base {

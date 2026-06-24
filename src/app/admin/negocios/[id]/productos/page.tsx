@@ -122,57 +122,57 @@ export default function BusinessProductsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <button onClick={() => router.push(`/admin/negocios/${id}`)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700/50 text-slate-400 hover:text-white transition-colors">
+        <button onClick={() => router.push(`/admin/negocios/${id}`)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-900/50">
-          <Package className="h-5 w-5 text-emerald-400" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/20">
+          <Package className="h-5 w-5 text-success" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-white">Productos</h1>
-          <p className="text-sm text-slate-400">{businessName}</p>
+          <h1 className="text-xl font-bold text-foreground">Productos</h1>
+          <p className="text-sm text-muted-foreground">{businessName}</p>
         </div>
       </div>
 
       <div className="flex items-center justify-between">
         <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar producto..." className="h-9 w-full rounded-lg border border-slate-700/50 bg-slate-800/50 pl-9 pr-3 text-sm text-white placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar producto..." className="h-9 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring/50 focus:outline-none" />
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setShowCategoryForm(!showCategoryForm)} className="rounded-lg border border-slate-700/50 px-3 py-2 text-xs text-slate-300 hover:text-white transition-colors">
+          <button onClick={() => setShowCategoryForm(!showCategoryForm)} className="rounded-lg border border-border px-3 py-2 text-xs text-foreground/80 hover:text-foreground transition-colors">
             + Categoría
           </button>
-          <button onClick={() => { resetForm(); setShowForm(true); }} className="rounded-lg bg-emerald-900/50 px-3 py-2 text-xs font-medium text-emerald-400 border border-emerald-800/50 hover:bg-emerald-900/70 flex items-center gap-1">
+          <button onClick={() => { resetForm(); setShowForm(true); }} className="rounded-lg bg-success/20 px-3 py-2 text-xs font-medium text-success border border-success/30 hover:bg-success/30 flex items-center gap-1">
             <Plus className="h-3.5 w-3.5" /> Nuevo Producto
           </button>
         </div>
       </div>
 
       {showCategoryForm && (
-        <form onSubmit={handleCreateCategory} className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-slate-400">Nueva Categoría</h3>
+        <form onSubmit={handleCreateCategory} className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-muted-foreground">Nueva Categoría</h3>
           <div className="flex gap-3">
-            <input value={catForm.name} onChange={e => setCatForm(prev => ({ ...prev, name: e.target.value }))} required placeholder="Nombre de la categoría" className="flex-1 h-9 rounded-lg border border-slate-700/50 bg-slate-800/50 px-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none" />
-            <input value={catForm.description} onChange={e => setCatForm(prev => ({ ...prev, description: e.target.value }))} placeholder="Descripción (opcional)" className="flex-1 h-9 rounded-lg border border-slate-700/50 bg-slate-800/50 px-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none" />
-            <button type="submit" className="rounded-lg bg-emerald-900/50 px-3 py-2 text-xs font-medium text-emerald-400 border border-emerald-800/50 hover:bg-emerald-900/70">Crear</button>
-            <button type="button" onClick={() => setShowCategoryForm(false)} className="text-xs text-slate-500 hover:text-white">Cancelar</button>
+            <input value={catForm.name} onChange={e => setCatForm(prev => ({ ...prev, name: e.target.value }))} required placeholder="Nombre de la categoría" className="flex-1 h-9 rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
+            <input value={catForm.description} onChange={e => setCatForm(prev => ({ ...prev, description: e.target.value }))} placeholder="Descripción (opcional)" className="flex-1 h-9 rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
+            <button type="submit" className="rounded-lg bg-success/20 px-3 py-2 text-xs font-medium text-success border border-success/30 hover:bg-success/30">Crear</button>
+            <button type="button" onClick={() => setShowCategoryForm(false)} className="text-xs text-muted-foreground hover:text-foreground">Cancelar</button>
           </div>
         </form>
       )}
 
       {showForm && (
-        <form onSubmit={handleSave} className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-5 space-y-4">
-          <h3 className="text-sm font-semibold text-slate-400">{editingProduct ? 'Editar' : 'Nuevo'} Producto</h3>
+        <form onSubmit={handleSave} className="rounded-xl border border-border bg-card p-5 space-y-4">
+          <h3 className="text-sm font-semibold text-muted-foreground">{editingProduct ? 'Editar' : 'Nuevo'} Producto</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Nombre *</label>
-              <input value={form.name} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} required className="h-9 w-full rounded-lg border border-slate-700/50 bg-slate-800/50 px-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none" />
+              <label className="text-xs text-muted-foreground">Nombre *</label>
+              <input value={form.name} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} required className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Categoría *</label>
-              <select value={form.categoryId} onChange={e => setForm(prev => ({ ...prev, categoryId: e.target.value }))} required className="h-9 w-full rounded-lg border border-slate-700/50 bg-slate-800/50 px-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none">
+              <label className="text-xs text-muted-foreground">Categoría *</label>
+              <select value={form.categoryId} onChange={e => setForm(prev => ({ ...prev, categoryId: e.target.value }))} required className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none">
                 <option value="">Seleccionar...</option>
                 {categories.map((c: any) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
@@ -182,37 +182,37 @@ export default function BusinessProductsPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs text-slate-500">Descripción</label>
-            <textarea value={form.description} onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))} rows={2} className="w-full rounded-lg border border-slate-700/50 bg-slate-800/50 px-3 py-2 text-sm text-white focus:border-emerald-500/50 focus:outline-none" />
+            <label className="text-xs text-muted-foreground">Descripción</label>
+            <textarea value={form.description} onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))} rows={2} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Precio *</label>
-              <input value={form.price} onChange={e => setForm(prev => ({ ...prev, price: e.target.value }))} type="number" step="0.01" required className="h-9 w-full rounded-lg border border-slate-700/50 bg-slate-800/50 px-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none" />
+              <label className="text-xs text-muted-foreground">Precio *</label>
+              <input value={form.price} onChange={e => setForm(prev => ({ ...prev, price: e.target.value }))} type="number" step="0.01" required className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Costo</label>
-              <input value={form.costPrice} onChange={e => setForm(prev => ({ ...prev, costPrice: e.target.value }))} type="number" step="0.01" className="h-9 w-full rounded-lg border border-slate-700/50 bg-slate-800/50 px-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none" />
+              <label className="text-xs text-muted-foreground">Costo</label>
+              <input value={form.costPrice} onChange={e => setForm(prev => ({ ...prev, costPrice: e.target.value }))} type="number" step="0.01" className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Precio desc.</label>
-              <input value={form.discountPrice} onChange={e => setForm(prev => ({ ...prev, discountPrice: e.target.value }))} type="number" step="0.01" className="h-9 w-full rounded-lg border border-slate-700/50 bg-slate-800/50 px-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none" />
+              <label className="text-xs text-muted-foreground">Precio desc.</label>
+              <input value={form.discountPrice} onChange={e => setForm(prev => ({ ...prev, discountPrice: e.target.value }))} type="number" step="0.01" className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Stock</label>
-              <input value={form.quantityAvailable} onChange={e => setForm(prev => ({ ...prev, quantityAvailable: e.target.value }))} type="number" className="h-9 w-full rounded-lg border border-slate-700/50 bg-slate-800/50 px-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none" />
+              <label className="text-xs text-muted-foreground">Stock</label>
+              <input value={form.quantityAvailable} onChange={e => setForm(prev => ({ ...prev, quantityAvailable: e.target.value }))} type="number" className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Tiempo prep. (min)</label>
-              <input value={form.preparationTime} onChange={e => setForm(prev => ({ ...prev, preparationTime: e.target.value }))} type="number" className="h-9 w-full rounded-lg border border-slate-700/50 bg-slate-800/50 px-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none" />
+              <label className="text-xs text-muted-foreground">Tiempo prep. (min)</label>
+              <input value={form.preparationTime} onChange={e => setForm(prev => ({ ...prev, preparationTime: e.target.value }))} type="number" className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Estado</label>
-              <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-700/50 bg-slate-800/50 px-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none">
+              <label className="text-xs text-muted-foreground">Estado</label>
+              <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value }))} className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none">
                 <option value="available">Disponible</option>
                 <option value="unavailable">No disponible</option>
                 <option value="discontinued">Descontinuado</option>
@@ -221,45 +221,45 @@ export default function BusinessProductsPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs text-slate-500">URL de imagen</label>
-            <input value={form.imageUrl} onChange={e => setForm(prev => ({ ...prev, imageUrl: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-700/50 bg-slate-800/50 px-3 text-sm text-white font-mono focus:border-emerald-500/50 focus:outline-none" placeholder="https://..." />
+            <label className="text-xs text-muted-foreground">URL de imagen</label>
+            <input value={form.imageUrl} onChange={e => setForm(prev => ({ ...prev, imageUrl: e.target.value }))} className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground font-mono focus:border-ring/50 focus:outline-none" placeholder="https://..." />
           </div>
 
           <div className="flex items-center gap-2">
             <input type="checkbox" id="isFeatured" checked={form.isFeatured} onChange={e => setForm(prev => ({ ...prev, isFeatured: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-emerald-500" />
-            <label htmlFor="isFeatured" className="text-sm text-slate-300">Producto destacado</label>
+            <label htmlFor="isFeatured" className="text-sm text-foreground/80">Producto destacado</label>
           </div>
 
           <div className="flex gap-2">
-            <button type="submit" disabled={saving} className="rounded-lg bg-emerald-900/50 px-4 py-2 text-sm font-medium text-emerald-400 border border-emerald-800/50 hover:bg-emerald-900/70 disabled:opacity-50">
+            <button type="submit" disabled={saving} className="rounded-lg bg-success/20 px-4 py-2 text-sm font-medium text-success border border-success/30 hover:bg-success/30 disabled:opacity-50">
               {saving ? <Loader2 className="inline h-4 w-4 animate-spin" /> : editingProduct ? 'Guardar Cambios' : 'Crear Producto'}
             </button>
-            <button type="button" onClick={resetForm} className="rounded-lg border border-slate-700/50 px-4 py-2 text-sm text-slate-300 hover:text-white">Cancelar</button>
+            <button type="button" onClick={resetForm} className="rounded-lg border border-border px-4 py-2 text-sm text-foreground/80 hover:text-foreground">Cancelar</button>
           </div>
         </form>
       )}
 
       {loading ? (
-        <div className="text-center py-12 text-slate-500">Cargando productos...</div>
+        <div className="text-center py-12 text-muted-foreground">Cargando productos...</div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
           <Package className="mb-3 h-10 w-10 text-slate-600" />
           <p className="text-sm">No hay productos</p>
         </div>
       ) : (
         <div className="grid gap-2">
           {filtered.map((p: any) => (
-            <div key={p.id} className="flex items-center justify-between rounded-lg border border-slate-700/50 bg-slate-800/30 p-3 group hover:border-slate-600/50 transition-all">
+            <div key={p.id} className="flex items-center justify-between rounded-lg border border-border bg-card p-3 group hover:border-border transition-all">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-700/50 overflow-hidden">
-                  {p.image_url ? <img src={p.image_url} alt="" className="h-full w-full object-cover" /> : <Package className="h-4 w-4 text-slate-400" />}
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted overflow-hidden">
+                  {p.image_url ? <img src={p.image_url} alt="" className="h-full w-full object-cover" /> : <Package className="h-4 w-4 text-muted-foreground" />}
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-white truncate">{p.name}</p>
-                    {p.is_featured && <span className="text-[9px] text-amber-400">★</span>}
+                    <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
+                    {p.is_featured && <span className="text-[9px] text-warning">★</span>}
                   </div>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-muted-foreground">
                     {p.category_name} · ${Number(p.price).toLocaleString('es-CO')}
                     {p.cost_price ? ` · Costo: $${Number(p.cost_price).toLocaleString('es-CO')}` : ''}
                     {p.total_sales > 0 ? ` · ${p.total_sales} vendidos` : ''}
@@ -268,16 +268,16 @@ export default function BusinessProductsPage() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                  p.status === 'available' ? 'bg-emerald-900/40 text-emerald-400' :
-                  p.status === 'unavailable' ? 'bg-amber-900/40 text-amber-400' :
-                  'bg-red-900/40 text-red-400'
+                  p.status === 'available' ? 'bg-success/15 text-success' :
+                  p.status === 'unavailable' ? 'bg-warning/20 text-warning' :
+                  'bg-destructive/20 text-destructive'
                 }`}>
                   {p.status === 'available' ? 'Disponible' : p.status === 'unavailable' ? 'No disponible' : 'Descontinuado'}
                 </span>
-                <button onClick={() => handleEdit(p)} className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-700/50 opacity-0 group-hover:opacity-100 transition-all" title="Editar">
+                <button onClick={() => handleEdit(p)} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover:opacity-100 transition-all" title="Editar">
                   <Edit3 className="h-3.5 w-3.5" />
                 </button>
-                <button onClick={() => handleDelete(p.id)} className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-900/30 opacity-0 group-hover:opacity-100 transition-all" title="Eliminar">
+                <button onClick={() => handleDelete(p.id)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/20 opacity-0 group-hover:opacity-100 transition-all" title="Eliminar">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
