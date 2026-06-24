@@ -128,25 +128,25 @@ export default function EditarNegocioPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">Nombre</label>
-              <input value={form.name} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
+              <input value={form.name} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} className="h-10 w-full rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">Tipo de cocina</label>
-              <input value={form.cuisineType} onChange={e => setForm(prev => ({ ...prev, cuisineType: e.target.value }))} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
+              <input value={form.cuisineType} onChange={e => setForm(prev => ({ ...prev, cuisineType: e.target.value }))} className="h-10 w-full rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
             </div>
           </div>
           <div className="space-y-1.5">
             <label className="text-xs text-muted-foreground">Descripción</label>
-            <textarea value={form.description} onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))} rows={3} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
+            <textarea value={form.description} onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))} rows={3} className="w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">Teléfono</label>
-              <input value={form.phone} onChange={e => setForm(prev => ({ ...prev, phone: e.target.value }))} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
+              <input value={form.phone} onChange={e => setForm(prev => ({ ...prev, phone: e.target.value }))} className="h-10 w-full rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">Email</label>
-              <input value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} type="email" className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
+              <input value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} type="email" className="h-10 w-full rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -159,7 +159,7 @@ export default function EditarNegocioPage() {
               <span className="text-sm text-foreground/80">Activo</span>
             </label>
           </div>
-          <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-success/20 px-4 py-2 text-sm font-medium text-success border border-success/30 hover:bg-success/30 disabled:opacity-50">
+          <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold text-white hover:bg-success/90 border-0 disabled:opacity-50">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Guardar Cambios
           </button>
@@ -177,14 +177,14 @@ export default function EditarNegocioPage() {
               </label>
               {!h.is_closed && (
                 <>
-                  <input type="time" value={h.opens_at} onChange={e => setHours(prev => prev.map(x => x.day_of_week === h.day_of_week ? { ...x, opens_at: e.target.value } : x))} className="h-9 w-28 rounded-lg border border-border bg-card px-3 text-sm text-foreground" />
+                  <input type="time" value={h.opens_at} onChange={e => setHours(prev => prev.map(x => x.day_of_week === h.day_of_week ? { ...x, opens_at: e.target.value } : x))} className="h-9 w-28 rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground" />
                   <span className="text-muted-foreground">—</span>
-                  <input type="time" value={h.closes_at} onChange={e => setHours(prev => prev.map(x => x.day_of_week === h.day_of_week ? { ...x, closes_at: e.target.value } : x))} className="h-9 w-28 rounded-lg border border-border bg-card px-3 text-sm text-foreground" />
+                  <input type="time" value={h.closes_at} onChange={e => setHours(prev => prev.map(x => x.day_of_week === h.day_of_week ? { ...x, closes_at: e.target.value } : x))} className="h-9 w-28 rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground" />
                 </>
               )}
             </div>
           ))}
-          <button onClick={handleSaveHours} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-success/20 px-4 py-2 text-sm font-medium text-success border border-success/30 hover:bg-success/30 disabled:opacity-50">
+          <button onClick={handleSaveHours} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold text-white hover:bg-success/90 border-0 disabled:opacity-50">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Guardar Horarios
           </button>
@@ -218,24 +218,24 @@ function AddressEditor({ address, onSave }: { address: any; onSave: (updates: Re
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="space-y-1">
           <label className="text-[10px] text-muted-foreground">Dirección</label>
-          <input value={street} onChange={e => setStreet(e.target.value)} className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground" />
+          <input value={street} onChange={e => setStreet(e.target.value)} className="h-9 w-full rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground" />
         </div>
         <div className="space-y-1">
           <label className="text-[10px] text-muted-foreground">Ciudad</label>
-          <input value={city} onChange={e => setCity(e.target.value)} className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground" />
+          <input value={city} onChange={e => setCity(e.target.value)} className="h-9 w-full rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground" />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <label className="text-[10px] text-muted-foreground">Latitud</label>
-          <input value={lat} onChange={e => setLat(e.target.value)} type="number" step="any" className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground" />
+          <input value={lat} onChange={e => setLat(e.target.value)} type="number" step="any" className="h-9 w-full rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground" />
         </div>
         <div className="space-y-1">
           <label className="text-[10px] text-muted-foreground">Longitud</label>
-          <input value={lng} onChange={e => setLng(e.target.value)} type="number" step="any" className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground" />
+          <input value={lng} onChange={e => setLng(e.target.value)} type="number" step="any" className="h-9 w-full rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground" />
         </div>
       </div>
-      <button onClick={() => onSave({ street_address: street, city, latitude: lat ? Number(lat) : null, longitude: lng ? Number(lng) : null })} className="rounded-lg bg-success/20 px-3 py-1.5 text-xs font-medium text-success border border-success/30 hover:bg-success/30">
+      <button onClick={() => onSave({ street_address: street, city, latitude: lat ? Number(lat) : null, longitude: lng ? Number(lng) : null })} className="rounded-lg bg-success px-3 py-1.5 text-xs font-semibold text-white hover:bg-success/90 border-0">
         Guardar Dirección
       </button>
     </div>

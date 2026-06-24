@@ -83,7 +83,7 @@ export default function AdminBusinessesPage() {
         </div>
         <button
           onClick={() => router.push('/admin/negocios/crear')}
-          className="inline-flex items-center gap-2 rounded-xl bg-success/20 px-4 py-2.5 text-sm font-medium text-success hover:bg-success/30 border border-success/30 transition-all"
+          className="inline-flex items-center gap-2 rounded-xl bg-success px-4 py-2.5 text-sm font-semibold text-white hover:bg-success/90 border-0 transition-all"
         >
           <Plus className="h-4 w-4" /> Nuevo Negocio
         </button>
@@ -96,13 +96,13 @@ export default function AdminBusinessesPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar por nombre, propietario..."
-            className="h-10 w-full rounded-xl border border-border bg-card pl-10 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring/50 focus:outline-none focus:ring-2 focus:ring-ring/20"
+            className="h-10 w-full rounded-xl border border-border bg-input-bg pl-10 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring/50 focus:outline-none focus:ring-2 focus:ring-ring/20"
           />
         </div>
         <select
           value={filter}
           onChange={e => setFilter(e.target.value)}
-          className="h-10 rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none"
+          className="h-10 rounded-xl border border-border bg-input-bg px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none"
         >
           <option value="all">Todos</option>
           <option value="verified">Verificados</option>
@@ -196,13 +196,13 @@ export default function AdminBusinessesPage() {
                   : `¿Reactivar "${b.name}"?`}
               </p>
               <div className="mt-4 flex gap-2">
-                <button onClick={() => handleToggleActive(b)} className="flex-1 rounded-lg bg-success/20 px-4 py-2 text-sm font-medium text-success hover:bg-success/30 border border-success/30">
+                <button onClick={() => handleToggleActive(b)} className="flex-1 rounded-lg bg-success px-4 py-2 text-sm font-semibold text-white hover:bg-success/90">
                   {b.is_active ? 'Suspender' : 'Reactivar'}
                 </button>
-                <button onClick={() => handleDelete(b.id)} className="flex-1 rounded-lg bg-destructive/20 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/30 border border-destructive/30">
+                <button onClick={() => handleDelete(b.id)} className="flex-1 rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-white hover:bg-destructive/90">
                   Eliminar
                 </button>
-                <button onClick={() => setShowDeleteConfirm(null)} className="flex-1 rounded-lg bg-muted px-4 py-2 text-sm text-foreground/80 hover:bg-muted/80">
+                <button onClick={() => setShowDeleteConfirm(null)} className="flex-1 rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/80">
                   Cancelar
                 </button>
               </div>

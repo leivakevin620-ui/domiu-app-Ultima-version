@@ -73,10 +73,10 @@ export default function BusinessDetailPage() {
             const d = await getBusinessFullDetail(id);
             setData(d);
           }}
-          className={`rounded-lg px-3 py-2 text-xs font-medium border transition-all ${
+          className={`rounded-lg px-3 py-2 text-xs font-semibold border-0 transition-all ${
             b.is_active
-              ? 'border-destructive/30 text-destructive hover:bg-destructive/20'
-              : 'border-success/30 text-success hover:bg-success/20'
+              ? 'bg-destructive text-white hover:bg-destructive/90'
+              : 'bg-success text-white hover:bg-success/90'
           }`}
         >
           {b.is_active ? 'Suspender' : 'Reactivar'}
@@ -188,7 +188,7 @@ export default function BusinessDetailPage() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-muted-foreground">{data.products?.length || 0} productos</p>
-            <button onClick={() => router.push(`/admin/negocios/${id}/productos`)} className="rounded-lg bg-success/20 px-3 py-2 text-xs font-medium text-success border border-success/30 hover:bg-emerald-900/70">
+            <button onClick={() => router.push(`/admin/negocios/${id}/productos`)} className="rounded-lg bg-success px-3 py-2 text-xs font-semibold text-white border-0 hover:bg-success/90">
               Gestionar Productos
             </button>
           </div>

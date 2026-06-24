@@ -137,13 +137,13 @@ export default function BusinessProductsPage() {
       <div className="flex items-center justify-between">
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar producto..." className="h-9 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring/50 focus:outline-none" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar producto..." className="h-9 w-full rounded-lg border border-border bg-input-bg pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring/50 focus:outline-none" />
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setShowCategoryForm(!showCategoryForm)} className="rounded-lg border border-border px-3 py-2 text-xs text-foreground/80 hover:text-foreground transition-colors">
+          <button onClick={() => setShowCategoryForm(!showCategoryForm)} className="rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground/80 hover:text-foreground transition-colors">
             + Categoría
           </button>
-          <button onClick={() => { resetForm(); setShowForm(true); }} className="rounded-lg bg-success/20 px-3 py-2 text-xs font-medium text-success border border-success/30 hover:bg-success/30 flex items-center gap-1">
+          <button onClick={() => { resetForm(); setShowForm(true); }} className="rounded-lg bg-success px-3 py-2 text-xs font-semibold text-white hover:bg-success/90 border-0 flex items-center gap-1">
             <Plus className="h-3.5 w-3.5" /> Nuevo Producto
           </button>
         </div>
@@ -153,9 +153,9 @@ export default function BusinessProductsPage() {
         <form onSubmit={handleCreateCategory} className="rounded-xl border border-border bg-card p-4 space-y-3">
           <h3 className="text-sm font-semibold text-muted-foreground">Nueva Categoría</h3>
           <div className="flex gap-3">
-            <input value={catForm.name} onChange={e => setCatForm(prev => ({ ...prev, name: e.target.value }))} required placeholder="Nombre de la categoría" className="flex-1 h-9 rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
-            <input value={catForm.description} onChange={e => setCatForm(prev => ({ ...prev, description: e.target.value }))} placeholder="Descripción (opcional)" className="flex-1 h-9 rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
-            <button type="submit" className="rounded-lg bg-success/20 px-3 py-2 text-xs font-medium text-success border border-success/30 hover:bg-success/30">Crear</button>
+            <input value={catForm.name} onChange={e => setCatForm(prev => ({ ...prev, name: e.target.value }))} required placeholder="Nombre de la categoría" className="flex-1 h-9 rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
+            <input value={catForm.description} onChange={e => setCatForm(prev => ({ ...prev, description: e.target.value }))} placeholder="Descripción (opcional)" className="flex-1 h-9 rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
+            <button type="submit" className="rounded-lg bg-success px-3 py-2 text-xs font-semibold text-white hover:bg-success/90 border-0">Crear</button>
             <button type="button" onClick={() => setShowCategoryForm(false)} className="text-xs text-muted-foreground hover:text-foreground">Cancelar</button>
           </div>
         </form>
@@ -168,11 +168,11 @@ export default function BusinessProductsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">Nombre *</label>
-              <input value={form.name} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} required className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
+              <input value={form.name} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} required className="h-9 w-full rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">Categoría *</label>
-              <select value={form.categoryId} onChange={e => setForm(prev => ({ ...prev, categoryId: e.target.value }))} required className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none">
+              <select value={form.categoryId} onChange={e => setForm(prev => ({ ...prev, categoryId: e.target.value }))} required className="h-9 w-full rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none">
                 <option value="">Seleccionar...</option>
                 {categories.map((c: any) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
@@ -183,36 +183,36 @@ export default function BusinessProductsPage() {
 
           <div className="space-y-1.5">
             <label className="text-xs text-muted-foreground">Descripción</label>
-            <textarea value={form.description} onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))} rows={2} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
+            <textarea value={form.description} onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))} rows={2} className="w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">Precio *</label>
-              <input value={form.price} onChange={e => setForm(prev => ({ ...prev, price: e.target.value }))} type="number" step="0.01" required className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
+              <input value={form.price} onChange={e => setForm(prev => ({ ...prev, price: e.target.value }))} type="number" step="0.01" required className="h-9 w-full rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">Costo</label>
-              <input value={form.costPrice} onChange={e => setForm(prev => ({ ...prev, costPrice: e.target.value }))} type="number" step="0.01" className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
+              <input value={form.costPrice} onChange={e => setForm(prev => ({ ...prev, costPrice: e.target.value }))} type="number" step="0.01" className="h-9 w-full rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">Precio desc.</label>
-              <input value={form.discountPrice} onChange={e => setForm(prev => ({ ...prev, discountPrice: e.target.value }))} type="number" step="0.01" className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
+              <input value={form.discountPrice} onChange={e => setForm(prev => ({ ...prev, discountPrice: e.target.value }))} type="number" step="0.01" className="h-9 w-full rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">Stock</label>
-              <input value={form.quantityAvailable} onChange={e => setForm(prev => ({ ...prev, quantityAvailable: e.target.value }))} type="number" className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
+              <input value={form.quantityAvailable} onChange={e => setForm(prev => ({ ...prev, quantityAvailable: e.target.value }))} type="number" className="h-9 w-full rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">Tiempo prep. (min)</label>
-              <input value={form.preparationTime} onChange={e => setForm(prev => ({ ...prev, preparationTime: e.target.value }))} type="number" className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
+              <input value={form.preparationTime} onChange={e => setForm(prev => ({ ...prev, preparationTime: e.target.value }))} type="number" className="h-9 w-full rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">Estado</label>
-              <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value }))} className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none">
+              <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value }))} className="h-9 w-full rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground focus:border-ring/50 focus:outline-none">
                 <option value="available">Disponible</option>
                 <option value="unavailable">No disponible</option>
                 <option value="discontinued">Descontinuado</option>
@@ -222,7 +222,7 @@ export default function BusinessProductsPage() {
 
           <div className="space-y-1.5">
             <label className="text-xs text-muted-foreground">URL de imagen</label>
-            <input value={form.imageUrl} onChange={e => setForm(prev => ({ ...prev, imageUrl: e.target.value }))} className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground font-mono focus:border-ring/50 focus:outline-none" placeholder="https://..." />
+            <input value={form.imageUrl} onChange={e => setForm(prev => ({ ...prev, imageUrl: e.target.value }))} className="h-9 w-full rounded-lg border border-border bg-input-bg px-3 text-sm text-foreground font-mono focus:border-ring/50 focus:outline-none" placeholder="https://..." />
           </div>
 
           <div className="flex items-center gap-2">
@@ -231,7 +231,7 @@ export default function BusinessProductsPage() {
           </div>
 
           <div className="flex gap-2">
-            <button type="submit" disabled={saving} className="rounded-lg bg-success/20 px-4 py-2 text-sm font-medium text-success border border-success/30 hover:bg-success/30 disabled:opacity-50">
+            <button type="submit" disabled={saving} className="rounded-lg bg-success px-4 py-2 text-sm font-semibold text-white hover:bg-success/90 border-0 disabled:opacity-50">
               {saving ? <Loader2 className="inline h-4 w-4 animate-spin" /> : editingProduct ? 'Guardar Cambios' : 'Crear Producto'}
             </button>
             <button type="button" onClick={resetForm} className="rounded-lg border border-border px-4 py-2 text-sm text-foreground/80 hover:text-foreground">Cancelar</button>

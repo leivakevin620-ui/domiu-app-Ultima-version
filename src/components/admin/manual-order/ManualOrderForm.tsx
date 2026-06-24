@@ -306,7 +306,7 @@ export function ManualOrderForm() {
           onChange={(e) => setWhatsAppText(e.target.value)}
           placeholder="Pega aquí el texto recibido por WhatsApp del local..."
           rows={4}
-          className="w-full rounded-lg border border-slate-600 bg-slate-700/50 p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          className="w-full rounded-lg border border-slate-600 bg-input-bg p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
         <button
           type="button"
@@ -341,14 +341,14 @@ export function ManualOrderForm() {
 
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-300">
+              <label className="mb-1.5 block text-sm font-semibold text-slate-300">
                 <User className="mr-1.5 inline h-4 w-4" />
                 Cliente
               </label>
               <input
                 {...form.register('customerName')}
                 placeholder="Nombre del cliente"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700/50 p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="w-full rounded-lg border border-slate-600 bg-input-bg p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
               {form.formState.errors.customerName && (
                 <p className="mt-1 text-xs text-red-400">{form.formState.errors.customerName.message}</p>
@@ -356,7 +356,7 @@ export function ManualOrderForm() {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-300">
+              <label className="mb-1.5 block text-sm font-semibold text-slate-300">
                 <Phone className="mr-1.5 inline h-4 w-4" />
                 Teléfono
               </label>
@@ -364,7 +364,7 @@ export function ManualOrderForm() {
                 {...form.register('customerPhone')}
                 placeholder="3016837146"
                 maxLength={10}
-                className="w-full rounded-lg border border-slate-600 bg-slate-700/50 p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="w-full rounded-lg border border-slate-600 bg-input-bg p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
               {form.formState.errors.customerPhone && (
                 <p className="mt-1 text-xs text-red-400">{form.formState.errors.customerPhone.message}</p>
@@ -372,14 +372,14 @@ export function ManualOrderForm() {
             </div>
 
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-slate-300">
+              <label className="mb-1.5 block text-sm font-semibold text-slate-300">
                 <MapPin className="mr-1.5 inline h-4 w-4" />
                 Dirección
               </label>
               <input
                 {...form.register('deliveryAddress')}
                 placeholder="Dirección exacta del cliente"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700/50 p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="w-full rounded-lg border border-slate-600 bg-input-bg p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
               {form.formState.errors.deliveryAddress && (
                 <p className="mt-1 text-xs text-red-400">{form.formState.errors.deliveryAddress.message}</p>
@@ -387,31 +387,31 @@ export function ManualOrderForm() {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-300">Barrio / Zona</label>
+              <label className="mb-1.5 block text-sm font-semibold text-slate-300">Barrio / Zona</label>
               <input
                 {...form.register('neighborhood')}
                 placeholder="Ej: Villa Marbella"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700/50 p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="w-full rounded-lg border border-slate-600 bg-input-bg p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-300">Notas de dirección</label>
+              <label className="mb-1.5 block text-sm font-semibold text-slate-300">Notas de dirección</label>
               <input
                 {...form.register('addressNotes')}
                 placeholder="Referencias, piso, etc."
-                className="w-full rounded-lg border border-slate-600 bg-slate-700/50 p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="w-full rounded-lg border border-slate-600 bg-input-bg p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-300">
+              <label className="mb-1.5 block text-sm font-semibold text-slate-300">
                 <Store className="mr-1.5 inline h-4 w-4" />
                 Local / Negocio
               </label>
               <select
                 {...form.register('businessId')}
-                className="w-full rounded-lg border border-slate-600 bg-slate-700/50 p-3 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="w-full rounded-lg border border-slate-600 bg-input-bg p-3 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               >
                 <option value="">Sin local</option>
                 {businesses.map((b) => (
@@ -426,12 +426,12 @@ export function ManualOrderForm() {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-300">Dirección del local</label>
+              <label className="mb-1.5 block text-sm font-semibold text-slate-300">Dirección del local</label>
               <input
                 value={selectedBusiness?.address || ''}
                 readOnly
                 placeholder="Selecciona un local"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700/30 p-3 text-sm text-slate-300"
+                className="w-full rounded-lg border border-slate-600 bg-input-bg p-3 text-sm text-slate-300"
               />
               {selectedBusiness && !selectedBusiness.hasAddress && (
                 <p className="mt-1 text-xs text-yellow-400">
@@ -460,7 +460,7 @@ export function ManualOrderForm() {
 
           <div className="mt-5 grid gap-5 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-300">
+              <label className="mb-1.5 block text-sm font-semibold text-slate-300">
                 <Navigation className="mr-1.5 inline h-4 w-4" />
                 Kilómetros
               </label>
@@ -469,7 +469,7 @@ export function ManualOrderForm() {
                 step="0.1"
                 {...form.register('distanceKm', { valueAsNumber: true })}
                 placeholder="0.0"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700/50 p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="w-full rounded-lg border border-slate-600 bg-input-bg p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
               {form.formState.errors.distanceKm && (
                 <p className="mt-1 text-xs text-red-400">{form.formState.errors.distanceKm.message}</p>
@@ -477,12 +477,12 @@ export function ManualOrderForm() {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-300">Duración estimada</label>
+              <label className="mb-1.5 block text-sm font-semibold text-slate-300">Duración estimada</label>
               <input
                 type="number"
                 {...form.register('durationMinutes', { valueAsNumber: true })}
                 placeholder="0 min"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700/50 p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="w-full rounded-lg border border-slate-600 bg-input-bg p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
             </div>
           </div>
@@ -530,10 +530,10 @@ export function ManualOrderForm() {
 
           <div className="mt-5 grid gap-5 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-300">Método de pago</label>
+              <label className="mb-1.5 block text-sm font-semibold text-slate-300">Método de pago</label>
               <select
                 {...form.register('paymentMethod')}
-                className="w-full rounded-lg border border-slate-600 bg-slate-700/50 p-3 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="w-full rounded-lg border border-slate-600 bg-input-bg p-3 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               >
                 <option value="">Seleccionar...</option>
                 {PAYMENT_METHODS.map((pm) => (
@@ -546,7 +546,7 @@ export function ManualOrderForm() {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-300">
+              <label className="mb-1.5 block text-sm font-semibold text-slate-300">
                 <DollarSign className="mr-1.5 inline h-4 w-4" />
                 Precio manual (opcional)
               </label>
@@ -554,13 +554,13 @@ export function ManualOrderForm() {
                 type="number"
                 {...form.register('manualPrice', { valueAsNumber: true })}
                 placeholder="Dejar vacío para usar valor automático"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700/50 p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="w-full rounded-lg border border-slate-600 bg-input-bg p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
             </div>
           </div>
 
           <div className="mt-5">
-            <label className="mb-3 block text-sm font-medium text-slate-300">Modo de asignación</label>
+            <label className="mb-3 block text-sm font-semibold text-slate-300">Modo de asignación</label>
             <div className="flex flex-wrap gap-4">
               <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-600 bg-slate-700/50 px-4 py-2.5 text-sm text-slate-300 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-900/30 has-[:checked]:text-emerald-300">
                 <input
@@ -585,10 +585,10 @@ export function ManualOrderForm() {
 
           {watchAssignmentMode === 'manual' && (
             <div className="mt-4">
-              <label className="mb-1.5 block text-sm font-medium text-slate-300">Repartidor</label>
+              <label className="mb-1.5 block text-sm font-semibold text-slate-300">Repartidor</label>
               <select
                 {...form.register('courierId')}
-                className="w-full rounded-lg border border-slate-600 bg-slate-700/50 p-3 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="w-full rounded-lg border border-slate-600 bg-input-bg p-3 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               >
                 <option value="">Sin asignar</option>
                 {couriers.map((c) => (
@@ -601,12 +601,12 @@ export function ManualOrderForm() {
           )}
 
           <div className="mt-5">
-            <label className="mb-1.5 block text-sm font-medium text-slate-300">Notas</label>
+            <label className="mb-1.5 block text-sm font-semibold text-slate-300">Notas</label>
             <textarea
               {...form.register('specialInstructions')}
               rows={2}
               placeholder="Instrucciones especiales para el repartidor..."
-              className="w-full rounded-lg border border-slate-600 bg-slate-700/50 p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="w-full rounded-lg border border-slate-600 bg-input-bg p-3 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
           </div>
         </div>

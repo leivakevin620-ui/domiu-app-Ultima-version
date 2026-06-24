@@ -57,7 +57,7 @@ export default function BusinessPedidosPage() {
 
       <div className="relative max-w-xs">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar pedido..." className="h-9 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring/50 focus:outline-none" />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar pedido..." className="h-9 w-full rounded-lg border border-border bg-input-bg pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring/50 focus:outline-none" />
       </div>
 
       {loading ? (
