@@ -84,7 +84,7 @@ export async function createBusinessAction(input: CreateBusinessInput) {
     if (data.createOwner && data.ownerName && data.ownerEmail && data.ownerPassword) {
       const { data: existingUser } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, role')
         .eq('email', data.ownerEmail)
         .maybeSingle();
 
@@ -99,24 +99,43 @@ export async function createBusinessAction(input: CreateBusinessInput) {
         });
 
         if (createUserError || !newUser?.user) {
-          return { error: 'No se pudo crear el usuario propietario: ' + (createUserError?.message || '') };
-        }
+          const errMsg = createUserError?.message || '';
+          if (errMsg.toLowerCase().includes('already registered') || errMsg.toLowerCase().includes('already exists')) {
+            const { data: users } = await supabase.auth.admin.listUsers();
+            const found = users?.users.find(u => u.email?.toLowerCase() === data.ownerEmail?.toLowerCase());
+            if (found) {
+              ownerId = found.id;
+              const nameParts = data.ownerName.split(' ');
+              await supabase.from('profiles').upsert({
+                id: ownerId,
+                email: data.ownerEmail,
+                role: 'merchant',
+                first_name: nameParts[0] || data.ownerName,
+                last_name: nameParts.slice(1).join(' ') || '',
+                status: 'active',
+              }, { onConflict: 'id' });
+            } else {
+              return { error: 'El correo ya existe pero no se pudo asociar el usuario' };
+            }
+          } else {
+            return { error: 'No se pudo crear el usuario propietario: ' + errMsg };
+          }
+        } else {
+          ownerId = newUser.user.id;
+          const nameParts = data.ownerName.split(' ');
+          const { error: profileError } = await supabase.from('profiles').upsert({
+            id: ownerId,
+            email: data.ownerEmail,
+            role: 'merchant',
+            first_name: nameParts[0] || data.ownerName,
+            last_name: nameParts.slice(1).join(' ') || '',
+            status: 'active',
+          });
 
-        ownerId = newUser.user.id;
-
-        const nameParts = data.ownerName.split(' ');
-        const { error: profileError } = await supabase.from('profiles').upsert({
-          id: ownerId,
-          email: data.ownerEmail,
-          role: 'merchant',
-          first_name: nameParts[0] || data.ownerName,
-          last_name: nameParts.slice(1).join(' ') || '',
-          status: 'active',
-        });
-
-        if (profileError) {
-          await supabase.auth.admin.deleteUser(ownerId);
-          return { error: 'No se pudo crear el perfil del propietario' };
+          if (profileError) {
+            await supabase.auth.admin.deleteUser(ownerId);
+            return { error: 'No se pudo crear el perfil del propietario' };
+          }
         }
       }
     }
