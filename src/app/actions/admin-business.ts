@@ -312,14 +312,21 @@ export async function getBusinessFullDetail(businessId: string) {
 
 export async function getAllBusinessesAdmin(search?: string, filter?: string) {
   const result = await requireAuth();
-  if (result.error) return [];
+  if (result.error) {
+    return [];
+  }
   if (result.session.profile.role !== 'admin') return [];
 
   const supabase = getServiceClient();
+  if (!supabase?.from) return [];
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('businesses')
     .select('id, name, slug, owner_id, cuisine_type, business_type, phone, email, is_verified, is_active, rating, total_ratings, created_at, updated_at');
+
+  if (error) {
+    return [];
+  }
 
   const list = (data || []) as any[];
   const ownerIds = [...new Set(list.map(b => b.owner_id))];
