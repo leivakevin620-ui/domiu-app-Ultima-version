@@ -10,13 +10,14 @@ import type { Permission } from '@/types/admin';
 import {
   LayoutDashboard, Users, Store, Truck, ClipboardList, BarChart3, Settings,
   MessageSquare, DollarSign, Gift, MapPin, LogOut, ChevronLeft, Search,
-  Sparkles, Shield, Activity, Globe, Menu, X, Package,
+  Sparkles, Shield, Activity, Globe, Menu, X, Package, PlusCircle,
 } from 'lucide-react';
 
 const sidebarItems = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Usuarios', href: '/admin/usuarios', icon: Users },
-  { label: 'Negocios', href: '/admin/negocios', icon: Store },
+  { label: 'Locales', href: '/admin/locales', icon: Store },
+  { label: 'Crear Local', href: '/admin/locales/nuevo', icon: PlusCircle },
   { label: 'Repartidores', href: '/admin/repartidores', icon: Truck },
   { label: 'Pedidos', href: '/admin/pedidos', icon: ClipboardList },
   { label: 'Crear Pedido', href: '/admin/pedidos/crear', icon: Package },
@@ -41,7 +42,8 @@ export function AdminSidebar() {
 
   const permissionMap: Record<string, string> = {
     'Usuarios': 'users.read',
-    'Negocios': 'business.read',
+    'Locales': 'business.read',
+    'Crear Local': 'business.create',
     'Repartidores': 'courier.read',
     'Pedidos': 'orders.read',
     'Finanzas': 'wallet.read',
