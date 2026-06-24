@@ -30,34 +30,39 @@ export default function CrearNegocioPage() {
     e.preventDefault();
     setLoading(true);
 
-    const res = await createBusinessAction({
-      name: form.name,
-      slug: form.slug,
-      description: form.description || undefined,
-      cuisineType: form.cuisineType || undefined,
-      businessType: 'restaurant',
-      phone: form.phone || undefined,
-      email: form.email || undefined,
-      ownerId: form.ownerId || undefined,
-      createOwner,
-      ownerName: form.ownerName || undefined,
-      ownerEmail: form.ownerEmail || undefined,
-      ownerPassword: form.ownerPassword || undefined,
-      address: form.address,
-      city: form.city,
-      latitude: form.latitude ? Number(form.latitude) : undefined,
-      longitude: form.longitude ? Number(form.longitude) : undefined,
-      isVerified: form.isVerified,
-    });
+    try {
+      const res = await createBusinessAction({
+        name: form.name,
+        slug: form.slug,
+        description: form.description || undefined,
+        cuisineType: form.cuisineType || undefined,
+        businessType: 'restaurant',
+        phone: form.phone || undefined,
+        email: form.email || undefined,
+        ownerId: form.ownerId || undefined,
+        createOwner,
+        ownerName: form.ownerName || undefined,
+        ownerEmail: form.ownerEmail || undefined,
+        ownerPassword: form.ownerPassword || undefined,
+        address: form.address,
+        city: form.city,
+        latitude: form.latitude ? Number(form.latitude) : undefined,
+        longitude: form.longitude ? Number(form.longitude) : undefined,
+        isVerified: form.isVerified,
+      });
 
-    if (res.error) {
-      toast.error(res.error);
+      if (res.error) {
+        toast.error(res.error);
+        setLoading(false);
+        return;
+      }
+
+      toast.success('Negocio creado exitosamente');
+      router.push('/admin/negocios');
+    } catch (err) {
+      toast.error('Error inesperado: ' + (err instanceof Error ? err.message : 'intenta de nuevo'));
       setLoading(false);
-      return;
     }
-
-    toast.success('Negocio creado exitosamente');
-    router.push('/admin/negocios');
   };
 
   const updateField = (field: string, value: string | boolean) => {
