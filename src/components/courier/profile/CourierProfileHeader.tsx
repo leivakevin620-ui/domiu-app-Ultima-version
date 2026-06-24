@@ -8,10 +8,16 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCourier } from '@/contexts/CourierContext';
 import { getCourierLevel } from '@/services/courier-pro';
 import { getInitials, levelStyles, formatDate } from './shared';
+const STATUS_HEADER_CONFIG: Record<string, { label: string; dot: string; bg: string }> = {
+  available: { label: 'Disponible', dot: 'bg-emerald-400', bg: 'bg-emerald-500/20 text-emerald-300' },
+  busy: { label: 'Ocupado', dot: 'bg-amber-400', bg: 'bg-amber-500/20 text-amber-300' },
+  offline: { label: 'Desconectado', dot: 'bg-slate-400', bg: 'bg-slate-500/20 text-slate-300' },
+  on_break: { label: 'En pausa', dot: 'bg-blue-400', bg: 'bg-blue-500/20 text-blue-300' },
+};
 
 export function CourierProfileHeader() {
   const { profile } = useAuth();
-  const { courier, isAvailable, activeDeliveries } = useCourier();
+  const { courier, activeDeliveries } = useCourier();
 
   const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() || 'Repartidor DomiU';
   const deliveredOrders = courier?.total_deliveries || 0;
@@ -23,10 +29,8 @@ export function CourierProfileHeader() {
   const city = String(profile?.metadata?.city || profile?.metadata?.zone || 'Santa Marta');
   const driverId = profile?.id ? `DU-${profile.id.slice(0, 8).toUpperCase()}` : 'DU-PENDIENTE';
   const notificationCount = activeDeliveries.length;
-
-  const statusConfig = isAvailable
-    ? { label: 'En línea', dot: 'bg-emerald-400', bg: 'bg-emerald-500/20 text-emerald-300' }
-    : { label: 'Desconectado', dot: 'bg-slate-400', bg: 'bg-slate-500/20 text-slate-300' };
+  const courierStatus = (courier?.status || 'offline') as DriverStatus;
+  const statusConfig = STATUS_HEADER_CONFIG[courierStatus] || STATUS_HEADER_CONFIG.offline;
 
   return (
     <motion.section
@@ -90,7 +94,13 @@ export function CourierProfileHeader() {
               <p className="text-[10px] font-bold uppercase tracking-wider text-white/50">Nivel {level.level}</p>
               <p className="text-sm font-bold text-white">{cleanLevelTitle} · {level.bonusMultiplier}x bonificación</p>
             </div>
-            <button aria-label="Editar perfil" className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-3 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/25">
+            <button
+              onClick={() => {
+                document.getElementById('courier-vehicle-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+              aria-label="Editar perfil"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-3 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/25"
+            >
               <PenLine className="h-3.5 w-3.5" />
               Editar
             </button>

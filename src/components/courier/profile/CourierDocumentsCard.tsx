@@ -4,8 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FileCheck2, Clock, XCircle, Save, IdCard, Shield, Gauge, Camera } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { courierProService } from '@/services/courier-pro';
-import { getBrowserClient } from '@/lib/db/supabase';
 import { DOCUMENT_TYPES } from '@/lib/mock/courier-profile';
 
 const iconMap: Record<string, React.ElementType> = {
@@ -29,24 +27,29 @@ export function CourierDocumentsCard() {
   useEffect(() => {
     (async () => {
       if (!profile?.id) return;
-      const supabase = await getBrowserClient();
-      const { data: driver } = await supabase
-        .from('drivers')
-        .select('license_number, license_expiry, is_verified, vehicle_type')
-        .eq('id', profile.id)
-        .single();
-      if (driver) {
-        setLicenseNumber(driver.license_number || '');
-        setLicenseExpiry(driver.license_expiry || '');
-        setDocuments(prev => prev.map(d => {
-          if (d.key === 'license') {
-            const expiry = driver.license_expiry;
-            const expired = expiry && new Date(expiry).getTime() < Date.now();
-            return { ...d, status: expired ? 'expired' as const : (driver.license_number ? 'verified' as const : 'pending' as const) };
-          }
-          if (d.key === 'id') return { ...d, status: (profile?.verified_at ? 'verified' as const : 'pending' as const) };
-          return d;
-        }));
+      try {
+        const { getBrowserClient } = await import('@/lib/db/supabase');
+        const supabase = getBrowserClient();
+        const { data: driver } = await supabase
+          .from('drivers')
+          .select('license_number, license_expiry, is_verified, vehicle_type')
+          .eq('id', profile.id)
+          .single();
+        if (driver) {
+          setLicenseNumber(driver.license_number || '');
+          setLicenseExpiry(driver.license_expiry || '');
+          setDocuments(prev => prev.map(d => {
+            if (d.key === 'license') {
+              const expiry = driver.license_expiry;
+              const expired = expiry && new Date(expiry).getTime() < Date.now();
+              return { ...d, status: expired ? 'expired' as const : (driver.license_number ? 'verified' as const : 'pending' as const) };
+            }
+            if (d.key === 'id') return { ...d, status: (profile?.verified_at ? 'verified' as const : 'pending' as const) };
+            return d;
+          }));
+        }
+      } catch (e) {
+        console.error('Error cargando documentos:', e);
       }
     })();
   }, [profile?.id, profile?.verified_at]);
@@ -54,8 +57,15 @@ export function CourierDocumentsCard() {
   const handleSave = async () => {
     if (!profile?.id) return;
     setSaving(true);
-    await courierProService.updateDocuments(profile.id, { licenseNumber, licenseExpiry });
-    setDocuments(prev => prev.map(d => d.key === 'license' ? { ...d, status: 'verified' as const } : d));
+    try {
+      const { updateDriverProfileAction } = await import('@/app/actions/auth');
+      await updateDriverProfileAction(profile.id, {
+        license_number: licenseNumber,
+      });
+      setDocuments(prev => prev.map(d => d.key === 'license' ? { ...d, status: 'verified' as const } : d));
+    } catch (e) {
+      console.error('Error guardando documentos:', e);
+    }
     setSaving(false);
   };
 

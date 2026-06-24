@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { orderService, type OrderData, type OrderStatus } from '@/services/orders';
 import { assignmentService, type CourierDriver, type AssignmentRequest } from '@/services/assignment';
+import type { DriverStatus } from '@/types/database';
+import { getBrowserClient } from '@/lib/db/supabase';
 
 export interface DeliveryEarning {
   id: string;
@@ -21,8 +23,10 @@ interface CourierContextValue {
   earnings: DeliveryEarning[];
   loading: boolean;
   isAvailable: boolean;
+  courierStatus: DriverStatus | null;
   pendingRequests: AssignmentRequest[];
   toggleAvailability: () => Promise<void>;
+  setCourierStatus: (status: DriverStatus) => Promise<void>;
   acceptDelivery: (orderId: string) => Promise<void>;
   updateDeliveryStatus: (orderId: string, status: OrderStatus) => Promise<void>;
   refresh: () => Promise<void>;
@@ -151,15 +155,32 @@ export function CourierProvider({
       }
     });
 
+    // Supabase realtime subscription — picks up any INSERT/UPDATE/DELETE on orders
+    const supabase = getBrowserClient();
+    const channel = supabase
+      .channel('courier-orders-realtime')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        () => { refresh(); }
+      )
+      .subscribe();
+
     return () => {
       unsub();
       unsubReq();
+      supabase.removeChannel(channel);
     };
-  }, [courierId]);
+  }, [courierId, refresh]);
 
   const toggleAvailability = useCallback(async () => {
     if (!courierId) return;
     const updated = await assignmentService.toggleAvailability(courierId);
+    if (updated) setCourier(updated);
+  }, [courierId]);
+
+  const setCourierStatus = useCallback(async (status: DriverStatus) => {
+    if (!courierId) return;
+    const updated = await assignmentService.setCourierStatus(courierId, status);
     if (updated) setCourier(updated);
   }, [courierId]);
 
@@ -210,8 +231,10 @@ export function CourierProvider({
       earnings,
       loading,
       isAvailable: courier?.is_available ?? false,
+      courierStatus: courier?.status ?? null,
       pendingRequests,
       toggleAvailability,
+      setCourierStatus,
       acceptDelivery,
       updateDeliveryStatus,
       refresh,
@@ -229,6 +252,7 @@ export function CourierProvider({
       loading,
       pendingRequests,
       toggleAvailability,
+      setCourierStatus,
       acceptDelivery,
       updateDeliveryStatus,
       refresh,

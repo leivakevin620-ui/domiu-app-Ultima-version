@@ -6,7 +6,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { BottomNavigation } from '@/components/ui/bottom-navigation';
 import { SkeletonCard } from '@/components/ui/skeleton';
-import { Home, ClipboardList, DollarSign, User, Bike, Navigation } from 'lucide-react';
+import { Home, ClipboardList, DollarSign, User, Bike, Navigation, LogOut } from 'lucide-react';
+import { createBrowserClient } from '@supabase/ssr';
 
 const navItems = [
   { label: 'Inicio', href: '/repartidor', icon: <Home className="h-5 w-5" /> },
@@ -19,6 +20,15 @@ const navItems = [
 export default function RepartidorLayout({ children }: { children: React.ReactNode }) {
   const { isLoading, profile } = useAuth();
   const router = useRouter();
+
+  const handleLogout = async () => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
 
   if (isLoading) return <SkeletonCard />;
   if (!profile) { router.push('/login'); return null; }
@@ -37,6 +47,14 @@ export default function RepartidorLayout({ children }: { children: React.ReactNo
               <p className="text-[10px] text-muted-foreground">Repartidor Pro</p>
             </div>
           </div>
+          <button
+            onClick={handleLogout}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-red-500/10 px-3 py-2 text-xs font-bold text-red-500 transition hover:bg-red-500/20"
+            aria-label="Cerrar sesión"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            Salir
+          </button>
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-4 py-4">{children}</main>

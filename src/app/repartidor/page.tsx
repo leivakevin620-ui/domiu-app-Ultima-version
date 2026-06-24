@@ -3,20 +3,67 @@
 import React, { useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { CourierProvider, useCourier } from '@/contexts/CourierContext';
-import { courierProService, getCourierLevel, getNextLevel, COURIER_LEVELS } from '@/services/courier-pro';
+import { getCourierLevel, getNextLevel, COURIER_LEVELS } from '@/services/courier-pro';
 import { SkeletonStats } from '@/components/ui/skeleton';
-import { Bike, Star, TrendingUp, Zap, MapPin, ChevronRight, Package } from 'lucide-react';
+import { Bike, Star, TrendingUp, Zap, MapPin, ChevronRight, Package, Coffee, XCircle } from 'lucide-react';
 
 const formatCurrency = (n: number) => '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0 });
 
+const STATUS_CYCLE: Record<string, string> = {
+  available: 'busy',
+  busy: 'offline',
+  offline: 'available',
+  on_break: 'available',
+};
+
+const STATUS_CONFIG: Record<string, { label: string; desc: string; color: string; bg: string; icon: React.ReactNode }> = {
+  available: {
+    label: 'Disponible',
+    desc: 'Recibiendo solicitudes de pedidos',
+    color: 'text-success',
+    bg: 'border-success/50 bg-gradient-to-br from-success/10 to-success/5 shadow-lg shadow-success/10',
+    icon: <Bike className="h-8 w-8 text-white" />,
+  },
+  busy: {
+    label: 'Ocupado',
+    desc: 'En un pedido activo',
+    color: 'text-warning',
+    bg: 'border-warning/50 bg-gradient-to-br from-warning/10 to-amber-500/5 shadow-lg shadow-warning/10',
+    icon: <Zap className="h-8 w-8 text-white" />,
+  },
+  offline: {
+    label: 'No disponible',
+    desc: 'Actívate para recibir pedidos',
+    color: 'text-muted-foreground',
+    bg: 'border-muted/50 bg-gradient-to-br from-muted/10 to-muted/5',
+    icon: <XCircle className="h-8 w-8 text-muted-foreground" />,
+  },
+  on_break: {
+    label: 'En pausa',
+    desc: 'Tomando un descanso',
+    color: 'text-info',
+    bg: 'border-info/50 bg-gradient-to-br from-info/10 to-blue-500/5 shadow-lg shadow-info/10',
+    icon: <Coffee className="h-8 w-8 text-white" />,
+  },
+};
+
 function StatusToggle() {
-  const { isAvailable, toggleAvailability, courier } = useCourier();
+  const { courierStatus, refresh } = useCourier();
+  const { profile } = useAuth();
   const [animating, setAnimating] = React.useState(false);
+  const current = courierStatus && STATUS_CONFIG[courierStatus] ? courierStatus : 'offline';
+  const cfg = STATUS_CONFIG[current];
 
   const handleToggle = async () => {
     setAnimating(true);
-    if (courier) await courierProService.updateCourierStatus(courier.id, isAvailable ? 'offline' : 'available');
-    await toggleAvailability();
+    const next = STATUS_CYCLE[current] || 'available';
+    try {
+      const { updateCourierStatusAction } = await import('@/app/actions/auth');
+      await updateCourierStatusAction(profile!.id, next);
+      await refresh();
+    } catch (e) {
+      console.error('Error cambiando estado:', e);
+    }
     setTimeout(() => setAnimating(false), 600);
   };
 
@@ -24,30 +71,26 @@ function StatusToggle() {
     <button
       onClick={handleToggle}
       disabled={animating}
-      className={`relative w-full overflow-hidden rounded-2xl border-2 p-6 text-center transition-all duration-500 ${
-        isAvailable
-          ? 'border-success/50 bg-gradient-to-br from-success/10 to-success/5 shadow-lg shadow-success/10'
-          : 'border-muted/50 bg-gradient-to-br from-muted/10 to-muted/5'
-      } hover:scale-[1.01] active:scale-[0.98]`}
+      className={`relative w-full overflow-hidden rounded-2xl border-2 p-6 text-center transition-all duration-500 ${cfg.bg} hover:scale-[1.01] active:scale-[0.98]`}
     >
-      <div className={`absolute inset-0 rounded-2xl transition-opacity duration-700 ${isAvailable ? 'bg-[radial-gradient(circle_at_50%_0%,hsl(var(--success)/0.15),transparent_70%)]' : ''}`} />
+      <div className={`absolute inset-0 rounded-2xl transition-opacity duration-700 ${current === 'available' ? 'bg-[radial-gradient(circle_at_50%_0%,hsl(var(--success)/0.15),transparent_70%)]' : ''}`} />
       <div className="relative">
         <div className={`mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-full transition-all duration-500 ${
-          isAvailable
+          current === 'available'
             ? 'bg-success shadow-lg shadow-success/30 scale-100'
+            : current === 'busy'
+            ? 'bg-warning shadow-lg shadow-warning/30 scale-100'
             : 'bg-muted scale-90'
         }`}>
           <div className={`absolute inset-0 rounded-full transition-all duration-1000 ${
-            isAvailable ? 'animate-ping bg-success/30' : ''
+            current === 'available' ? 'animate-ping bg-success/30' : ''
           }`} />
-          <Bike className={`h-8 w-8 transition-colors duration-500 ${isAvailable ? 'text-white' : 'text-muted-foreground'}`} />
+          {cfg.icon}
         </div>
-        <h2 className={`text-2xl font-bold transition-colors duration-500 ${isAvailable ? 'text-success' : 'text-muted-foreground'}`}>
-          {isAvailable ? 'Disponible' : 'Desconectado'}
+        <h2 className={`text-2xl font-bold transition-colors duration-500 ${cfg.color}`}>
+          {cfg.label}
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {isAvailable ? 'Recibiendo solicitudes de pedidos' : 'Actívate para recibir pedidos'}
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">{cfg.desc}</p>
       </div>
     </button>
   );

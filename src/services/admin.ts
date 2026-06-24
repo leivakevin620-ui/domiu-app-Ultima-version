@@ -301,9 +301,26 @@ export const adminService = {
     }).eq('id', driverId);
   },
 
+  async setCourierExactStatus(driverId: string, status: string): Promise<void> {
+    const supabase = await getClient();
+    const isActive = status !== 'offline';
+    await supabase.from('drivers').update({ status, is_active: isActive }).eq('id', driverId);
+  },
+
   async verifyCourier(driverId: string): Promise<void> {
     const supabase = await getClient();
     await supabase.from('drivers').update({ is_verified: true }).eq('id', driverId);
+  },
+
+  async getCourierLocationHistory(driverId: string, limit = 100): Promise<{ latitude: number; longitude: number; created_at: string }[]> {
+    const supabase = await getClient();
+    const { data } = await supabase
+      .from('driver_locations')
+      .select('latitude, longitude, created_at')
+      .eq('driver_id', driverId)
+      .order('created_at', { ascending: true })
+      .limit(limit);
+    return (data || []) as any;
   },
 
   async getOrders(search?: string, statusFilter?: string): Promise<AdminOrder[]> {

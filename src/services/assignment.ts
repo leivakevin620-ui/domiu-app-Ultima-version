@@ -1,5 +1,5 @@
 import { getBrowserClient } from '@/lib/db/supabase';
-import type { Driver } from '@/types/database';
+import type { Driver, DriverStatus } from '@/types/database';
 import { orderService, type OrderData } from './orders';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -9,6 +9,7 @@ export interface CourierDriver {
   name: string;
   phone: string;
   vehicle_type: 'motorcycle' | 'bicycle' | 'car';
+  status: DriverStatus;
   is_available: boolean;
   is_active: boolean;
   rating: number;
@@ -54,6 +55,7 @@ function mapDriverToCourier(driver: Driver, firstName?: string | null, lastName?
     name,
     phone: '',
     vehicle_type: VEHICLE_TYPE_MAP[driver.vehicle_type] ?? 'motorcycle',
+    status: driver.status,
     is_available: driver.status === 'available',
     is_active: driver.is_active,
     rating: driver.avg_rating,
@@ -117,6 +119,19 @@ export const assignmentService = {
       .select()
       .single();
 
+    if (!updated) return undefined;
+    return mapDriverToCourier(updated);
+  },
+
+  setCourierStatus: async (courierId: string, status: DriverStatus): Promise<CourierDriver | undefined> => {
+    const supabase = await getClient();
+    const isActive = status !== 'offline';
+    const { data: updated } = await supabase
+      .from('drivers')
+      .update({ status, is_active: isActive })
+      .eq('id', courierId)
+      .select()
+      .single();
     if (!updated) return undefined;
     return mapDriverToCourier(updated);
   },

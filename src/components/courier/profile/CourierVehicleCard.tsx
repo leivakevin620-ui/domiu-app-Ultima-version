@@ -4,8 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Bike, Car, Truck, Save } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { courierProService } from '@/services/courier-pro';
-import { getBrowserClient } from '@/lib/db/supabase';
 import { VEHICLE_TYPES, VEHICLE_BRANDS } from '@/lib/mock/courier-profile';
 
 const vehicleIcons: Record<string, React.ElementType> = {
@@ -31,21 +29,26 @@ export function CourierVehicleCard() {
   useEffect(() => {
     (async () => {
       if (!profile?.id) return;
-      const supabase = await getBrowserClient();
-      const { data: driver } = await supabase
-        .from('drivers')
-        .select('vehicle_type, vehicle_plate, vehicle_model')
-        .eq('id', profile.id)
-        .single();
-      if (driver) {
-        const fullModel = driver.vehicle_model || '';
-        setVehicle({
-          type: driver.vehicle_type || 'motorcycle',
-          plate: driver.vehicle_plate || '',
-          model: fullModel,
-        });
-        const parts = fullModel.split(' ');
-        setBrand(parts[0] || '');
+      try {
+        const { getBrowserClient } = await import('@/lib/db/supabase');
+        const supabase = getBrowserClient();
+        const { data: driver } = await supabase
+          .from('drivers')
+          .select('vehicle_type, vehicle_plate, vehicle_model')
+          .eq('id', profile.id)
+          .single();
+        if (driver) {
+          const fullModel = driver.vehicle_model || '';
+          setVehicle({
+            type: driver.vehicle_type || 'motorcycle',
+            plate: driver.vehicle_plate || '',
+            model: fullModel,
+          });
+          const parts = fullModel.split(' ');
+          setBrand(parts[0] || '');
+        }
+      } catch (e) {
+        console.error('Error cargando datos del vehículo:', e);
       }
     })();
   }, [profile?.id]);
@@ -53,7 +56,16 @@ export function CourierVehicleCard() {
   const handleSave = async () => {
     if (!profile?.id) return;
     setSaving(true);
-    await courierProService.updateVehicle(profile.id, vehicle);
+    try {
+      const { updateDriverProfileAction } = await import('@/app/actions/auth');
+      await updateDriverProfileAction(profile.id, {
+        vehicle_type: vehicle.type as 'bike' | 'motorcycle' | 'car' | 'van',
+        vehicle_plate: vehicle.plate,
+        vehicle_model: vehicle.model,
+      });
+    } catch (e) {
+      console.error('Error guardando vehículo:', e);
+    }
     setSaving(false);
   };
 

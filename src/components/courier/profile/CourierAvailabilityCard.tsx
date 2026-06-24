@@ -2,16 +2,33 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Power, Clock, MapPin } from 'lucide-react';
+import { Power, Clock, MapPin, Zap, Coffee, XCircle } from 'lucide-react';
 import { useCourier } from '@/contexts/CourierContext';
+import { useAuth } from '@/contexts/AuthContext';
+import type { DriverStatus } from '@/types/database';
+
+const STATUS_MAP: Record<DriverStatus, { label: string; dot: string; badge: string; icon: React.ReactNode }> = {
+  available: { label: 'Disponible', dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700', icon: null },
+  busy: { label: 'Ocupado', dot: 'bg-amber-500', badge: 'bg-amber-50 text-amber-700', icon: <Zap className="h-3.5 w-3.5" /> },
+  offline: { label: 'No disponible', dot: 'bg-slate-400', badge: 'bg-slate-50 text-slate-500', icon: <XCircle className="h-3.5 w-3.5" /> },
+  on_break: { label: 'En pausa', dot: 'bg-blue-400', badge: 'bg-blue-50 text-blue-600', icon: <Coffee className="h-3.5 w-3.5" /> },
+};
 
 export function CourierAvailabilityCard() {
-  const { courier, isAvailable, toggleAvailability, loading } = useCourier();
+  const { courier, courierStatus, isAvailable, loading, refresh } = useCourier();
+  const { profile } = useAuth();
   const [toggling, setToggling] = useState(false);
+  const status = courierStatus && STATUS_MAP[courierStatus] ? STATUS_MAP[courierStatus] : STATUS_MAP.offline;
 
   const handleToggle = async () => {
     setToggling(true);
-    await toggleAvailability();
+    try {
+      const { updateCourierStatusAction } = await import('@/app/actions/auth');
+      await updateCourierStatusAction(profile!.id, isAvailable ? 'offline' : 'available');
+      await refresh();
+    } catch (e) {
+      console.error('Error cambiando estado:', e);
+    }
     setToggling(false);
   };
 
@@ -38,7 +55,7 @@ export function CourierAvailabilityCard() {
         <button
           onClick={handleToggle}
           disabled={toggling || loading}
-          aria-label={isAvailable ? 'Desconectarse' : 'Conectarse'}
+          aria-label={`Cambiar a ${isAvailable ? 'ocupado' : 'disponible'}`}
           className={`relative flex h-12 w-12 items-center justify-center rounded-2xl transition-all ${
             isAvailable
               ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
@@ -57,11 +74,12 @@ export function CourierAvailabilityCard() {
 
       <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5">
         <div className="flex items-center gap-2">
-          <div className={`h-2.5 w-2.5 rounded-full ${isAvailable ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-          <span className="text-sm font-bold text-slate-800">{isAvailable ? 'Disponible' : 'No disponible'}</span>
+          <div className={`h-2.5 w-2.5 rounded-full ${status.dot}`} />
+          <span className="text-sm font-bold text-slate-800">{status.label}</span>
         </div>
-        <span className="text-xs font-semibold text-slate-500">
-          {isAvailable ? 'Aceptando pedidos' : 'Sin conexión'}
+        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${status.badge}`}>
+          {status.icon}
+          {isAvailable ? 'Aceptando pedidos' : courierStatus === 'busy' ? 'En entrega' : 'Sin conexión'}
         </span>
       </div>
 

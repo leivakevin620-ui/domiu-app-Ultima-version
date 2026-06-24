@@ -53,6 +53,11 @@ export default function AdminOrders() {
 
   useEffect(() => { (async () => { await reloadOrders(); setLoading(false); })(); }, [search, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    const id = setInterval(() => { reloadOrders(); }, 15000);
+    return () => clearInterval(id);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleStatusChange = async () => {
     if (!newStatus || !selected) return;
     try {

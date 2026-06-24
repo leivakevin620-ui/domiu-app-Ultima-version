@@ -27,6 +27,14 @@ const createDriverSchema = z.object({
   vehicle_plate: z.string().min(1),
 });
 
+const updateDriverSchema = z.object({
+  license_number: z.string().optional(),
+  vehicle_type: z.enum(['bike', 'motorcycle', 'car', 'van']).optional(),
+  vehicle_plate: z.string().optional(),
+  vehicle_model: z.string().optional(),
+  is_verified: z.boolean().optional(),
+});
+
 export async function registerUserAction(data: z.infer<typeof registerSchema>) {
   const parsed = registerSchema.safeParse(data);
   if (!parsed.success) {
@@ -133,4 +141,70 @@ export async function createDriverProfileAction(
   if (error) throw new Error(error.message);
 
   await serverAudit.logAction(session.user.id, session.user.email, session.profile.role, 'create_driver', 'driver', userId);
+}
+
+export async function updateCourierStatusAction(userId: string, status: string) {
+  const result = await requireAuth();
+  if (result.error) throw new Error(result.error.message);
+
+  const { session } = result;
+  const isOwner = session.user.id === userId;
+  const isAdmin = ADMIN_ROLES.includes(session.profile.role as UserRole);
+  if (!isOwner && !isAdmin) {
+    throw new Error('No autorizado para cambiar este estado');
+  }
+
+  const supabase = getServiceClient();
+  const isActive = status !== 'offline';
+  const { error } = await supabase
+    .from('drivers')
+    .update({ status, is_active: isActive })
+    .eq('id', userId);
+
+  if (error) throw new Error(error.message);
+
+  await serverAudit.logAction(session.user.id, session.user.email, session.profile.role, 'update_courier_status', 'driver', userId, { status });
+}
+
+export async function updateDriverProfileAction(userId: string, data: z.infer<typeof updateDriverSchema>) {
+  const parsed = updateDriverSchema.safeParse(data);
+  if (!parsed.success) throw new Error('Datos inválidos');
+
+  const result = await requireAuth();
+  if (result.error) throw new Error(result.error.message);
+
+  const { session } = result;
+  const isOwner = session.user.id === userId;
+  const isAdmin = ADMIN_ROLES.includes(session.profile.role as UserRole);
+  if (!isOwner && !isAdmin) {
+    throw new Error('No autorizado para actualizar este perfil');
+  }
+
+  const supabase = getServiceClient();
+  const { error } = await supabase
+    .from('drivers')
+    .update(parsed.data)
+    .eq('id', userId);
+
+  if (error) throw new Error(error.message);
+
+  await serverAudit.logAction(session.user.id, session.user.email, session.profile.role, 'update_driver_profile', 'driver', userId);
+}
+
+export async function updateProfilePhotoAction(userId: string, avatarUrl: string) {
+  const result = await requireAuth();
+  if (result.error) throw new Error(result.error.message);
+
+  const { session } = result;
+  if (session.user.id !== userId && !ADMIN_ROLES.includes(session.profile.role as UserRole)) {
+    throw new Error('No autorizado');
+  }
+
+  const supabase = getServiceClient();
+  const { error } = await supabase
+    .from('profiles')
+    .update({ avatar_url: avatarUrl })
+    .eq('id', userId);
+
+  if (error) throw new Error(error.message);
 }

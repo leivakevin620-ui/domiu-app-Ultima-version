@@ -42,6 +42,11 @@ export default function NegocioPedidos() {
 
   useEffect(() => { (async () => { await loadOrders(); setLoading(false); })(); }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    const id = setInterval(() => { loadOrders(); }, 10000);
+    return () => clearInterval(id);
+  }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const advanceStatus = async (orderId: string, currentStatus: string) => {
     const next = STATUS_FLOW[currentStatus];
     if (!next) return;

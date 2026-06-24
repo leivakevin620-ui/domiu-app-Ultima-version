@@ -139,11 +139,37 @@ export default function AdminCouriers() {
             <div><span className="text-sm text-muted-foreground">Estado:</span> <Badge variant={selected.status === 'available' ? 'success' : selected.status === 'busy' ? 'warning' : 'outline'}>{selected.status}</Badge></div>
             <div><span className="text-sm text-muted-foreground">Entregas completadas:</span> {selected.total_deliveries}</div>
             <div><span className="text-sm text-muted-foreground">Rating:</span> {selected.rating} ⭐</div>
-            <div className="flex gap-2 pt-2">
-              {!selected.is_verified && <Button variant="outline" onClick={() => handleVerify(selected)}>Verificar</Button>}
-              <Button variant="outline" className={selected.status !== 'offline' ? 'text-destructive' : 'text-success'} onClick={() => handleToggleActive(selected)}>
-                {selected.status !== 'offline' ? 'Suspender' : 'Reactivar'}
-              </Button>
+            <div className="space-y-2 pt-2">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground">Cambiar estado</label>
+                <select
+                  defaultValue=""
+                  onChange={async (e) => {
+                    const val = e.target.value;
+                    if (!val) return;
+                    try {
+                      const { updateCourierStatusAction } = await import('@/app/actions/auth');
+                      await updateCourierStatusAction(selected.id, val);
+                      setAlert({ type: 'success', msg: `Estado cambiado a "${val}"` });
+                      reloadCouriers();
+                    } catch { setAlert({ type: 'error', msg: 'Error al cambiar estado' }); }
+                    e.target.value = '';
+                  }}
+                  className="mt-1 w-full rounded-lg border border-border bg-background p-2 text-sm"
+                >
+                  <option value="">Seleccionar...</option>
+                  <option value="available">Disponible</option>
+                  <option value="busy">Ocupado</option>
+                  <option value="offline">No disponible</option>
+                  <option value="on_break">En pausa</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                {!selected.is_verified && <Button variant="outline" onClick={() => handleVerify(selected)}>Verificar</Button>}
+                <Button variant="outline" className={selected.status !== 'offline' ? 'text-destructive' : 'text-success'} onClick={() => handleToggleActive(selected)}>
+                  {selected.status !== 'offline' ? 'Suspender' : 'Reactivar'}
+                </Button>
+              </div>
             </div>
           </div>
         )}

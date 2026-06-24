@@ -1,18 +1,87 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { MapPin, Navigation, Satellite, WifiOff } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { getBrowserClient } from '@/lib/db/supabase';
+
+const GPS_UPDATE_INTERVAL_MS = 10000;
 
 export function CourierLiveLocationCard() {
-  const [gpsActive, setGpsActive] = useState(true);
+  const { profile } = useAuth();
+  const [gpsActive, setGpsActive] = useState(false);
   const [lastUpdate, setLastUpdate] = useState('—');
+  const [error, setError] = useState<string | null>(null);
+  const watchIdRef = useRef<number | null>(null);
+  const lastPosRef = useRef<{ lat: number; lng: number } | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopGps = useCallback(() => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    if (intervalRef.current !== null) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    lastPosRef.current = null;
+    setGpsActive(false);
+    setError(null);
+  }, []);
+
+  const startGps = useCallback(() => {
+    if (!navigator.geolocation) {
+      setError('Geolocalización no soportada');
+      return;
+    }
+
+    const supabase = getBrowserClient();
+    const driverId = profile?.id;
+    if (!driverId) {
+      setError('Usuario no identificado');
+      return;
+    }
+
+    const writePosition = (lat: number, lng: number) => {
+      supabase.from('driver_locations').upsert(
+        { driver_id: driverId, latitude: lat, longitude: lng, updated_at: new Date().toISOString() },
+        { onConflict: 'driver_id' }
+      ).then(({ error: err }) => {
+        if (err) console.error('Error escribiendo ubicación:', err);
+      });
+    };
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        lastPosRef.current = { lat: latitude, lng: longitude };
+        writePosition(latitude, longitude);
+        setLastUpdate(new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }));
+        setGpsActive(true);
+        setError(null);
+      },
+      (err) => {
+        console.error('Error GPS:', err);
+        setError(err.message === 'User denied Geolocation' ? 'Permiso denegado' : 'Error de GPS');
+        stopGps();
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+    );
+
+    intervalRef.current = setInterval(() => {
+      if (lastPosRef.current) {
+        writePosition(lastPosRef.current.lat, lastPosRef.current.lng);
+      }
+    }, GPS_UPDATE_INTERVAL_MS);
+  }, [profile?.id, stopGps]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setLastUpdate(new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }));
-    }, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+      if (intervalRef.current !== null) clearInterval(intervalRef.current);
+    };
   }, []);
 
   return (
@@ -45,11 +114,11 @@ export function CourierLiveLocationCard() {
         <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-[10px] text-white/70">
           <span className="flex items-center gap-1">
             <MapPin className="h-3 w-3" />
-            Santa Marta, Centro
+            {error ? error : (gpsActive ? 'Transmitiendo ubicación' : 'Santa Marta')}
           </span>
           <span>Última act. {lastUpdate}</span>
         </div>
-        {!gpsActive && (
+        {!gpsActive && !error && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
             <div className="text-center">
               <WifiOff className="mx-auto h-6 w-6 text-white/60" />
@@ -71,7 +140,13 @@ export function CourierLiveLocationCard() {
             Ver mapa
           </a>
           <button
-            onClick={() => setGpsActive(!gpsActive)}
+            onClick={() => {
+              if (gpsActive) {
+                stopGps();
+              } else {
+                startGps();
+              }
+            }}
             className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold transition ${
               gpsActive ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
             }`}

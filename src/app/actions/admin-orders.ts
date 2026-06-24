@@ -123,8 +123,18 @@ export async function createManualOrderAction(input: CreateManualOrderInput) {
       return { error: 'No se pudo crear la dirección de entrega' };
     }
 
-    const orderNumber = `DOM-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-    const status: OrderStatus = data.assignmentMode === 'manual' && data.courierId ? 'assigned' : 'pending';
+    const now = new Date();
+    const yymmdd = now.getFullYear().toString().slice(2) +
+      String(now.getMonth() + 1).padStart(2, '0') +
+      String(now.getDate()).padStart(2, '0');
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    const { count: todayCount } = await supabase
+      .from('orders')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', todayStart);
+    const seqNumber = (todayCount || 0) + 1;
+    const orderNumber = `DOM-${yymmdd}-${String(seqNumber).padStart(3, '0')}`;
+    const status: OrderStatus = data.assignmentMode === 'manual' && data.courierId ? 'assigned' : 'confirmed';
 
     const { data: order, error: orderError } = await supabase
       .from('orders')
@@ -172,6 +182,8 @@ export async function createManualOrderAction(input: CreateManualOrderInput) {
       status,
       notes: status === 'assigned'
         ? 'Pedido manual creado y asignado a repartidor'
+        : status === 'confirmed'
+        ? 'Pedido manual creado por administrador — disponible para repartidores'
         : 'Pedido manual creado por administrador',
     });
 
@@ -306,27 +318,89 @@ export async function getAvailableCouriersForAdmin() {
 
   const { data: drivers } = await supabase
     .from('drivers')
-    .select('id, is_active, status, user_id')
+    .select('id, is_active, status')
     .eq('is_active', true)
 
   if (!drivers) return [];
 
-  const userIds = drivers.map(d => d.user_id).filter(Boolean);
+  const driverIds = drivers.map(d => d.id).filter(Boolean);
 
   const { data: profiles } = await supabase
     .from('profiles')
     .select('id, first_name, last_name, phone')
-    .in('id', userIds);
+    .in('id', driverIds);
 
   const profileMap = new Map((profiles || []).map(p => [p.id, p]));
 
   return drivers.map(d => {
-    const p = profileMap.get(d.user_id) || null;
+    const p = profileMap.get(d.id) || null;
     return {
       id: d.id,
-      name: [p?.first_name, p?.last_name].filter(Boolean).join(' '),
+      name: [p?.first_name, p?.last_name].filter(Boolean).join(' ') || 'Sin nombre',
     phone: p?.phone || '',
     status: d.status || null,
     };
   });
+}
+
+function haversineDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export async function findNearestAvailableCourier(businessLat: number, businessLng: number) {
+  const result = await requireAuth();
+  if (result.error) return null;
+  if (result.session.profile.role !== 'admin') return null;
+
+  const supabase = getServiceClient();
+
+  const { data: availableDrivers } = await supabase
+    .from('drivers')
+    .select('id, status')
+    .eq('status', 'available')
+    .eq('is_active', true)
+    .eq('is_verified', true);
+
+  if (!availableDrivers || availableDrivers.length === 0) return null;
+
+  const driverIds = availableDrivers.map(d => d.id);
+
+  const { data: locations } = await supabase
+    .from('driver_locations')
+    .select('driver_id, latitude, longitude')
+    .in('driver_id', driverIds);
+
+  if (!locations || locations.length === 0) return null;
+
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, first_name, last_name, phone')
+    .in('id', driverIds);
+
+  const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+
+  let nearest: { id: string; name: string; phone: string; distanceKm: number; latitude: number; longitude: number } | null = null;
+
+  for (const loc of locations) {
+    const dist = haversineDistanceKm(businessLat, businessLng, loc.latitude, loc.longitude);
+    if (!nearest || dist < nearest.distanceKm) {
+      const p = profileMap.get(loc.driver_id);
+      nearest = {
+        id: loc.driver_id,
+        name: [p?.first_name, p?.last_name].filter(Boolean).join(' ') || 'Repartidor',
+        phone: p?.phone || '',
+        distanceKm: Math.round(dist * 100) / 100,
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+      };
+    }
+  }
+
+  return nearest;
 }

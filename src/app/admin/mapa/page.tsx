@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { MapsProvider, useMaps } from '@/contexts/MapsContext';
 import dynamic from 'next/dynamic';
 const DynamicMapWrapper = dynamic(() => import('@/components/tracking/maps/DynamicMapWrapper').then(m => ({ default: m.DynamicMapWrapper })), {
@@ -11,7 +11,7 @@ import { getBrowserClient } from '@/lib/db/supabase';
 import { SkeletonMap } from '@/components/ui/skeleton';
 import { PageTitle } from '@/components/ui/page-title';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Globe, Search, Clock } from 'lucide-react';
+import { Globe, Search, Clock, Route } from 'lucide-react';
 
 interface RawOrderData {
   id: string;
@@ -35,6 +35,7 @@ interface MapOrder {
   customer_lng?: number;
   driver_lat?: number;
   driver_lng?: number;
+  driver_id?: string;
   driver_name?: string;
   eta?: number;
 }
@@ -50,10 +51,14 @@ function AdminMapContent() {
   const [search, setSearch] = useState('');
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
+  const polylineRef = useRef<google.maps.Polyline | null>(null);
+  const [routePoints, setRoutePoints] = useState<{ lat: number; lng: number }[]>([]);
+  const [showRoute, setShowRoute] = useState(false);
 
   useEffect(() => {
     const supabase = getBrowserClient();
-    supabase.from('orders')
+
+    const fetchOrders = () => supabase.from('orders')
       .select(`
         id, order_number, status,
         business:businesses(id, name, business_addresses!inner(latitude, longitude)),
@@ -75,11 +80,23 @@ function AdminMapContent() {
           business_lng: o.business?.business_addresses?.[0]?.longitude ?? -74.211,
           driver_lat: o.driver_locations?.[0]?.latitude,
           driver_lng: o.driver_locations?.[0]?.longitude,
+          driver_id: o.driver_locations?.[0]?.driver_id,
           driver_name: o.courier ? `${o.courier.first_name ?? ''} ${o.courier.last_name ?? ''}`.trim() : undefined,
         }));
         setOrders(mapped);
         setLoading(false);
       });
+
+    fetchOrders();
+
+    const channel = supabase.channel('admin-mapa-drivers')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'driver_locations' },
+        () => { fetchOrders(); }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const filtered = useMemo(() => {
@@ -138,6 +155,41 @@ function AdminMapContent() {
 
     mapRef.current.fitBounds(bounds, 60);
   }, [filtered, isReady]);
+
+  // Draw route polyline when routePoints change
+  useEffect(() => {
+    if (!mapRef.current || !isReady || routePoints.length < 2 || !showRoute) {
+      if (polylineRef.current) { polylineRef.current.setMap(null); polylineRef.current = null; }
+      return;
+    }
+    const maps = window.google.maps;
+    if (polylineRef.current) polylineRef.current.setMap(null);
+    polylineRef.current = new maps.Polyline({
+      path: routePoints,
+      geodesic: true,
+      strokeColor: '#6366F1',
+      strokeOpacity: 0.8,
+      strokeWeight: 3,
+      map: mapRef.current,
+    });
+    const bounds = new maps.LatLngBounds();
+    routePoints.forEach(p => bounds.extend(p));
+    mapRef.current.fitBounds(bounds, 60);
+  }, [routePoints, showRoute, isReady]);
+
+  const handleShowRoute = useCallback(async (driverId: string) => {
+    const supabase = getBrowserClient();
+    const { data } = await supabase
+      .from('driver_locations')
+      .select('latitude, longitude')
+      .eq('driver_id', driverId)
+      .order('created_at', { ascending: true })
+      .limit(100);
+    if (data && data.length >= 2) {
+      setRoutePoints(data.map(d => ({ lat: d.latitude, lng: d.longitude })));
+      setShowRoute(true);
+    }
+  }, []);
 
   const statusColors: Record<string, string> = {
     confirmed: 'bg-blue-500', preparing: 'bg-purple-500', ready: 'bg-green-500',
@@ -232,6 +284,14 @@ function AdminMapContent() {
                     <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground capitalize">
                       <Clock className="h-3 w-3" /> {o.status}
                     </div>
+                    {o.driver_id && o.driver_lat && o.driver_lng && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleShowRoute(o.driver_id!); }}
+                        className="mt-2 inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold text-indigo-600 transition hover:bg-indigo-100"
+                      >
+                        <Route className="h-3 w-3" /> Ver ruta
+                      </button>
+                    )}
                   </motion.button>
                 ))}
               </AnimatePresence>
