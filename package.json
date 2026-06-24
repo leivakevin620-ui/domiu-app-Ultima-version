@@ -16,7 +16,8 @@
     "create:super-admin": "node scripts/create-super-admin.cjs",
     "create:test-courier": "node scripts/create-test-courier.cjs",
     "debug:courier-login": "node scripts/debug-courier-login.cjs",
-    "audit:rls": "node scripts/audit-rls-status.cjs"
+    "audit:rls": "node scripts/audit-rls-status.cjs",
+    "cleanup:demo": "node scripts/cleanup-demo-accounts.cjs"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.15.0",
