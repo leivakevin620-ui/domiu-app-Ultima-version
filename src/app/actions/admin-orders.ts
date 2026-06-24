@@ -50,6 +50,7 @@ export async function createManualOrderAction(input: CreateManualOrderInput) {
   const { session } = result;
   const supabase = getServiceClient();
   const data = parsed.data;
+  let orderId: string | null = null;
 
   try {
     const { data: business, error: bizError } = await supabase
@@ -89,7 +90,6 @@ export async function createManualOrderAction(input: CreateManualOrderInput) {
       const { error: profileError } = await supabase.from('profiles').upsert({
         id: customerId,
         email: `${data.customerPhone}@pedido-manual.domiu`,
-        role: 'customer',
         first_name: data.customerName.split(' ')[0] || data.customerName,
         last_name: data.customerName.split(' ').slice(1).join(' ') || '',
         phone: data.customerPhone,
@@ -97,7 +97,7 @@ export async function createManualOrderAction(input: CreateManualOrderInput) {
       });
 
       if (profileError) {
-        await supabase.auth.admin.deleteUser(customerId);
+        await supabase.auth.admin.deleteUser(customerId).catch(() => {});
         return { error: 'No se pudo crear el perfil del cliente' };
       }
     }
@@ -127,13 +127,8 @@ export async function createManualOrderAction(input: CreateManualOrderInput) {
     const yymmdd = now.getFullYear().toString().slice(2) +
       String(now.getMonth() + 1).padStart(2, '0') +
       String(now.getDate()).padStart(2, '0');
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-    const { count: todayCount } = await supabase
-      .from('orders')
-      .select('*', { count: 'exact', head: true })
-      .gte('created_at', todayStart);
-    const seqNumber = (todayCount || 0) + 1;
-    const orderNumber = `DOM-${yymmdd}-${String(seqNumber).padStart(3, '0')}`;
+    const randomSuffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+    const orderNumber = `DOM-${yymmdd}-${randomSuffix}`;
     const status: OrderStatus = data.assignmentMode === 'manual' && data.courierId ? 'assigned' : 'confirmed';
 
     const { data: order, error: orderError } = await supabase
@@ -177,17 +172,17 @@ export async function createManualOrderAction(input: CreateManualOrderInput) {
       return { error: 'Error al crear el pedido: ' + (orderError?.message || '') };
     }
 
+    orderId = order.id;
+
     await supabase.from('order_tracking').insert({
       order_id: order.id,
       status,
       notes: status === 'assigned'
         ? 'Pedido manual creado y asignado a repartidor'
-        : status === 'confirmed'
-        ? 'Pedido manual creado por administrador — disponible para repartidores'
-        : 'Pedido manual creado por administrador',
+        : 'Pedido manual creado por administrador — disponible para repartidores',
     });
 
-    serverAudit.logAction(
+    await serverAudit.logAction(
       session.user.id,
       session.user.email,
       session.profile.role,
@@ -214,10 +209,13 @@ export async function createManualOrderAction(input: CreateManualOrderInput) {
     return { success: true, orderId: order.id, orderNumber };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error desconocido';
-    serverAudit.logError(
-      session.user.id,
-      session.user.email,
-      session.profile.role,
+    const auditUserId = session?.user?.id || 'unknown';
+    const auditEmail = session?.user?.email || 'unknown';
+    const auditRole = session?.profile?.role || 'unknown';
+    await serverAudit.logError(
+      auditUserId,
+      auditEmail,
+      auditRole,
       'manual_order_created',
       'orders',
       msg,
