@@ -35,7 +35,15 @@ async function createServerSupabaseClient() {
       getAll() {
         return cookieStore.getAll();
       },
-      setAll() {},
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          );
+        } catch {
+          // Forward compatibility: in some Next.js versions this throws in read-only contexts
+        }
+      },
     },
   });
 }
@@ -45,11 +53,18 @@ export const getServerSession = cache(async (): Promise<{
 }> => {
   try {
     const supabase = await createServerSupabaseClient();
+
     const { data: { session }, error } = await supabase.auth.getSession();
-    if (error || !session?.user) {
-      return { error: 'No autenticado', status: 401 };
+    if (!error && session?.user) {
+      return { userId: session.user.id, email: session.user.email || '' };
     }
-    return { userId: session.user.id, email: session.user.email || '' };
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (!userError && user) {
+      return { userId: user.id, email: user.email || '' };
+    }
+
+    return { error: 'No autenticado', status: 401 };
   } catch {
     return { error: 'Error de autenticación', status: 500 };
   }

@@ -5,9 +5,26 @@ import { getEnv } from '@/lib/env';
 
 export async function GET() {
   try {
+    const { cookies } = await import('next/headers');
+    const cookieStore = await cookies();
+    const allCookies = cookieStore.getAll().map(c => ({ name: c.name, value: c.value.length > 20 ? c.value.substring(0, 20) + '...' : c.value }));
+    const sbCookies = cookieStore.getAll().filter(c => c.name.startsWith('sb-'));
+
     const result = await requireAuth();
     if (result.error) {
-      return NextResponse.json({ error: 'No autenticado', details: result.error }, { status: 401 });
+      return NextResponse.json({
+        error: 'No autenticado',
+        details: result.error,
+        totalCookies: allCookies.length,
+        sbCookies: sbCookies.map(c => ({ name: c.name, value: c.value.length > 20 ? c.value.substring(0, 20) + '...' : c.value })),
+        allCookieNames: allCookies.map(c => c.name),
+        hints: [
+          'setAll en createServerSupabaseClient ahora escribe cookies correctamente',
+          'Asegúrate de estar logueado como admin en esta misma pestaña',
+          'Si usaste varias pestañas, cierra sesión y vuelve a iniciar',
+          'Si no ves cookies sb-*, el token no se está enviando al servidor',
+        ],
+      }, { status: 401 });
     }
     if (result.session.profile.role !== 'admin') {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
