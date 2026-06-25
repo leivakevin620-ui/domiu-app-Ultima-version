@@ -11,6 +11,7 @@ import {
   Mail, Smartphone, MessageSquare, ShoppingBag, Percent, CreditCard,
   User, Trash2
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 type SettingsTab = 'notifications' | 'security' | 'account';
 
@@ -91,7 +92,7 @@ export default function ConfiguracionPage() {
           {tab === 'security' && (
             <>
               <p className="text-xs text-muted-foreground px-1 mb-3">Gestiona tu contraseña y la seguridad de tu cuenta.</p>
-              <button className="flex w-full items-center justify-between rounded-2xl border border-border/30 bg-card/50 p-4 transition-all hover:border-primary/20">
+              <button onClick={() => toast.info('Función en preparación: cambio de contraseña')} className="flex w-full items-center justify-between rounded-2xl border border-border/30 bg-card/50 p-4 transition-all hover:border-primary/20">
                 <div className="flex items-center gap-3">
                   <Shield className="h-5 w-5 text-muted-foreground" />
                   <div className="text-left">
@@ -135,7 +136,7 @@ export default function ConfiguracionPage() {
                   <p className="text-xs text-red-600 mb-4">Todos tus datos serán eliminados permanentemente.</p>
                   <div className="flex gap-2 justify-center">
                     <button onClick={() => setShowDeleteConfirm(false)} className="rounded-xl bg-card px-5 py-2 text-xs font-semibold text-foreground">Cancelar</button>
-                    <button className="rounded-xl bg-red-500 px-5 py-2 text-xs font-semibold text-white">Eliminar</button>
+                    <button onClick={() => { setShowDeleteConfirm(false); toast.info('Función en preparación: eliminación de cuenta'); }} className="rounded-xl bg-red-500 px-5 py-2 text-xs font-semibold text-white">Eliminar</button>
                   </div>
                 </div>
               )}

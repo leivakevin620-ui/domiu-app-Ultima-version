@@ -15,7 +15,7 @@ const EarningsChart = dynamic(() => import('@/components/charts/earnings-chart')
 
 const formatCurrency = (n: number) => '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0 });
 
-function GananciasContent() {
+function GananciasContent({ courierId }: { courierId?: string }) {
   const { loading, todayEarnings, weekEarnings, monthEarnings, totalEarnings, earnings } = useCourier();
   const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'year'>('month');
   const [history, setHistory] = useState<DailyEarningPoint[]>([]);
@@ -23,15 +23,12 @@ function GananciasContent() {
 
   useEffect(() => {
     (async () => {
-      if (!earnings.length) { setHistLoading(false); return; }
-      const courierId = earnings[0]?.order_id?.replace('earn-', '') || '';
-      if (courierId) {
-        const h = await courierProService.getEarningsHistory(courierId);
-        setHistory(h);
-      }
+      if (!courierId) { setHistLoading(false); return; }
+      const h = await courierProService.getEarningsHistory(courierId);
+      setHistory(h);
       setHistLoading(false);
     })();
-  }, [earnings]);
+  }, [courierId]);
 
   const exportCSV = async () => {
     const csv = await reportService.exportCourierEarningsCSV();
@@ -164,7 +161,7 @@ export default function RepartidorGanancias() {
   const { profile } = useAuth();
   return (
     <CourierProvider courierId={profile?.id}>
-      <GananciasContent />
+      <GananciasContent courierId={profile?.id} />
     </CourierProvider>
   );
 }

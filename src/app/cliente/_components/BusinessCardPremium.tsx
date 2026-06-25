@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { Star, Clock, MapPin, Heart } from 'lucide-react';
 import { BusinessPlaceholder } from '@/components/ui/placeholders';
+import { toast } from 'sonner';
 
 interface BusinessCardPremiumProps {
   name: string;
@@ -63,7 +64,7 @@ export function BusinessCardPremium({
           </div>
         )}
 
-        <button className="absolute right-3 bottom-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition-all hover:bg-white/30 hover:scale-110">
+        <button onClick={(e) => { e.stopPropagation(); toast.info('Función en preparación: favoritos'); }} className="absolute right-3 bottom-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition-all hover:bg-white/30 hover:scale-110">
           <Heart className="h-4 w-4" />
         </button>
 

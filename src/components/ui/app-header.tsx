@@ -65,7 +65,7 @@ export function AppHeader({ title, className }: AppHeaderProps) {
                   </p>
                   <p className="text-xs text-muted-foreground">{user?.email}</p>
                 </div>
-                <button className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                <button onClick={() => { setMenuOpen(false); router.push('/cliente/configuracion'); }} className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
                   <User className="h-4 w-4" />
                   Perfil
                 </button>

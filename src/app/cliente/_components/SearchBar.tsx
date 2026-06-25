@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Search, Mic, SlidersHorizontal, Map as MapIcon } from 'lucide-react';
+import { toast } from 'sonner';
 
 export function SearchBar() {
   const router = useRouter();
@@ -33,14 +34,14 @@ export function SearchBar() {
             placeholder="Buscar productos, restaurantes..."
             className="h-11 w-full bg-transparent pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
-          <button type="button" className="absolute right-3 flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground hover:bg-muted">
+          <button type="button" onClick={() => toast.info('Función en preparación: búsqueda por voz')} className="absolute right-3 flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground hover:bg-muted">
             <Mic className="h-4 w-4" />
           </button>
         </div>
-        <button type="button" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border/50 bg-background/80 text-muted-foreground backdrop-blur-xl transition-all hover:border-primary/30 hover:text-primary hover:shadow-sm">
+        <button type="button" onClick={() => toast.info('Función en preparación: filtros de búsqueda')} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border/50 bg-background/80 text-muted-foreground backdrop-blur-xl transition-all hover:border-primary/30 hover:text-primary hover:shadow-sm">
           <SlidersHorizontal className="h-4 w-4" />
         </button>
-        <button type="button" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border/50 bg-background/80 text-muted-foreground backdrop-blur-xl transition-all hover:border-primary/30 hover:text-primary hover:shadow-sm">
+        <button type="button" onClick={() => toast.info('Función en preparación: mapa de negocios')} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border/50 bg-background/80 text-muted-foreground backdrop-blur-xl transition-all hover:border-primary/30 hover:text-primary hover:shadow-sm">
           <MapIcon className="h-4 w-4" />
         </button>
       </form>

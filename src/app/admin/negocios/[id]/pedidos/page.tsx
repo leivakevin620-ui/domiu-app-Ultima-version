@@ -90,7 +90,7 @@ export default function BusinessPedidosPage() {
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <span className="text-sm font-bold text-foreground">${(o.total_amount || 0).toLocaleString('es-CO')}</span>
-                <button className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all" title="Ver detalle">
+                <button onClick={() => router.push(`/admin/pedidos`)} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all" title="Ver detalle">
                   <Eye className="h-4 w-4" />
                 </button>
               </div>

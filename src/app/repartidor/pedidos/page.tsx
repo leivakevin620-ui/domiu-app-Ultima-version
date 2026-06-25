@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CourierProvider, useCourier } from '@/contexts/CourierContext';
 import { SkeletonList } from '@/components/ui/skeleton';
 import { ClipboardList, Navigation, MapPin, Store, User, Package, DollarSign, MessageSquare, CheckCircle2, Circle, ArrowRight, Phone } from 'lucide-react';
+import { toast } from 'sonner';
 
 const formatCurrency = (n: number) => '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0 });
 
@@ -142,7 +143,7 @@ function PedidosContent() {
                     </div>
                     <p className="text-sm font-semibold text-foreground">{activeOrder.customer_name}</p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">
-                      <Phone className="inline h-3 w-3 mr-1" />{activeOrder.delivery_address}
+                      <Phone className="inline h-3 w-3 mr-1" />{activeOrder.customer_phone || 'Sin teléfono'}
                     </p>
                   </div>
                   <div className="rounded-xl border border-border/50 bg-background/50 p-3 sm:col-span-2 lg:col-span-1">
@@ -174,7 +175,7 @@ function PedidosContent() {
                     <Navigation className="h-4 w-4" />
                     Navegar
                   </a>
-                  <button className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
+                  <button onClick={() => toast.info('Función en preparación: chat con cliente')} className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
                     <MessageSquare className="h-4 w-4" />
                     Chat
                   </button>

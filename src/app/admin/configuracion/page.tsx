@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Save, Settings, Shield, Globe, Bell, Database, Download } from 'lucide-react';
+import { toast } from 'sonner';
 
 const STORAGE_KEY = 'domiu_admin_config';
 
@@ -145,33 +146,39 @@ export default function AdminConfig() {
         <div className="p-5">
           <p className="mb-4 text-sm text-muted-foreground">Exporta los datos de la plataforma en formato CSV.</p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {[
-              { label: 'Base de Datos', filename: 'domiu_database', icon: Database },
-              { label: 'Usuarios', filename: 'domiu_usuarios', icon: Shield },
-              { label: 'Pedidos', filename: 'domiu_pedidos', icon: Settings },
-              { label: 'Negocios', filename: 'domiu_negocios', icon: Settings },
-              { label: 'Repartidores', filename: 'domiu_repartidores', icon: Settings },
-              { label: 'Wallets', filename: 'domiu_wallets', icon: Settings },
-            ].map((item) => {
-              return (
-                <button
-                  key={item.label}
-                  onClick={() => {
-                    const a = document.createElement('a');
-                    a.href = '#';
-                    a.download = `${item.filename}_${new Date().toISOString().slice(0, 10)}.csv`;
-                    a.click();
-                  }}
-                  className="flex flex-col items-center gap-2 rounded-xl border border-border/50 p-4 transition-all hover:border-primary/30 hover:bg-primary/5 hover:shadow-sm"
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/10 to-primary/5">
-                    <Download className="h-5 w-5 text-primary" />
-                  </div>
-                  <span className="text-xs font-medium text-foreground">{item.label}</span>
-                  <span className="text-[10px] text-muted-foreground">CSV</span>
-                </button>
-              );
-            })}
+              {[
+                { label: 'Usuarios', filename: 'domiu_usuarios', icon: Shield },
+                { label: 'Pedidos', filename: 'domiu_pedidos', icon: Settings },
+                { label: 'Negocios', filename: 'domiu_negocios', icon: Settings },
+                { label: 'Repartidores', filename: 'domiu_repartidores', icon: Settings },
+              ].map((item) => {
+                return (
+                  <button
+                    key={item.label}
+                    onClick={async () => {
+                      try {
+                        toast.info(`Exportando ${item.label.toLowerCase()}...`);
+                        const csv = `${item.label},ID,Fecha\nEjemplo,000,${new Date().toISOString().slice(0,10)}\n`;
+                        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${item.filename}_${new Date().toISOString().slice(0, 10)}.csv`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        toast.success(`${item.label} exportado`);
+                      } catch { toast.error('Error al exportar'); }
+                    }}
+                    className="flex flex-col items-center gap-2 rounded-xl border border-border/50 p-4 transition-all hover:border-primary/30 hover:bg-primary/5 hover:shadow-sm"
+                  >
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/10 to-primary/5">
+                      <Download className="h-5 w-5 text-primary" />
+                    </div>
+                    <span className="text-xs font-medium text-foreground">{item.label}</span>
+                    <span className="text-[10px] text-muted-foreground">CSV</span>
+                  </button>
+                );
+              })}
           </div>
           <p className="mt-4 text-[10px] text-muted-foreground">
             Nota: La exportación directa requiere una API Server-Side. Por ahora se genera la descripción del archivo.

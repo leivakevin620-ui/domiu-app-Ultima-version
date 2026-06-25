@@ -12,14 +12,14 @@ const QUICK_LINKS = [
 const LEGAL_LINKS = [
   { label: 'Términos de servicio', href: '/terminos' },
   { label: 'Política de privacidad', href: '/privacidad' },
-  { label: 'Política de cookies', href: '/cookies' },
+  { label: 'Política de cookies', href: '/privacidad' },
   { label: 'Trabaja con nosotros', href: '/register' },
 ];
 
 const SOCIAL_LINKS = [
-  { icon: AtSign, href: '#', label: 'Email' },
-  { icon: Globe, href: '#', label: 'Web' },
-  { icon: ExternalLink, href: '#', label: 'Link' },
+  { icon: AtSign, href: 'mailto:hola@domiu.app', label: 'Email' },
+  { icon: Globe, href: 'https://domiu.app', label: 'Web' },
+  { icon: ExternalLink, href: 'https://instagram.com/domiu.app', label: 'Instagram' },
 ];
 
 export function Footer() {

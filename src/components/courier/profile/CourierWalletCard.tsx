@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCourier } from '@/contexts/CourierContext';
 import { courierProService } from '@/services/courier-pro';
 import { formatCurrency } from './shared';
+import { toast } from 'sonner';
 
 export function CourierWalletCard() {
   const { profile } = useAuth();
@@ -79,7 +80,7 @@ export function CourierWalletCard() {
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <button className="flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white shadow transition hover:bg-blue-700" aria-label="Retirar saldo">
+        <button onClick={() => toast.info('Función en preparación: retiro de saldo')} className="flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white shadow transition hover:bg-blue-700" aria-label="Retirar saldo">
           <Banknote className="h-3.5 w-3.5" />
           Retirar saldo
         </button>

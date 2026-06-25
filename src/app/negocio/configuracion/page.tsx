@@ -6,6 +6,7 @@ import { getBrowserClient } from '@/lib/db/supabase';
 import { SkeletonCard } from '@/components/ui/skeleton';
 import NextImage from 'next/image';
 import { Settings, Store, Clock, CreditCard, Truck, Percent, Image as ImageIcon, Users, Bell, Save } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface BusinessConfig {
   id?: string;
@@ -55,11 +56,20 @@ export default function NegocioConfiguracion() {
   const handleSave = async () => {
     if (!business?.id) return;
     setSaving(true);
-    const supabase = await getBrowserClient();
-    await supabase.from('businesses').update(business as never).eq('id', business.id as string);
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    try {
+      const supabase = await getBrowserClient();
+      const allowed = ['name', 'phone', 'address', 'description', 'tax_id', 'logo_url', 'cover_url'];
+      const clean: Record<string, unknown> = {};
+      for (const k of allowed) if (k in business) clean[k] = business[k];
+      const { error } = await supabase.from('businesses').update(clean).eq('id', business.id);
+      if (error) throw error;
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      toast.error('Error al guardar: ' + (err instanceof Error ? err.message : 'desconocido'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) return <SkeletonCard />;

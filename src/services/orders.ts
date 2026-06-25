@@ -18,6 +18,7 @@ export interface OrderData {
   order_number: string;
   customer_id: string;
   customer_name: string;
+  customer_phone?: string;
   business_id: string;
   business_name: string;
   courier_id: string | null;
@@ -83,7 +84,7 @@ async function buildOrderData(order: Order): Promise<OrderData> {
   const supabase = await getClient();
 
   const [profileResult, bizResult, itemsResult, addrResult, courierResult] = await Promise.all([
-    supabase.from('profiles').select('first_name, last_name').eq('id', order.customer_id).single(),
+    supabase.from('profiles').select('first_name, last_name, phone').eq('id', order.customer_id).single(),
     supabase.from('businesses').select('name').eq('id', order.business_id).single(),
     supabase.from('order_items').select('*').eq('order_id', order.id),
     supabase.from('addresses').select('street_address, city, state_province').eq('id', order.delivery_address_id).single(),
@@ -95,6 +96,7 @@ async function buildOrderData(order: Order): Promise<OrderData> {
   const customerName = profileResult.data
     ? [profileResult.data.first_name, profileResult.data.last_name].filter(Boolean).join(' ')
     : 'Cliente';
+  const customerPhone = profileResult.data?.phone ?? undefined;
   const businessName = bizResult.data?.name ?? 'Negocio';
   const courierName = courierResult?.data
     ? [courierResult.data.first_name, courierResult.data.last_name].filter(Boolean).join(' ')
@@ -116,7 +118,9 @@ async function buildOrderData(order: Order): Promise<OrderData> {
       item_total: i.item_total,
     }));
 
-  return mapOrderToData(order, items, customerName, businessName, courierName, address);
+  const data = mapOrderToData(order, items, customerName, businessName, courierName, address);
+  data.customer_phone = customerPhone;
+  return data;
 }
 
 export const orderService = {

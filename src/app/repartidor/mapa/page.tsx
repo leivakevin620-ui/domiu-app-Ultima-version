@@ -14,6 +14,7 @@ import { SkeletonMap } from '@/components/ui/skeleton';
 import type { OrderData } from '@/services/orders';
 import { useRouter } from 'next/navigation';
 import { Navigation, ArrowLeft, Store, MapPin, Truck, Clock } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface ActiveDelivery {
   orderId: string;
@@ -221,7 +222,11 @@ function CourierMapContent() {
               )}
             </div>
             <div className="mt-3 flex gap-1">
-              <button className="flex-1 rounded-lg bg-primary py-2 text-xs font-semibold text-primary-foreground flex items-center justify-center gap-1.5">
+              <button onClick={() => {
+                const loc = step === 'to_business' ? activeDelivery.businessLoc : activeDelivery.customerLoc;
+                if (loc) window.open(`https://www.google.com/maps/dir//${loc.lat},${loc.lng}`, '_blank');
+                else toast.error('Ubicación no disponible');
+              }} className="flex-1 rounded-lg bg-primary py-2 text-xs font-semibold text-primary-foreground flex items-center justify-center gap-1.5">
                 <Navigation className="h-3.5 w-3.5" /> Iniciar navegación
               </button>
             </div>
