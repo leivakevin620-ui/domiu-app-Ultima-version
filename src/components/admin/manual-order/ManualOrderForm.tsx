@@ -10,8 +10,7 @@ import { createManualOrderAction, getBusinessDetailsForOrder } from '@/app/actio
 import { calculateRouteDistance } from '@/lib/maps/distance';
 import { Loader2, MapPin, Phone, User, Navigation, DollarSign, AlertTriangle, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useRouter } from 'next/navigation';
 
 const formSchema = z.object({
   customerName: z.string().min(3, 'Mínimo 3 caracteres'),
@@ -70,10 +69,12 @@ const PAYMENT_METHODS = [
   { value: 'credit_card', label: 'Tarjeta' },
   { value: 'pse', label: 'PSE' },
   { value: 'wallet', label: 'Wallet' },
-  { value: 'other', label: 'Otro' },
 ];
 
+const CREATE_TIMEOUT_MS = 30000;
+
 export function ManualOrderForm() {
+  const router = useRouter();
   const [whatsAppText, setWhatsAppText] = React.useState('');
   const [parsing, setParsing] = React.useState(false);
   const [businesses, setBusinesses] = React.useState<BusinessOption[]>([]);
@@ -81,6 +82,7 @@ export function ManualOrderForm() {
   const [selectedBusiness, setSelectedBusiness] = React.useState<BusinessDetail | null>(null);
   const [calculating, setCalculating] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
+  const [createTimedOut, setCreateTimedOut] = React.useState(false);
   const [priceResult, setPriceResult] = React.useState<{
     distanceKm: number;
     durationMinutes: number;
@@ -100,6 +102,7 @@ export function ManualOrderForm() {
     warnings: string[];
   } | null>(null);
   const [distanceMode, setDistanceMode] = React.useState<'auto' | 'manual'>('auto');
+  const createTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -145,12 +148,15 @@ export function ManualOrderForm() {
     async function loadDetail() {
       const detail = await getBusinessDetailsForOrder(watchBusinessId);
       setSelectedBusiness(detail);
-      if (detail) {
-        form.setValue('deliveryAddress', form.getValues('deliveryAddress') || '');
-      }
     }
     loadDetail();
   }, [watchBusinessId]);
+
+  React.useEffect(() => {
+    return () => {
+      if (createTimeoutRef.current) clearTimeout(createTimeoutRef.current);
+    };
+  }, []);
 
   const handleParse = () => {
     if (!whatsAppText.trim()) {
@@ -263,21 +269,25 @@ export function ManualOrderForm() {
     }
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreate = async (values: FormValues) => {
+    if (values.deliveryFee <= 0) {
+      toast.error('Calcula el valor del domicilio antes de crear el pedido');
+      return;
+    }
+
     setCreating(true);
+    setCreateTimedOut(false);
+
+    const manualPriceUsed = !!values.manualPrice && values.manualPrice! > 0;
+    const finalFee: number = manualPriceUsed ? values.manualPrice! : values.deliveryFee;
+
+    createTimeoutRef.current = setTimeout(() => {
+      setCreateTimedOut(true);
+      toast.warning('El servidor está tardando más de lo normal. No cierres esta página.');
+    }, CREATE_TIMEOUT_MS - 5000);
+
     try {
-      const values = form.getValues();
-
-      if (values.deliveryFee <= 0) {
-        toast.error('Calcula el valor del domicilio antes de crear el pedido');
-        return;
-      }
-
-      const manualPriceUsed = !!values.manualPrice && values.manualPrice! > 0;
-      const finalFee: number = manualPriceUsed ? values.manualPrice! : values.deliveryFee;
-
-      const result = await createManualOrderAction({
+      const resultPromise = createManualOrderAction({
         customerName: values.customerName,
         customerPhone: values.customerPhone,
         deliveryAddress: values.deliveryAddress,
@@ -294,13 +304,21 @@ export function ManualOrderForm() {
         durationMinutes: values.durationMinutes,
         deliveryFee: finalFee,
         manualPriceUsed,
-        priceCalculationSource: priceResult?.calculationSource as any || 'manual',
+        priceCalculationSource: (priceResult?.calculationSource || 'manual') as 'google_maps' | 'manual' | 'fallback',
         paymentMethod: values.paymentMethod,
         assignmentMode: values.assignmentMode as 'manual' | 'public',
         courierId: values.assignmentMode === 'manual' && values.courierId ? values.courierId : undefined,
         specialInstructions: values.specialInstructions || undefined,
         rawWhatsAppText: whatsAppText || undefined,
       });
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Tiempo de espera agotado (30s)')), CREATE_TIMEOUT_MS)
+      );
+
+      const result = await Promise.race([resultPromise, timeoutPromise]);
+
+      if (createTimeoutRef.current) clearTimeout(createTimeoutRef.current);
 
       if (result.error) {
         toast.error(result.error);
@@ -313,12 +331,16 @@ export function ManualOrderForm() {
       setParsedData(null);
       setPriceResult(null);
       setSelectedBusiness(null);
+      setCreateTimedOut(false);
+      setTimeout(() => router.push('/admin/pedidos'), 1500);
     } catch (err) {
+      if (createTimeoutRef.current) clearTimeout(createTimeoutRef.current);
       const msg = err instanceof Error ? err.message : 'Error desconocido al crear pedido';
       toast.error(msg);
       console.error('[ManualOrderForm] Error:', err);
     } finally {
       setCreating(false);
+      setCreateTimedOut(false);
     }
   };
 
@@ -327,6 +349,19 @@ export function ManualOrderForm() {
     if (v >= 0.5) return 'text-yellow-400';
     return 'text-red-400';
   };
+
+  const formValues = form.watch();
+
+  const checks = [
+    { label: 'Cliente', ok: formValues.customerName?.length >= 3 },
+    { label: 'Teléfono', ok: /^3\d{9}$/.test(formValues.customerPhone || '') },
+    { label: 'Dirección entrega', ok: (formValues.deliveryAddress?.length || 0) >= 5 },
+    { label: 'Local seleccionado', ok: !!selectedBusiness },
+    { label: 'Local con dirección', ok: selectedBusiness?.hasAddress ?? false },
+    { label: 'Distancia calculada', ok: (formValues.distanceKm || 0) > 0 },
+    { label: 'Precio calculado', ok: (formValues.deliveryFee || 0) > 0 },
+    { label: 'Método de pago', ok: !!formValues.paymentMethod },
+  ];
 
   return (
     <div className="space-y-6">
@@ -366,7 +401,7 @@ export function ManualOrderForm() {
         </div>
       )}
 
-      <form onSubmit={handleCreate} className="space-y-6">
+      <form onSubmit={form.handleSubmit(handleCreate)} className="space-y-6">
         <div className="rounded-xl border border-slate-700/50 bg-slate-800/50 p-6">
           <h2 className="mb-6 text-lg font-semibold text-white">Nuevo Pedido</h2>
 
@@ -707,16 +742,7 @@ export function ManualOrderForm() {
         <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
           <h3 className="mb-3 text-sm font-medium text-slate-400">Estado del pedido</h3>
           <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-            {[
-              { label: 'Cliente', ok: !!form.getValues('customerName') && form.getValues('customerName').length >= 3 },
-              { label: 'Teléfono', ok: /^3\d{9}$/.test(form.getValues('customerPhone')) },
-              { label: 'Dirección entrega', ok: form.getValues('deliveryAddress').length >= 5 },
-              { label: 'Local seleccionado', ok: !!selectedBusiness },
-              { label: 'Local con dirección', ok: selectedBusiness?.hasAddress ?? false },
-              { label: 'Distancia calculada', ok: form.getValues('distanceKm') > 0 },
-              { label: 'Precio calculado', ok: form.getValues('deliveryFee') > 0 },
-              { label: 'Método de pago', ok: !!form.getValues('paymentMethod') },
-            ].map((check) => (
+            {checks.map((check) => (
               <div key={check.label} className="flex items-center gap-2">
                 {check.ok ? (
                   <CheckCircle className="h-4 w-4 text-emerald-400" />
@@ -737,7 +763,7 @@ export function ManualOrderForm() {
           {creating ? (
             <span className="inline-flex items-center gap-2">
               <Loader2 className="h-5 w-5 animate-spin" />
-              Creando pedido...
+              {createTimedOut ? 'Esperando respuesta del servidor...' : 'Creando pedido...'}
             </span>
           ) : (
             'Crear Pedido'

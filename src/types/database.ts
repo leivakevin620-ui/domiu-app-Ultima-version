@@ -36,7 +36,9 @@ export type NotificationType =
   | 'driver_assigned'
   | 'courier_nearby'
   | 'system_alert'
-  | 'review_reminder';
+  | 'review_reminder'
+  | 'manual_order_created'
+  | 'order_assigned';
 export type NotificationChannel = 'in_app' | 'email' | 'sms' | 'push';
 
 // ============================================================================
@@ -244,6 +246,7 @@ export interface GeometryPoint {
 export interface Order extends Timestamp, SoftDelete {
   id: string;
   order_number: string;
+  order_code: string | null;
   customer_id: string;
   business_id: string;
   courier_id: string | null;
