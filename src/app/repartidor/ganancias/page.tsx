@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { CourierProvider, useCourier } from '@/contexts/CourierContext';
+import { useCourier } from '@/contexts/CourierContext';
 import { courierProService, type DailyEarningPoint } from '@/services/courier-pro';
 import { reportService } from '@/services/reports';
 import { SkeletonStats } from '@/components/ui/skeleton';
@@ -159,9 +159,5 @@ function GananciasContent({ courierId }: { courierId?: string }) {
 
 export default function RepartidorGanancias() {
   const { profile } = useAuth();
-  return (
-    <CourierProvider courierId={profile?.id}>
-      <GananciasContent courierId={profile?.id} />
-    </CourierProvider>
-  );
+  return <GananciasContent courierId={profile?.id} />;
 }

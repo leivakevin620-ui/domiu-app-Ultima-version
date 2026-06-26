@@ -1,37 +1,57 @@
 'use client';
-
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, Calendar, IdCard, Bike, Star, Bell, Settings, PenLine } from 'lucide-react';
+import { MapPin, Calendar, IdCard, Bike, Star, Bell, Settings, Camera } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCourier } from '@/contexts/CourierContext';
 import { getCourierLevel } from '@/services/courier-pro';
 import { getInitials, levelStyles, formatDate } from './shared';
-const STATUS_HEADER_CONFIG: Record<string, { label: string; dot: string; bg: string }> = {
+import { uploadCourierAvatarAction } from '@/app/actions/courier-profile';
+
+const STATUS_CONFIG: Record<string, { label: string; dot: string; bg: string }> = {
   available: { label: 'Disponible', dot: 'bg-emerald-400', bg: 'bg-emerald-500/20 text-emerald-300' },
   busy: { label: 'Ocupado', dot: 'bg-amber-400', bg: 'bg-amber-500/20 text-amber-300' },
   offline: { label: 'Desconectado', dot: 'bg-slate-400', bg: 'bg-slate-500/20 text-slate-300' },
   on_break: { label: 'En pausa', dot: 'bg-blue-400', bg: 'bg-blue-500/20 text-blue-300' },
 };
 
-export function CourierProfileHeader() {
+export function PremiumHeroCard() {
   const { profile } = useAuth();
   const { courier, activeDeliveries } = useCourier();
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() || 'Repartidor DomiU';
   const deliveredOrders = courier?.total_deliveries || 0;
   const avgRating = courier?.rating || 0;
   const level = getCourierLevel(deliveredOrders);
-  const cleanLevelTitle = level.title;
-  const levelStyle = levelStyles[cleanLevelTitle] || levelStyles.Novato;
+  const levelStyle = levelStyles[level.title] || levelStyles.Novato;
   const LevelIcon = levelStyle.icon;
   const city = String(profile?.metadata?.city || profile?.metadata?.zone || 'Santa Marta');
   const driverId = profile?.id ? `DU-${profile.id.slice(0, 8).toUpperCase()}` : 'DU-PENDIENTE';
   const notificationCount = activeDeliveries.length;
   const courierStatus = courier?.status || 'offline';
-  const statusConfig = STATUS_HEADER_CONFIG[courierStatus] || STATUS_HEADER_CONFIG.offline;
+  const statusConfig = STATUS_CONFIG[courierStatus] || STATUS_CONFIG.offline;
+
+  const handleAvatarClick = () => fileInputRef.current?.click();
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { alert('Solo se permiten imágenes'); return; }
+    if (file.size > 2 * 1024 * 1024) { alert('La imagen debe ser menor a 2MB'); return; }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('avatar', file);
+      const res = await uploadCourierAvatarAction(formData);
+      if (res.error) { alert(res.error); return; }
+    } catch { alert('Error al subir imagen'); }
+    setUploading(false);
+  };
 
   return (
     <motion.section
@@ -45,7 +65,11 @@ export function CourierProfileHeader() {
 
         <div className="relative flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className={`flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${levelStyle.ring} p-[3px] shadow-2xl`}>
+            <button
+              onClick={handleAvatarClick}
+              disabled={uploading}
+              className={`relative flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${levelStyle.ring} p-[3px] shadow-2xl transition hover:scale-105`}
+            >
               <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-slate-900 text-2xl font-black text-white">
                 {profile?.avatar_url ? (
                   <Image src={profile.avatar_url} alt={fullName} width={80} height={80} className="h-full w-full object-cover" />
@@ -53,7 +77,16 @@ export function CourierProfileHeader() {
                   getInitials(profile?.first_name, profile?.last_name, profile?.email)
                 )}
               </div>
-            </div>
+              <div className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-blue-500 text-white shadow-lg backdrop-blur">
+                {uploading ? (
+                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                ) : (
+                  <Camera className="h-3.5 w-3.5" />
+                )}
+              </div>
+            </button>
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+
             <div className="min-w-0">
               <h1 className="text-xl font-black text-white leading-tight sm:text-2xl">{fullName}</h1>
               <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -63,7 +96,7 @@ export function CourierProfileHeader() {
                 </span>
                 <span className={`inline-flex items-center gap-1 rounded-full bg-gradient-to-r ${levelStyle.badge} px-2.5 py-1 text-xs font-black text-white`}>
                   <LevelIcon className="h-3.5 w-3.5" />
-                  {cleanLevelTitle}
+                  {level.title}
                 </span>
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-white/80">
                   <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
@@ -78,10 +111,13 @@ export function CourierProfileHeader() {
               </div>
             </div>
           </div>
+
           <div className="flex items-center gap-2">
             <Link href="/repartidor/notificaciones" aria-label="Notificaciones" className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white backdrop-blur transition hover:bg-white/20">
               <Bell className="h-4 w-4" />
-              {notificationCount > 0 && <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">{notificationCount}</span>}
+              {notificationCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">{notificationCount}</span>
+              )}
             </Link>
             <Link href="/repartidor/configuracion" aria-label="Configuración" className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white backdrop-blur transition hover:bg-white/20">
               <Settings className="h-4 w-4" />
@@ -93,18 +129,8 @@ export function CourierProfileHeader() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-white/50">Nivel {level.level}</p>
-              <p className="text-sm font-bold text-white">{cleanLevelTitle} · {level.bonusMultiplier}x bonificación</p>
+              <p className="text-sm font-bold text-white">{level.title} · {level.bonusMultiplier}x bonificación</p>
             </div>
-            <button
-              onClick={() => {
-                document.getElementById('courier-vehicle-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}
-              aria-label="Editar perfil"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-3 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/25"
-            >
-              <PenLine className="h-3.5 w-3.5" />
-              Editar
-            </button>
           </div>
           <div className="mt-2">
             <div className="flex items-center justify-between text-xs text-white/60">

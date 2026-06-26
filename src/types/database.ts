@@ -308,6 +308,7 @@ export interface Driver extends Timestamp, SoftDelete {
   vehicle_plate: string | null;
   vehicle_model: string | null;
   status: DriverStatus;
+  is_available: boolean;
   is_verified: boolean;
   total_deliveries: number;
   completed_deliveries: number;
@@ -351,6 +352,22 @@ export interface DriverEarnings extends Timestamp {
   total_earned: number;
   status: 'pending' | 'completed' | 'paid';
   paid_at: string | null;
+  metadata: Record<string, any>;
+}
+
+export type CourierIncidentType = 'accident' | 'traffic_violation' | 'customer_complaint' | 'order_issue' | 'vehicle_issue' | 'other';
+export type IncidentSeverity = 'minor' | 'moderate' | 'severe' | 'critical';
+
+export interface CourierIncident extends Timestamp {
+  id: string;
+  driver_id: string;
+  incident_type: CourierIncidentType;
+  description: string | null;
+  severity: IncidentSeverity;
+  location: Record<string, any> | null;
+  order_id: string | null;
+  resolved_at: string | null;
+  resolution_notes: string | null;
   metadata: Record<string, any>;
 }
 
@@ -730,6 +747,11 @@ export interface Database {
         Row: Rating;
         Insert: Omit<Rating, 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Omit<Rating, 'id' | 'created_at' | 'updated_at'>>;
+      };
+      courier_incidents: {
+        Row: CourierIncident;
+        Insert: Omit<CourierIncident, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<CourierIncident, 'id' | 'created_at' | 'updated_at'>>;
       };
       wallets: {
         Row: Wallet;

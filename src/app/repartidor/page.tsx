@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useMemo } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { CourierProvider, useCourier } from '@/contexts/CourierContext';
+import React, { useMemo, useState } from 'react';
+import { useCourier } from '@/contexts/CourierContext';
 import { getCourierLevel, getNextLevel, COURIER_LEVELS } from '@/services/courier-pro';
 import { SkeletonStats } from '@/components/ui/skeleton';
 import { Bike, Star, TrendingUp, Zap, MapPin, ChevronRight, Package, Coffee, XCircle } from 'lucide-react';
@@ -49,7 +48,6 @@ const STATUS_CONFIG: Record<string, { label: string; desc: string; color: string
 
 function StatusToggle() {
   const { courierStatus, refresh } = useCourier();
-  const { profile } = useAuth();
   const [animating, setAnimating] = React.useState(false);
   const current = courierStatus && STATUS_CONFIG[courierStatus] ? courierStatus : 'offline';
   const cfg = STATUS_CONFIG[current];
@@ -58,9 +56,13 @@ function StatusToggle() {
     setAnimating(true);
     const next = STATUS_CYCLE[current] || 'available';
     try {
-      const { updateCourierStatusAction } = await import('@/app/actions/auth');
-      await updateCourierStatusAction(profile!.id, next);
-      await refresh();
+      const { setCourierOnlineStatusAction } = await import('@/app/actions/courier-profile');
+      const result = await setCourierOnlineStatusAction(next);
+      if (result.success) {
+        await refresh();
+      } else {
+        console.error('Error cambiando estado:', result.error);
+      }
     } catch (e) {
       console.error('Error cambiando estado:', e);
     }
@@ -97,7 +99,8 @@ function StatusToggle() {
 }
 
 function DashboardContent() {
-  const { courier, activeDeliveries, availableOrders, loading, todayEarnings, weekEarnings, monthEarnings, totalEarnings, acceptDelivery } = useCourier();
+  const { courier, activeDeliveries, availableOrders, loading, todayEarnings, weekEarnings, monthEarnings, totalEarnings, refresh } = useCourier();
+  const [acceptLoading, setAcceptLoading] = useState<string | null>(null);
 
   const level = useMemo(() => courier ? getCourierLevel(courier.total_deliveries) : COURIER_LEVELS[0], [courier]);
   const nextLevel = useMemo(() => courier ? getNextLevel(courier.total_deliveries) : COURIER_LEVELS[1], [courier]);
@@ -112,6 +115,22 @@ function DashboardContent() {
 
   const activeOrder = activeDeliveries[0];
   const displayOrders = availableOrders.slice(0, 5);
+
+  const handleAcceptOrder = async (orderId: string) => {
+    if (acceptLoading) return;
+    setAcceptLoading(orderId);
+    try {
+      const { acceptOrderByCourierAction } = await import('@/app/actions/courier-orders');
+      const result = await acceptOrderByCourierAction(orderId);
+      if (result.success) {
+        await refresh();
+      }
+    } catch (e) {
+      console.error('Error al aceptar:', e);
+    } finally {
+      setAcceptLoading(null);
+    }
+  };
 
   if (loading) return <SkeletonStats />;
 
@@ -262,10 +281,11 @@ function DashboardContent() {
                   <p className="text-[10px] text-muted-foreground">{order.items.length} productos · {formatCurrency(order.total_amount)}</p>
                 </div>
                 <button
-                  onClick={() => acceptDelivery(order.id)}
-                  className="shrink-0 rounded-xl bg-gradient-to-r from-warning to-orange-500 px-4 py-2 text-[10px] font-bold text-white shadow-lg shadow-warning/20 transition-all hover:shadow-xl hover:shadow-warning/30 hover:-translate-y-0.5 active:scale-95"
+                  onClick={() => handleAcceptOrder(order.id)}
+                  disabled={acceptLoading === order.id}
+                  className="shrink-0 rounded-xl bg-gradient-to-r from-warning to-orange-500 px-4 py-2 text-[10px] font-bold text-white shadow-lg shadow-warning/20 transition-all hover:shadow-xl hover:shadow-warning/30 hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
                 >
-                  Aceptar
+                  {acceptLoading === order.id ? '...' : 'Aceptar'}
                 </button>
               </div>
             ))}
@@ -282,10 +302,5 @@ function DashboardContent() {
 }
 
 export default function RepartidorPage() {
-  const { profile } = useAuth();
-  return (
-    <CourierProvider courierId={profile?.id}>
-      <DashboardContent />
-    </CourierProvider>
-  );
+  return <DashboardContent />;
 }

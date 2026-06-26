@@ -1,13 +1,14 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 
 import { useRouter } from 'next/navigation';
 import { BottomNavigation } from '@/components/ui/bottom-navigation';
 import { SkeletonCard } from '@/components/ui/skeleton';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { CourierProvider } from '@/contexts/CourierContext';
 import { Home, ClipboardList, DollarSign, User, Bike, Navigation, LogOut } from 'lucide-react';
-import { createBrowserClient } from '@supabase/ssr';
 
 const navItems = [
   { label: 'Inicio', href: '/repartidor', icon: <Home className="h-5 w-5" /> },
@@ -21,18 +22,25 @@ export default function RepartidorLayout({ children }: { children: React.ReactNo
   const { isLoading, profile } = useAuth();
   const router = useRouter();
 
+  const { logout } = useAuth();
+
   const handleLogout = async () => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-    await supabase.auth.signOut();
-    router.push('/login');
+    await logout();
+    router.replace('/login');
+    router.refresh();
   };
 
+  useEffect(() => {
+    if (!isLoading && !profile) {
+      router.replace('/login');
+    } else if (!isLoading && profile && profile.role !== 'courier') {
+      router.replace('/?error=unauthorized');
+    }
+  }, [isLoading, profile, router]);
+
   if (isLoading) return <SkeletonCard />;
-  if (!profile) { router.push('/login'); return null; }
-  if (profile.role !== 'courier') { router.push('/?error=unauthorized'); return null; }
+  if (!profile) return null;
+  if (profile.role !== 'courier') return null;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/95 pb-20 lg:pb-0">
@@ -57,7 +65,13 @@ export default function RepartidorLayout({ children }: { children: React.ReactNo
           </button>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-4 py-4">{children}</main>
+      <main className="mx-auto max-w-7xl px-4 py-4">
+        <ErrorBoundary name="Layout-children">
+          <CourierProvider courierId={profile?.id}>
+            {children}
+          </CourierProvider>
+        </ErrorBoundary>
+      </main>
       <BottomNavigation items={navItems} />
     </div>
   );

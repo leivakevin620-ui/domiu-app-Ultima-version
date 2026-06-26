@@ -34,26 +34,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     logger.debug('[AdminLayout] render', { isLoading, hasProfile: !!profile, role: profile?.role, adminRoles: ADMIN_ROLES });
   });
 
+  useEffect(() => {
+    if (!isLoading && !profile) {
+      logger.debug('[AdminLayout] no profile, redirect to /login');
+      router.replace('/login');
+    } else if (!isLoading && profile && !ADMIN_ROLES.includes(profile.role)) {
+      const roleRoutes: Record<string, string> = {
+        merchant: '/negocio',
+        business: '/negocio',
+        courier: '/repartidor',
+        customer: '/cliente',
+      };
+      const dest = roleRoutes[profile.role] || '/login';
+      logger.debug('[AdminLayout] role not admin', { role: profile.role, redirectTo: dest });
+      router.replace(dest);
+    }
+  }, [isLoading, profile, router]);
+
   if (isLoading) return <SkeletonCard />;
-
-  if (!profile) {
-    logger.debug('[AdminLayout] no profile, redirect to /login');
-    router.replace('/login');
-    return null;
-  }
-
-  if (!ADMIN_ROLES.includes(profile.role)) {
-    const roleRoutes: Record<string, string> = {
-      merchant: '/negocio',
-      business: '/negocio',
-      courier: '/repartidor',
-      customer: '/cliente',
-    };
-    const dest = roleRoutes[profile.role] || '/login';
-    logger.debug('[AdminLayout] role not admin', { role: profile.role, redirectTo: dest });
-    router.replace(dest);
-    return null;
-  }
+  if (!profile) return null;
+  if (!ADMIN_ROLES.includes(profile.role)) return null;
 
   return (
     <div className="min-h-screen bg-background">

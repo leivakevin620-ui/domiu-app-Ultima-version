@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 
 import { useCart } from '@/contexts/CartContext';
@@ -25,14 +25,17 @@ export default function ClienteLayout({ children }: { children: React.ReactNode 
   const { itemCount } = useCart();
   const router = useRouter();
 
+  useEffect(() => {
+    if (!isLoading && !profile) {
+      router.replace('/login');
+    }
+  }, [isLoading, profile, router]);
+
   if (isLoading) {
     return <SkeletonCard />;
   }
 
-  if (!profile) {
-    router.push('/login');
-    return null;
-  }
+  if (!profile) return null;
 
   return (
     <div className="min-h-screen bg-background pb-16 lg:pb-0">

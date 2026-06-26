@@ -12,8 +12,15 @@ export interface CourierDriver {
   status: DriverStatus;
   is_available: boolean;
   is_active: boolean;
+  is_verified: boolean;
   rating: number;
+  avg_rating: number;
   total_deliveries: number;
+  completed_deliveries: number;
+  total_ratings: number;
+  vehicle_plate: string | null;
+  vehicle_model: string | null;
+  metadata: Record<string, any>;
   current_lat?: number;
   current_lng?: number;
 }
@@ -56,10 +63,17 @@ function mapDriverToCourier(driver: Driver, firstName?: string | null, lastName?
     phone: '',
     vehicle_type: VEHICLE_TYPE_MAP[driver.vehicle_type] ?? 'motorcycle',
     status: driver.status,
-    is_available: driver.status === 'available',
+    is_available: driver.is_available ?? driver.status === 'available',
     is_active: driver.is_active,
-    rating: driver.avg_rating,
-    total_deliveries: driver.total_deliveries,
+    is_verified: driver.is_verified ?? false,
+    rating: driver.rating ?? driver.avg_rating ?? 0,
+    avg_rating: driver.avg_rating ?? 0,
+    total_deliveries: driver.total_deliveries ?? 0,
+    completed_deliveries: driver.completed_deliveries ?? 0,
+    total_ratings: driver.total_ratings ?? 0,
+    vehicle_plate: driver.vehicle_plate ?? null,
+    vehicle_model: driver.vehicle_model ?? null,
+    metadata: (driver.metadata as Record<string, any>) ?? {},
   };
 }
 

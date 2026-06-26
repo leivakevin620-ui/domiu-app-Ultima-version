@@ -155,20 +155,29 @@ export function CourierProvider({
       }
     });
 
-    // Supabase realtime subscription — picks up any INSERT/UPDATE/DELETE on orders
-    const supabase = getBrowserClient();
-    const channel = supabase
-      .channel('courier-orders-realtime')
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
-        () => { refresh(); }
-      )
-      .subscribe();
+    // Only create Supabase Realtime channel when we have a valid courierId
+    let channel: ReturnType<ReturnType<typeof getBrowserClient>['channel']> | null = null;
+
+    if (courierId) {
+      const supabase = getBrowserClient();
+      const channelName = `courier-orders-realtime-${courierId}`;
+
+      channel = supabase
+        .channel(channelName)
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'orders' },
+          () => { refresh(); }
+        )
+        .subscribe();
+    }
 
     return () => {
       unsub();
       unsubReq();
-      supabase.removeChannel(channel);
+      if (channel) {
+        const supabase = getBrowserClient();
+        supabase.removeChannel(channel);
+      }
     };
   }, [courierId, refresh]);
 

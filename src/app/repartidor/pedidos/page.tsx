@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { CourierProvider, useCourier } from '@/contexts/CourierContext';
+import { useCourier } from '@/contexts/CourierContext';
 import { ChatProvider, useChat } from '@/contexts/ChatContext';
 import { ChatWindow } from '@/components/chat/ChatWindow';
 import { SkeletonList } from '@/components/ui/skeleton';
@@ -51,10 +51,11 @@ function DeliveryTimeline({ status }: { status: string }) {
 }
 
 function PedidosContent() {
-  const { availableOrders, activeDeliveries, deliveryHistory, loading, acceptDelivery, updateDeliveryStatus } = useCourier();
+  const { availableOrders, activeDeliveries, deliveryHistory, loading, refresh } = useCourier();
   const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<'active' | 'available' | 'history'>('active');
   const [chatOpen, setChatOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const activeOrder = activeDeliveries[0];
   const { openConversation, closeConversation } = useChat();
 
@@ -64,13 +65,58 @@ function PedidosContent() {
 
   const getNextAction = () => {
     if (!activeOrder) return null;
-    if (activeOrder.status === 'assigned') return { label: 'Marcar como Recogido', nextStatus: 'picked_up' as const, color: 'from-info to-blue-500' };
-    if (activeOrder.status === 'picked_up') return { label: 'En Camino', nextStatus: 'in_transit' as const, color: 'from-warning to-orange-500' };
-    if (activeOrder.status === 'in_transit') return { label: 'Marcar como Entregado', nextStatus: 'delivered' as const, color: 'from-success to-emerald-500' };
+    if (activeOrder.status === 'assigned') return { label: 'Marcar como Recogido', nextStatus: 'picked_up' as const, color: 'from-info to-blue-500', action: 'markOrderPickedUpAction' as const };
+    if (activeOrder.status === 'picked_up') return { label: 'En Camino', nextStatus: 'in_transit' as const, color: 'from-warning to-orange-500', action: 'markOrderInTransitAction' as const };
+    if (activeOrder.status === 'in_transit') return { label: 'Marcar como Entregado', nextStatus: 'delivered' as const, color: 'from-success to-emerald-500', action: 'markOrderDeliveredAction' as const };
     return null;
   };
 
   const nextAction = getNextAction();
+
+  const handleStatusAction = async (orderId: string, actionName: string) => {
+    if (actionLoading) return;
+    setActionLoading(actionName);
+    try {
+      const mod = await import('@/app/actions/courier-orders');
+      let result: { success: boolean; error?: string };
+      if (actionName === 'markOrderPickedUpAction') {
+        result = await mod.markOrderPickedUpAction(orderId);
+      } else if (actionName === 'markOrderInTransitAction') {
+        result = await mod.markOrderInTransitAction(orderId);
+      } else if (actionName === 'markOrderDeliveredAction') {
+        result = await mod.markOrderDeliveredAction(orderId);
+      } else {
+        result = { success: false, error: 'Acción inválida' };
+      }
+      if (result.success) {
+        await refresh();
+      } else {
+        console.error('Error en acción:', result.error);
+      }
+    } catch (e) {
+      console.error('Error en acción:', e);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleAcceptOrder = async (orderId: string) => {
+    if (actionLoading) return;
+    setActionLoading('accept');
+    try {
+      const { acceptOrderByCourierAction } = await import('@/app/actions/courier-orders');
+      const result = await acceptOrderByCourierAction(orderId);
+      if (result.success) {
+        await refresh();
+      } else {
+        console.error('Error al aceptar:', result.error);
+      }
+    } catch (e) {
+      console.error('Error al aceptar:', e);
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   if (loading) return <SkeletonList />;
 
@@ -163,11 +209,12 @@ function PedidosContent() {
                 <div className="mt-4 flex flex-wrap gap-2">
                   {nextAction && (
                     <button
-                      onClick={() => updateDeliveryStatus(activeOrder.id, nextAction.nextStatus)}
-                      className={`inline-flex items-center gap-2 rounded-xl bg-gradient-to-r ${nextAction.color} px-5 py-2.5 text-sm font-bold text-white shadow-lg transition-all hover:shadow-xl hover:-translate-y-0.5 active:scale-95`}
+                      onClick={() => handleStatusAction(activeOrder.id, nextAction.action)}
+                      disabled={actionLoading === nextAction.action}
+                      className={`inline-flex items-center gap-2 rounded-xl bg-gradient-to-r ${nextAction.color} px-5 py-2.5 text-sm font-bold text-white shadow-lg transition-all hover:shadow-xl hover:-translate-y-0.5 active:scale-95 disabled:opacity-50`}
                     >
                       <ArrowRight className="h-4 w-4" />
-                      {nextAction.label}
+                      {actionLoading === nextAction.action ? 'Procesando...' : nextAction.label}
                     </button>
                   )}
                   <a
@@ -268,10 +315,11 @@ function PedidosContent() {
                 </div>
                 <div className="mt-3 flex gap-2">
                   <button
-                    onClick={() => acceptDelivery(order.id)}
-                    className="flex-1 rounded-xl bg-gradient-to-r from-warning to-orange-500 py-2.5 text-xs font-bold text-white shadow-lg shadow-warning/20 transition-all hover:shadow-xl hover:shadow-warning/30 hover:-translate-y-0.5 active:scale-95"
+                    onClick={() => handleAcceptOrder(order.id)}
+                    disabled={actionLoading === 'accept'}
+                    className="flex-1 rounded-xl bg-gradient-to-r from-warning to-orange-500 py-2.5 text-xs font-bold text-white shadow-lg shadow-warning/20 transition-all hover:shadow-xl hover:shadow-warning/30 hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
                   >
-                    Aceptar Pedido
+                    {actionLoading === 'accept' ? 'Aceptando...' : 'Aceptar Pedido'}
                   </button>
                 </div>
               </div>
@@ -319,10 +367,8 @@ function PedidosContent() {
 export default function RepartidorPedidos() {
   const { profile } = useAuth();
   return (
-    <CourierProvider courierId={profile?.id}>
-      <ChatProvider userId={profile?.id ?? ''} userRole="courier">
-        <PedidosContent />
-      </ChatProvider>
-    </CourierProvider>
+    <ChatProvider userId={profile?.id ?? ''} userRole="courier">
+      <PedidosContent />
+    </ChatProvider>
   );
 }

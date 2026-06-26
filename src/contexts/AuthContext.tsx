@@ -45,6 +45,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   });
 
   const isLoggingInRef = useRef(false);
+  const isLoggingOutRef = useRef(false);
 
   const loadUserProfile = useCallback(async (source = '') => {
     if (isDevMode()) logger.debug(`[AuthContext] loadUserProfile${source ? ` (${source})` : ''}`);
@@ -95,6 +96,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const unsubscribe = SupabaseAuthService.onAuthStateChange(async (_session, user) => {
       if (isLoggingInRef.current) {
         isLoggingInRef.current = false;
+        return;
+      }
+      if (isLoggingOutRef.current) {
         return;
       }
       if (_session && user) {
@@ -175,9 +179,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(async () => {
     logger.debug('[AuthContext] logout');
+    isLoggingOutRef.current = true;
     setAuthSession(prev => ({ ...prev, isLoading: true }));
-    await SupabaseAuthService.logout();
+    try {
+      await SupabaseAuthService.logout();
+    } catch (err) {
+      logger.warn('[AuthContext] logout error', err);
+    }
     setAuthSession({ user: null, profile: null, isAuthenticated: false, isLoading: false, error: null });
+    setTimeout(() => { isLoggingOutRef.current = false; }, 1000);
   }, []);
 
   const resetPassword = useCallback(async (email: string) => {

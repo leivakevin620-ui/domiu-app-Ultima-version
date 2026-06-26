@@ -84,7 +84,7 @@ export function CourierNotificationsCard() {
         })}
       </div>
 
-      <a href="/notificaciones" className="w-full mt-3 flex items-center justify-center gap-1 rounded-xl bg-slate-50 py-2.5 text-[11px] font-bold text-slate-600 transition hover:bg-slate-100">
+      <a href="/repartidor/notificaciones" className="w-full mt-3 flex items-center justify-center gap-1 rounded-xl bg-slate-50 py-2.5 text-[11px] font-bold text-slate-600 transition hover:bg-slate-100">
         Ver todas <ChevronRight className="h-3 w-3" />
       </a>
     </motion.section>

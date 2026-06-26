@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 
 import { useRouter } from 'next/navigation';
@@ -14,22 +14,22 @@ export default function NegocioLayout({ children }: { children: React.ReactNode 
   const { isLoading, profile } = useAuth();
   const router = useRouter();
 
+  useEffect(() => {
+    if (!isLoading && !profile) {
+      router.replace('/login');
+    } else if (!isLoading && profile && profile.role !== 'merchant') {
+      const roleRoutes: Record<string, string> = {
+        admin: '/admin',
+        courier: '/repartidor',
+        customer: '/cliente',
+      };
+      router.replace(roleRoutes[profile.role] || '/login');
+    }
+  }, [isLoading, profile, router]);
+
   if (isLoading) return <SkeletonCard />;
-
-  if (!profile) {
-    router.push('/login');
-    return null;
-  }
-
-  if (profile.role !== 'merchant') {
-    const roleRoutes: Record<string, string> = {
-      admin: '/admin',
-      courier: '/repartidor',
-      customer: '/cliente',
-    };
-    router.push(roleRoutes[profile.role] || '/login');
-    return null;
-  }
+  if (!profile) return null;
+  if (profile.role !== 'merchant') return null;
 
   return (
     <div className="min-h-screen bg-background">
