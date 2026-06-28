@@ -19,7 +19,7 @@ type SettingsTab = 'notifications' | 'security' | 'account';
 export default function ConfiguracionPage() {
   const { profile, logout } = useAuth();
   const router = useRouter();
-  const [tab, setTab] = useState<SettingsTab>('notifications');
+  const [tab, setTab] = useState<SettingsTab>('account');
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState('');
