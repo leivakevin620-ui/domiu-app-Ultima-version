@@ -31,6 +31,7 @@ export interface OrderData {
   total_amount: number;
   delivery_address: string;
   special_instructions: string | null;
+  metadata: Record<string, unknown> | null;
   items: OrderItemData[];
   created_at: string;
   updated_at: string;
@@ -51,6 +52,30 @@ async function getClient() {
   return getBrowserClient();
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
+  return {};
+}
+
+function getString(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+export function isManualOrderVisibleToCourier(order: Pick<OrderData, 'order_type' | 'status' | 'courier_id' | 'metadata'>, courierId?: string): boolean {
+  if (order.order_type !== 'manual_delivery') return true;
+  if (order.status !== 'pending' || order.courier_id) return false;
+
+  const metadata = asRecord(order.metadata);
+  const assignmentMode = getString(metadata.assignment_mode) || 'public';
+  const closestCourierId = getString(metadata.closest_courier_id);
+
+  if (assignmentMode === 'closest_first') {
+    return Boolean(courierId && closestCourierId === courierId);
+  }
+
+  return assignmentMode === 'public' || assignmentMode === 'public_all';
+}
+
 function mapOrderToData(order: Order, items: OrderItemData[], customerName: string, businessName: string, courierName: string | null, address: string): OrderData {
   return {
     id: order.id,
@@ -69,6 +94,7 @@ function mapOrderToData(order: Order, items: OrderItemData[], customerName: stri
     total_amount: order.total_amount,
     delivery_address: address,
     special_instructions: order.special_instructions,
+    metadata: (order.metadata as Record<string, unknown> | null) ?? null,
     items,
     created_at: order.created_at,
     updated_at: order.updated_at,
@@ -244,7 +270,7 @@ export const orderService = {
     return Promise.all(orders.map(buildOrderData));
   },
 
-  getAvailableOrders: async (): Promise<OrderData[]> => {
+  getAvailableOrders: async (courierId?: string): Promise<OrderData[]> => {
     const supabase = await getClient();
     const { data: orders } = await supabase
       .from('orders')
@@ -253,7 +279,9 @@ export const orderService = {
       .or(`and(status.in.(confirmed,ready)),and(status.eq.pending,order_type.eq.manual_delivery)`)
       .order('created_at', { ascending: false });
     if (!orders) return [];
-    return Promise.all(orders.map(buildOrderData));
+
+    const data = await Promise.all(orders.map(buildOrderData));
+    return data.filter((order) => isManualOrderVisibleToCourier(order, courierId));
   },
 
   getOrderById: async (orderId: string): Promise<OrderData | null> => {
