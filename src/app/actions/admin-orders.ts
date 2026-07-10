@@ -10,9 +10,40 @@ import type { OrderStatus } from '@/types/database';
 
 const VALID_PAYMENT_METHODS = ['cash', 'transfer', 'credit_card', 'debit_card', 'wallet'] as const;
 
-function mapPaymentMethod(raw: string): string {
+type PaymentMethod = (typeof VALID_PAYMENT_METHODS)[number];
+
+type BusinessSelectRow = {
+  id: string;
+  name: string;
+  is_active: boolean;
+  is_verified?: boolean | null;
+};
+
+type BusinessAddressRow = {
+  business_id?: string | null;
+  street_address?: string | null;
+  city?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  is_primary?: boolean | null;
+};
+
+type ProfileContactRow = {
+  id: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  phone?: string | null;
+};
+
+type DriverAdminRow = {
+  id: string;
+  is_active?: boolean | null;
+  status?: string | null;
+};
+
+function mapPaymentMethod(raw: string): PaymentMethod {
   const normalized = raw.toLowerCase().replace(/[\s-]/g, '_');
-  if ((VALID_PAYMENT_METHODS as readonly string[]).includes(normalized)) return normalized;
+  if ((VALID_PAYMENT_METHODS as readonly string[]).includes(normalized)) return normalized as PaymentMethod;
   if (['nequi', 'daviplata', 'pse', 'other'].includes(normalized)) return 'transfer';
   return 'cash';
 }
@@ -58,7 +89,7 @@ export async function createManualOrderAction(input: CreateManualOrderInput): Pr
   try {
     const parsed = createManualOrderSchema.safeParse(input);
     if (!parsed.success) {
-      return { error: parsed.error.issues.map(e => e.message).join(', ') };
+      return { error: parsed.error.issues.map((issue) => issue.message).join(', ') };
     }
 
     const auth = await requireAuth();
@@ -145,7 +176,7 @@ export async function createManualOrderAction(input: CreateManualOrderInput): Pr
     const status: OrderStatus = data.assignmentMode === 'manual' && data.courierId ? 'assigned' : 'pending';
     const paymentMethod = mapPaymentMethod(data.paymentMethod);
 
-    const metadata = {
+    const metadata: Record<string, unknown> = {
       source: 'admin_manual',
       has_products: false,
       delivery_only: true,
@@ -157,6 +188,8 @@ export async function createManualOrderAction(input: CreateManualOrderInput): Pr
       business_address: data.businessAddress,
       business_neighborhood: data.businessNeighborhood || null,
       business_city: data.businessCity || null,
+      business_lat: data.businessLat ?? null,
+      business_lng: data.businessLng ?? null,
       customer_address: data.deliveryAddress,
       customer_phone: data.customerPhone,
       customer_neighborhood: data.neighborhood || null,
@@ -181,7 +214,7 @@ export async function createManualOrderAction(input: CreateManualOrderInput): Pr
         delivery_address_id: address.id,
         status,
         payment_status: 'pending',
-        payment_method: paymentMethod as 'cash' | 'transfer' | 'credit_card' | 'debit_card' | 'wallet',
+        payment_method: paymentMethod,
         subtotal: data.deliveryFee,
         delivery_fee: data.deliveryFee,
         courier_earnings: earnings.courierEarnings,
@@ -289,31 +322,31 @@ export async function getBusinessesForOrderSelect() {
       .eq('is_active', true)
       .order('name');
 
-    if (!data) return [];
+    const businesses = (data || []) as BusinessSelectRow[];
+    if (businesses.length === 0) return [];
 
-    const businessIds = data.map((b: { id: string }) => b.id);
+    const businessIds = businesses.map((business) => business.id);
     const { data: addresses } = await supabase
       .from('business_addresses')
       .select('business_id, street_address, latitude, longitude')
       .in('business_id', businessIds);
 
     const addressMap = new Map<string, { hasAddress: boolean; hasCoordinates: boolean }>();
-    for (const addr of addresses || []) {
-      if (!addressMap.has(addr.business_id)) {
-        addressMap.set(addr.business_id, {
-          hasAddress: !!(addr.street_address),
-          hasCoordinates: !!(addr.latitude && addr.longitude),
-        });
-      }
+    for (const addr of (addresses || []) as BusinessAddressRow[]) {
+      if (!addr.business_id || addressMap.has(addr.business_id)) continue;
+      addressMap.set(addr.business_id, {
+        hasAddress: !!addr.street_address,
+        hasCoordinates: !!(addr.latitude && addr.longitude),
+      });
     }
 
-    return data.map((b: { id: string; name: string; is_active: boolean; is_verified: boolean }) => {
-      const info = addressMap.get(b.id);
+    return businesses.map((business) => {
+      const info = addressMap.get(business.id);
       return {
-        id: b.id,
-        name: b.name,
-        is_active: b.is_active,
-        is_verified: b.is_verified ?? false,
+        id: business.id,
+        name: business.name,
+        is_active: business.is_active,
+        is_verified: business.is_verified ?? false,
         hasAddress: info?.hasAddress ?? false,
         hasCoordinates: info?.hasCoordinates ?? false,
       };
@@ -345,7 +378,7 @@ export async function getBusinessDetailsForOrder(businessId: string) {
       .order('is_primary', { ascending: false })
       .limit(1);
 
-    const bizAddress = bizAddresses?.[0] || null;
+    const bizAddress = ((bizAddresses || []) as BusinessAddressRow[])[0] || null;
 
     return {
       id: business.id,
@@ -358,7 +391,7 @@ export async function getBusinessDetailsForOrder(businessId: string) {
       is_active: business.is_active,
       is_verified: business.is_verified ?? false,
       accepts_orders: true,
-      hasAddress: !!(bizAddress?.street_address),
+      hasAddress: !!bizAddress?.street_address,
       hasCoordinates: !!(bizAddress?.latitude && bizAddress?.longitude),
     };
   } catch {
@@ -378,277 +411,33 @@ export async function getAvailableCouriersForAdmin() {
       .select('id, is_active, status')
       .eq('is_active', true);
 
-    if (!drivers) return [];
+    const driverRows = (drivers || []) as DriverAdminRow[];
+    if (driverRows.length === 0) return [];
 
-    const driverIds = drivers.map(d => d.id).filter(Boolean);
+    const driverIds = driverRows
+      .map((driver) => driver.id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, first_name, last_name, phone')
       .in('id', driverIds);
 
-    const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+    const profileMap = new Map<string, ProfileContactRow>();
+    for (const profile of (profiles || []) as ProfileContactRow[]) {
+      profileMap.set(profile.id, profile);
+    }
 
-    return drivers.map(d => {
-      const p = profileMap.get(d.id) || null;
+    return driverRows.map((driver) => {
+      const profile = profileMap.get(driver.id) || null;
       return {
-        id: d.id,
-        name: [p?.first_name, p?.last_name].filter(Boolean).join(' ') || 'Sin nombre',
-        phone: p?.phone || '',
-        status: d.status || null,
+        id: driver.id,
+        name: [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'Sin nombre',
+        phone: profile?.phone || '',
+        status: driver.status || null,
       };
     });
   } catch {
     return [];
-  }
-}
-
-function haversineDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-export async function findNearestAvailableCourier(businessLat: number, businessLng: number) {
-  try {
-    const auth = await requireAuth();
-    if (auth.error) return null;
-    if (auth.session.profile.role !== 'admin') return null;
-
-    const supabase = getServiceClient();
-    const { data: availableDrivers } = await supabase
-      .from('drivers')
-      .select('id, status')
-      .eq('status', 'available')
-      .eq('is_active', true);
-
-    if (!availableDrivers || availableDrivers.length === 0) return null;
-
-    const driverIds = availableDrivers.map(d => d.id);
-    const { data: locations } = await supabase
-      .from('driver_locations')
-      .select('driver_id, latitude, longitude')
-      .in('driver_id', driverIds);
-
-    if (!locations || locations.length === 0) return null;
-
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, first_name, last_name, phone')
-      .in('id', driverIds);
-
-    const profileMap = new Map((profiles || []).map(p => [p.id, p]));
-
-    let nearest: { id: string; name: string; phone: string; distanceKm: number; latitude: number; longitude: number } | null = null;
-
-    for (const loc of locations) {
-      const dist = haversineDistanceKm(businessLat, businessLng, loc.latitude, loc.longitude);
-      if (!nearest || dist < nearest.distanceKm) {
-        const p = profileMap.get(loc.driver_id);
-        nearest = {
-          id: loc.driver_id,
-          name: [p?.first_name, p?.last_name].filter(Boolean).join(' ') || 'Repartidor',
-          phone: p?.phone || '',
-          distanceKm: Math.round(dist * 100) / 100,
-          latitude: loc.latitude,
-          longitude: loc.longitude,
-        };
-      }
-    }
-
-    return nearest;
-  } catch {
-    return null;
-  }
-}
-
-async function getOrderBusinessCoordinates(orderId: string) {
-  const supabase = getServiceClient();
-  const { data: order, error: orderError } = await supabase
-    .from('orders')
-    .select('id, business_id, order_type, status, courier_id, order_number, metadata')
-    .eq('id', orderId)
-    .single();
-
-  if (orderError || !order) return { error: 'Pedido no encontrado' };
-  if (order.order_type !== 'manual_delivery') return { error: 'Solo pedidos de domicilio manual pueden asignarse' };
-  if (order.status !== 'pending') return { error: 'Solo pedidos pendientes pueden asignarse' };
-  if (order.courier_id) return { error: 'El pedido ya tiene repartidor asignado' };
-
-  const metadata = (order.metadata as Record<string, any>) || {};
-  let businessLat = metadata.business_lat as number | null;
-  let businessLng = metadata.business_lng as number | null;
-
-  if (!businessLat || !businessLng) {
-    const { data: backendAddress, error: addrError } = await supabase
-      .from('business_addresses')
-      .select('latitude, longitude')
-      .eq('business_id', order.business_id)
-      .limit(1)
-      .single();
-
-    if (addrError || !backendAddress || backendAddress.latitude == null || backendAddress.longitude == null) {
-      return { error: 'No se pudieron obtener las coordenadas del local' };
-    }
-
-    businessLat = backendAddress.latitude;
-    businessLng = backendAddress.longitude;
-  }
-
-  return { businessLat, businessLng, order };
-}
-
-export async function assignNearestCourierToManualOrderAction(orderId: string) {
-  try {
-    const auth = await requireAuth();
-    if (auth.error) return { success: false, error: auth.error.message };
-    if (auth.session.profile.role !== 'admin') {
-      return { success: false, error: 'Solo administradores pueden asignar pedidos' };
-    }
-
-    const coordsResult = await getOrderBusinessCoordinates(orderId);
-    if ('error' in coordsResult) return { success: false, error: coordsResult.error };
-
-    const nearest = await findNearestAvailableCourier(coordsResult.businessLat, coordsResult.businessLng);
-    if (!nearest) {
-      return { success: false, error: 'No hay repartidores disponibles o sin ubicación válida' };
-    }
-
-    const supabase = getServiceClient();
-    const now = new Date().toISOString();
-    const { data: updatedOrder, error: updateError } = await supabase
-      .from('orders')
-      .update({ courier_id: nearest.id, status: 'assigned', updated_at: now })
-      .eq('id', orderId)
-      .eq('status', 'pending')
-      .is('courier_id', null)
-      .select()
-      .maybeSingle();
-
-    if (updateError || !updatedOrder) {
-      return { success: false, error: 'No se pudo asignar el repartidor. El pedido pudo haber sido tomado.' };
-    }
-
-    await supabase.from('order_tracking').insert({
-      order_id: orderId,
-      status: 'assigned',
-      notes: `Asignado a ${nearest.name}`,
-    });
-
-    try {
-      try {
-        const orderObj = coordsResult.order as Record<string, unknown> | undefined;
-        const orderNumber = orderObj && typeof orderObj['order_number'] === 'string' ? (orderObj['order_number'] as string) : orderId;
-        await supabase.rpc('create_notification', {
-          p_recipient_id: nearest.id,
-          p_notification_type: 'order_assigned',
-          p_title: 'Pedido asignado',
-          p_message: `Se te ha asignado el pedido #${orderNumber}`,
-          p_order_id: orderId,
-        });
-      } catch {}
-    } catch {}
-
-    await serverAudit.logAction(
-      auth.session.user.id,
-      auth.session.user.email,
-      auth.session.profile.role,
-      'assign_manual_order',
-      'orders',
-      orderId,
-      {
-        courier_id: nearest.id,
-        courier_name: nearest.name,
-        distance_km: nearest.distanceKm,
-      },
-    );
-
-    return { success: true, courierName: nearest.name };
-  } catch (err: unknown) {
-    const error = err instanceof Error ? err.message : 'Error desconocido';
-    console.error('[admin-orders] assignNearestCourierToManualOrderAction error:', err);
-    return { success: false, error };
-  }
-}
-
-export async function publishManualDeliveryOrderAction(orderId: string) {
-  try {
-    const auth = await requireAuth();
-    if (auth.error) return { success: false, error: auth.error.message };
-    if (auth.session.profile.role !== 'admin') {
-      return { success: false, error: 'Solo administradores pueden publicar pedidos' };
-    }
-
-    const supabase = getServiceClient();
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .select('id, order_type, status, courier_id, order_number, metadata')
-      .eq('id', orderId)
-      .single();
-
-    if (orderError || !order) return { success: false, error: 'Pedido no encontrado' };
-    if (order.order_type !== 'manual_delivery') return { success: false, error: 'Solo pedidos de domicilio manual pueden publicarse' };
-    if (order.courier_id) return { success: false, error: 'El pedido ya tiene repartidor asignado' };
-
-    const now = new Date().toISOString();
-    const metadata = { ...(order.metadata as Record<string, any> || {}), assignment_mode: 'public' };
-
-    const { data: updatedOrder, error: updateError } = await supabase
-      .from('orders')
-      .update({ status: 'pending', updated_at: now, metadata })
-      .eq('id', orderId)
-      .select()
-      .maybeSingle();
-
-    if (updateError || !updatedOrder) {
-      return { success: false, error: 'No se pudo publicar el pedido' };
-    }
-
-    const { data: drivers } = await supabase
-      .from('drivers')
-      .select('id')
-      .eq('status', 'available')
-      .eq('is_active', true);
-
-    const availableDriverIds = (drivers || []).map((d: any) => d.id).filter(Boolean);
-    if (availableDriverIds.length > 0) {
-      const notifications = availableDriverIds.map((driverId: string) => ({
-        recipient_id: driverId,
-        sender_id: auth.session.user.id,
-        notification_type: 'courier_nearby',
-        title: 'Nuevo pedido disponible',
-        message: `Un pedido manual está disponible para entrega #${order.order_number}`,
-        order_id: orderId,
-        channels: ['in_app'],
-      }));
-      try {
-        await supabase.from('notifications').insert(notifications);
-      } catch {}
-    }
-
-    await supabase.from('order_tracking').insert({
-      order_id: orderId,
-      status: 'pending',
-      notes: 'Pedido publicado a repartidores disponibles',
-    });
-
-    await serverAudit.logAction(
-      auth.session.user.id,
-      auth.session.user.email,
-      auth.session.profile.role,
-      'publish_manual_order',
-      'orders',
-      orderId,
-      { notified_couriers: availableDriverIds.length },
-    );
-
-    return { success: true, notifiedCount: availableDriverIds.length };
-  } catch (err: unknown) {
-    const error = err instanceof Error ? err.message : 'Error desconocido';
-    console.error('[admin-orders] publishManualDeliveryOrderAction error:', err);
-    return { success: false, error };
   }
 }
