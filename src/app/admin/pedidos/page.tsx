@@ -85,7 +85,7 @@ export default function AdminOrders() {
       setActionLoading(true);
       const { assignNearestCourierToManualOrderAction } = await import('@/app/actions/manual-delivery-dispatch');
       const result = await assignNearestCourierToManualOrderAction(selected.id);
-      if (!result.success) {
+      if (!result.success || !('courierName' in result)) {
         setAlert({ type: 'error', msg: ('error' in result ? result.error : undefined) || 'No se pudo asignar el repartidor' });
         return;
       }
@@ -105,7 +105,7 @@ export default function AdminOrders() {
       setActionLoading(true);
       const { notifyClosestCourierForManualOrderAction } = await import('@/app/actions/manual-delivery-dispatch');
       const result = await notifyClosestCourierForManualOrderAction(selected.id);
-      if (!result.success) {
+      if (!result.success || !('courierName' in result)) {
         setAlert({ type: 'error', msg: ('error' in result ? result.error : undefined) || 'No se pudo publicar al repartidor cercano' });
         return;
       }
@@ -125,7 +125,7 @@ export default function AdminOrders() {
       setActionLoading(true);
       const { publishManualDeliveryOrderToAllCouriersAction } = await import('@/app/actions/manual-delivery-dispatch');
       const result = await publishManualDeliveryOrderToAllCouriersAction(selected.id);
-      if (!result.success) {
+      if (!result.success || !('notifiedCount' in result)) {
         setAlert({ type: 'error', msg: ('error' in result ? result.error : undefined) || 'No se pudo publicar el pedido' });
         return;
       }
