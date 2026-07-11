@@ -1,7 +1,7 @@
 # Auditoría e implementación multi-tenant de DomiU
 
-**Estado:** Fase 1 preparada  
-**Fecha:** 2026-07-10  
+**Estado:** Fase 2 de aplicación preparada  
+**Fecha:** 2026-07-11  
 **Rama:** `docs/arquitectura-oficial-domiu`
 
 ## 1. Objetivo
@@ -10,19 +10,9 @@ Introducir una base multi-tenant sin romper el funcionamiento actual de DomiU Ap
 
 La primera fase crea las entidades estructurales, registra un tenant predeterminado para la operación existente y agrega `tenant_id` de forma compatible a tablas operativas que ya existan.
 
-## 2. Hallazgos confirmados
+## 2. Implementación incorporada
 
-- El proyecto utiliza Supabase PostgreSQL, Auth, Storage y Realtime.
-- Existen tablas centrales como `profiles`, `businesses`, `orders`, `notifications`, `messages` y `driver_locations`.
-- El sistema actual utiliza `profiles.role = 'admin'` en funciones de seguridad existentes.
-- Hay migraciones preparadas que todavía no han sido aplicadas al entorno remoto.
-- El repositorio está en Release Candidate; por tanto, el aislamiento estricto no debe activarse en un solo cambio.
-
-## 3. Estrategia segura
-
-### Fase 1 — Foundation
-
-Incluida en la migración `2026071001_multitenancy_foundation.sql`:
+### Foundation SQL
 
 - `tenants`
 - `tenant_memberships`
@@ -31,113 +21,94 @@ Incluida en la migración `2026071001_multitenancy_foundation.sql`:
 - tenant predeterminado `domiu-magdalena`
 - ciudad inicial `Ciénaga`
 - funciones auxiliares de tenant
-- columnas `tenant_id` agregadas dinámicamente a tablas existentes conocidas
-- backfill al tenant predeterminado
-- índices básicos
+- backfill de `tenant_id`
+- RLS para entidades nuevas
 
-En esta fase, las nuevas columnas no se fuerzan todavía como `NOT NULL` en todas las tablas y no se reemplazan políticas RLS existentes.
+### Tenant Context de servidor
 
-### Fase 2 — Adaptación de aplicación
+Archivo: `src/lib/tenancy/server-tenant.ts`
 
-- Resolver tenant activo en servidor.
-- Incluir `tenant_id` al crear negocios, pedidos, productos, promociones, wallets y registros operativos.
-- Añadir contexto de tenant a servicios y Server Actions.
-- Incluir tenant en claves de caché.
-- Evitar que el cliente pueda escoger arbitrariamente un tenant mediante datos enviados desde el navegador.
+- Resuelve tenant desde el negocio, membresía o tenant predeterminado.
+- Nunca acepta `tenant_id` directamente desde el navegador.
+- Comprueba estado del tenant.
+- Expone el origen de la resolución para trazabilidad.
 
-### Fase 3 — RLS multi-tenant
+### Creación segura de pedidos
 
-- Crear políticas por tabla usando `is_tenant_member` y `has_tenant_role`.
-- Mantener reglas adicionales de propiedad: cliente, negocio, repartidor y administrador.
-- Probar acceso cruzado con usuarios de tenants diferentes.
-- Aplicar `NOT NULL` solamente después de verificar que no existen filas sin tenant.
+Archivo: `src/app/actions/create-order.ts`
 
-### Fase 4 — Operación multi-ciudad
+- Requiere sesión autenticada.
+- Usa el usuario de la sesión como cliente real.
+- Resuelve el tenant desde el negocio.
+- Valida que negocio y productos pertenezcan al mismo tenant.
+- Impide productos de varios negocios en un mismo pedido.
+- Revalida precios, disponibilidad, subtotal y total en servidor.
+- Propaga `tenant_id` a dirección, pedido, items y tracking.
 
-- Crear zonas PostGIS reales.
-- Asociar negocios, direcciones, repartidores y pedidos con ciudad y zona.
-- Activar tarifas y asignación por zona.
+`OrderContext` ahora utiliza esta Server Action en lugar de insertar el pedido directamente desde el navegador.
 
-## 4. Tablas candidatas para tenant_id
+### Integridad en PostgreSQL
 
-La migración usa detección dinámica y solo modifica una tabla cuando existe:
+Migración: `2026071002_tenant_order_propagation.sql`
 
-- `profiles`
-- `businesses`
-- `business_hours`
-- `categories`
-- `products`
-- `product_options`
-- `addresses`
-- `favorites`
-- `carts`
-- `cart_items`
-- `orders`
-- `order_items`
-- `order_events`
-- `assignments`
-- `drivers`
-- `couriers`
-- `driver_locations`
-- `courier_locations`
-- `notifications`
-- `chats`
-- `messages`
-- `wallets`
-- `wallet_transactions`
-- `promotions`
-- `coupons`
-- `ratings`
-- `support_tickets`
-- `audit_logs`
+- Agrega `tenant_id` a `order_tracking`.
+- Deriva el tenant del pedido desde el negocio.
+- Deriva el tenant de items y tracking desde el pedido.
+- Rechaza discrepancias de tenant.
+- Rechaza productos pertenecientes a otro negocio.
 
-## 5. Reglas de seguridad
+## 3. Reglas de seguridad
 
-1. `tenant_id` nunca debe confiarse directamente desde el frontend.
-2. El servidor debe resolverlo desde la sesión, membresía, negocio o recurso padre.
-3. Un usuario puede pertenecer a uno o varios tenants mediante `tenant_memberships`.
-4. La membresía suspendida o revocada no concede acceso.
-5. El administrador principal del tenant no equivale automáticamente a superadministrador global.
-6. Cualquier cambio de membresía o rol debe registrarse en auditoría.
+1. `tenant_id` nunca se confía desde el frontend.
+2. El servidor lo resuelve desde datos persistidos.
+3. PostgreSQL vuelve a validar las relaciones mediante triggers.
+4. Un pedido solo contiene productos de un negocio.
+5. Los precios enviados por el navegador se revalidan.
+6. Las membresías suspendidas o revocadas no conceden acceso.
+7. Esta fase no reemplaza todavía todas las políticas RLS heredadas.
 
-## 6. Validaciones antes de aplicar remotamente
+## 4. Orden de aplicación en staging
 
-Ejecutar en staging:
+```bash
+supabase db push
+npm run lint
+npm run test
+npm run build
+```
+
+Después ejecutar:
 
 ```sql
 select slug, name, status from public.tenants;
 select count(*) from public.tenant_memberships;
-select table_name, column_name
-from information_schema.columns
-where table_schema = 'public' and column_name = 'tenant_id'
-order by table_name;
-```
 
-Verificar filas sin tenant:
-
-```sql
--- Ejecutar por cada tabla crítica antes de activar NOT NULL.
 select count(*) from public.orders where tenant_id is null;
-select count(*) from public.businesses where tenant_id is null;
+select count(*) from public.order_items where tenant_id is null;
+select count(*) from public.order_tracking where tenant_id is null;
+
+select o.id
+from public.orders o
+join public.businesses b on b.id = o.business_id
+where o.tenant_id is distinct from b.tenant_id;
 ```
 
-## 7. Criterios para aprobar Fase 1
+## 5. Criterios de aprobación
 
-- La migración se aplica dos veces sin fallar.
-- Se conserva el tenant predeterminado sin duplicados.
-- Los datos actuales quedan asociados al tenant predeterminado.
-- El build y las pruebas existentes siguen pasando.
-- No cambia el comportamiento visible de la aplicación.
-- No se bloquean usuarios actuales por políticas RLS nuevas.
+- Ambas migraciones se aplican sin errores en staging.
+- Los datos existentes conservan su funcionamiento.
+- No hay pedidos, items ni tracking con tenant incorrecto.
+- La creación de pedidos funciona desde checkout.
+- Un producto de otro negocio es rechazado.
+- Precios alterados desde el navegador son rechazados.
+- Lint, pruebas y build pasan.
+- Las políticas RLS actuales no bloquean el flujo existente.
 
-## 8. Riesgos controlados
+## 6. Pendiente antes de producción
 
-- **Tablas con nombres diferentes:** el bloque dinámico ignora tablas inexistentes.
-- **Datos existentes:** se asignan al tenant predeterminado.
-- **RLS actual:** no se reemplaza en Fase 1.
-- **Migraciones remotas pendientes:** deben aplicarse en orden y primero en staging.
-- **Roles existentes:** se mantiene compatibilidad con el modelo actual y la migración introduce roles de membresía separados.
-
-## 9. Siguiente implementación
-
-Después de aplicar y validar esta base, el siguiente cambio debe ser el `TenantContext` del servidor y la propagación de `tenant_id` en el flujo de creación de pedidos, sin activar todavía aislamiento estricto en producción.
+- Aplicar las migraciones en Supabase staging.
+- Actualizar los tipos generados de Supabase.
+- Añadir pruebas automatizadas para `createTenantOrderAction`.
+- Implementar RLS multi-tenant estricta tabla por tabla.
+- Adaptar creación de negocios, productos, promociones y wallets.
+- Incluir tenant en caché, auditoría y notificaciones.
+- Resolver transacción atómica de pedido + items mediante RPC para eliminar compensación manual.
