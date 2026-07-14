@@ -266,7 +266,7 @@ export default function AdminBusinessesPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(null)}>
             <div className="w-full max-w-sm rounded-xl border border-border bg-slate-800 p-6 shadow-xl" onClick={e => e.stopPropagation()}>
               <h3 className="text-lg font-semibold text-foreground">Eliminar negocio</h3>
-              <p className="mt-2 text-sm text-muted-foreground">¿Eliminar "{b.name}"? Esta acción realizará un borrado lógico y lo dejará inactivo.</p>
+              <p className="mt-2 text-sm text-muted-foreground">¿Eliminar &quot;{b.name}&quot;? Esta acción realizará un borrado lógico y lo dejará inactivo.</p>
               <div className="mt-4 flex gap-2">
                 <button onClick={() => handleDelete(b.id)} className="flex-1 rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-white hover:bg-destructive/90">Eliminar</button>
                 <button onClick={() => setShowDeleteConfirm(null)} className="flex-1 rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/80">Cancelar</button>
