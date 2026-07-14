@@ -42,15 +42,22 @@ export function ReviewModal({
     setSubmitting(true);
     setError('');
     try {
-      await reviewService.createReview(orderId, customerId, businessId, 'merchant', businessRating, businessReview || undefined);
+      await reviewService.createReview(
+        orderId,
+        customerId,
+        businessId,
+        'merchant',
+        businessRating,
+        businessReview || undefined,
+      );
       if (courierId) {
         setStep('courier');
       } else {
         setStep('done');
         onSubmitted();
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al enviar calificación');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Error al enviar calificación');
     }
     setSubmitting(false);
   };
@@ -60,11 +67,18 @@ export function ReviewModal({
     setSubmitting(true);
     setError('');
     try {
-      await reviewService.createReview(orderId, customerId, courierId!, 'courier', courierRating, courierReview || undefined);
+      await reviewService.createReview(
+        orderId,
+        customerId,
+        courierId!,
+        'courier',
+        courierRating,
+        courierReview || undefined,
+      );
       setStep('done');
       onSubmitted();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al enviar calificación');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Error al enviar calificación');
     }
     setSubmitting(false);
   };
@@ -94,6 +108,7 @@ export function ReviewModal({
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
+                  type="button"
                   onClick={() => setBusinessRating(star)}
                   className="transition-all duration-150 hover:scale-110 active:scale-90"
                 >
@@ -110,8 +125,8 @@ export function ReviewModal({
 
             <textarea
               value={businessReview}
-              onChange={(e) => setBusinessReview(e.target.value)}
-              placeholder="Cuéntanos más sobre tu experiencia (opcional)"
+              onChange={(event) => setBusinessReview(event.target.value)}
+              placeholder="Cuéntanos más sobre tu experiencia"
               className="mb-4 h-24 w-full resize-none rounded-xl border border-border bg-background p-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20"
               maxLength={500}
             />
@@ -120,12 +135,14 @@ export function ReviewModal({
 
             <div className="flex gap-3">
               <button
+                type="button"
                 onClick={handleClose}
                 className="flex-1 rounded-xl border border-border py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
               >
-                Saltar
+                Ahora no
               </button>
               <button
+                type="button"
                 onClick={handleSubmitBusiness}
                 disabled={businessRating === 0 || submitting}
                 className="flex-1 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
@@ -148,6 +165,7 @@ export function ReviewModal({
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
+                  type="button"
                   onClick={() => setCourierRating(star)}
                   className="transition-all duration-150 hover:scale-110 active:scale-90"
                 >
@@ -164,8 +182,8 @@ export function ReviewModal({
 
             <textarea
               value={courierReview}
-              onChange={(e) => setCourierReview(e.target.value)}
-              placeholder="Comentario sobre el repartidor (opcional)"
+              onChange={(event) => setCourierReview(event.target.value)}
+              placeholder="Cuéntanos cómo fue la entrega"
               className="mb-4 h-24 w-full resize-none rounded-xl border border-border bg-background p-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20"
               maxLength={500}
             />
@@ -174,6 +192,14 @@ export function ReviewModal({
 
             <div className="flex gap-3">
               <button
+                type="button"
+                onClick={handleClose}
+                className="flex-1 rounded-xl border border-border py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
+              >
+                Ahora no
+              </button>
+              <button
+                type="button"
                 onClick={handleSubmitCourier}
                 disabled={courierRating === 0 || submitting}
                 className="flex-1 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
@@ -191,11 +217,10 @@ export function ReviewModal({
                 <MessageSquare className="h-8 w-8 text-success" />
               </div>
               <h2 className="text-lg font-bold text-foreground">¡Gracias por tu opinión!</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Tu calificación ayuda a mejorar la experiencia de todos.
-              </p>
+              <p className="mt-2 text-sm text-muted-foreground">Tu calificación ayuda a mejorar la experiencia de todos.</p>
             </div>
             <button
+              type="button"
               onClick={handleClose}
               className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
             >
