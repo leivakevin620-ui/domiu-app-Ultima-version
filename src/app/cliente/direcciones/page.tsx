@@ -1,238 +1,263 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { clientService, ClientAddress } from '@/services/client';
-import { motion, AnimatePresence } from 'framer-motion';
-import { EmptyState } from '@/components/ui/empty-state';
-import { SkeletonCard, SkeletonList } from '@/components/ui/skeleton';
-import { MapsProvider } from '@/contexts/MapsContext';
+import React, { useCallback, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-const PlacesAutocomplete = dynamic(() => import('@/components/tracking/maps/PlacesAutocomplete').then(m => ({ default: m.PlacesAutocomplete })), {
-  ssr: false,
-  loading: () => <SkeletonCard />,
-});
-import { logger } from '@/lib/logger';
-import { MapPin, Plus, Pencil, Trash2, Star, Home, Briefcase, Map as MapIcon } from 'lucide-react';
+import { Home, LocateFixed, MapPin, Pencil, Plus, Star, Trash2, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { addressService, type DeliveryAddress } from '@/services/addresses';
+import { getCurrentExactLocation } from '@/lib/maps/geolocation';
+import { SkeletonCard } from '@/components/ui/skeleton';
 
-const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = { home: Home, work: Briefcase, other: MapIcon };
+const PlacesAutocomplete = dynamic(
+  () => import('@/components/tracking/maps/PlacesAutocomplete').then((module) => module.PlacesAutocomplete),
+  { ssr: false, loading: () => <SkeletonCard /> },
+);
+
+type AddressForm = {
+  type: string;
+  label: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  latitude: number | null;
+  longitude: number | null;
+  accuracy: number | null;
+  isPrimary: boolean;
+  instructions: string;
+};
+
+const EMPTY_FORM: AddressForm = {
+  type: 'home',
+  label: 'Casa',
+  streetAddress: '',
+  city: 'Santa Marta',
+  state: 'Magdalena',
+  postalCode: '',
+  country: 'Colombia',
+  latitude: null,
+  longitude: null,
+  accuracy: null,
+  isPrimary: true,
+  instructions: '',
+};
 
 export default function DireccionesPage() {
   const { profile } = useAuth();
-  const [addresses, setAddresses] = useState<ClientAddress[]>([]);
+  const [addresses, setAddresses] = useState<DeliveryAddress[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ type: 'home', street_address: '', city: '', state_province: '', postal_code: '', country: 'Colombia', is_primary: false, label: '', latitude: 0, longitude: 0 });
+  const [locating, setLocating] = useState(false);
+  const [form, setForm] = useState<AddressForm>(EMPTY_FORM);
 
-  const load = () => {
+  const load = useCallback(async () => {
     if (!profile?.id) return;
-    clientService.getAddresses(profile.id).then(data => {
-      setAddresses(data);
+    setLoading(true);
+    try {
+      setAddresses(await addressService.list(profile.id));
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : 'No se pudieron cargar las direcciones');
+    } finally {
       setLoading(false);
-    });
-  };
+    }
+  }, [profile?.id]);
 
-  const loadRef = useRef(load);
-  useEffect(() => { loadRef.current = load; });
-  useEffect(() => { loadRef.current(); }, [profile?.id]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  const handlePlaceSelected = useCallback((place: { lat: number; lng: number; formattedAddress: string; city?: string; state?: string; country?: string; postalCode?: string }) => {
-    setForm(f => ({
-      ...f,
-      street_address: place.formattedAddress,
-      city: place.city || f.city,
-      state_province: place.state || f.state_province,
-      country: place.country || 'Colombia',
-      postal_code: place.postalCode || f.postal_code,
-      latitude: place.lat,
-      longitude: place.lng,
-    }));
-  }, []);
-
-  const resetForm = () => {
-    setForm({ type: 'home', street_address: '', city: '', state_province: '', postal_code: '', country: 'Colombia', is_primary: false, label: '', latitude: 0, longitude: 0 });
-    setEditingId(null);
-    setShowForm(false);
-  };
-
-  const handleEdit = (addr: ClientAddress) => {
-    setForm({ type: addr.type, street_address: addr.street_address, city: addr.city, state_province: addr.state_province ?? '', postal_code: addr.postal_code ?? '', country: addr.country, is_primary: addr.is_primary, label: '', latitude: addr.lat ?? 0, longitude: addr.lng ?? 0 });
-    setEditingId(addr.id);
+  const openNew = () => {
+    setEditingId(undefined);
+    setForm({ ...EMPTY_FORM, isPrimary: addresses.length === 0 });
     setShowForm(true);
   };
 
-  const handleSave = async () => {
+  const edit = (address: DeliveryAddress) => {
+    setEditingId(address.id);
+    setForm({
+      type: address.type,
+      label: address.label || 'Dirección',
+      streetAddress: address.street_address,
+      city: address.city,
+      state: address.state_province || 'Magdalena',
+      postalCode: address.postal_code || '',
+      country: address.country,
+      latitude: address.latitude,
+      longitude: address.longitude,
+      accuracy: null,
+      isPrimary: address.is_primary,
+      instructions: address.instructions || '',
+    });
+    setShowForm(true);
+  };
+
+  const shareLocation = async () => {
+    if (locating) return;
+    setLocating(true);
+    try {
+      const location = await getCurrentExactLocation();
+      setForm((current) => ({
+        ...current,
+        streetAddress: location.formattedAddress,
+        city: location.city,
+        state: location.state,
+        postalCode: location.postalCode,
+        country: location.country,
+        latitude: location.lat,
+        longitude: location.lng,
+        accuracy: location.accuracy,
+      }));
+      toast.success('Ubicación exacta capturada');
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : 'No se pudo obtener la ubicación');
+    } finally {
+      setLocating(false);
+    }
+  };
+
+  const save = async () => {
     if (!profile?.id || saving) return;
+    if (!form.streetAddress.trim() || !form.city.trim()) {
+      toast.error('Selecciona o escribe una dirección válida');
+      return;
+    }
+    if (form.latitude == null || form.longitude == null) {
+      toast.error('La dirección debe tener coordenadas. Selecciónala en Google o comparte tu ubicación.');
+      return;
+    }
+
     setSaving(true);
     try {
-      if (editingId) {
-        await clientService.updateAddress(editingId, profile.id, {
-          ...form,
-          lat: form.latitude || null,
-          lng: form.longitude || null,
-        });
-      } else {
-        await clientService.createAddress(profile.id, {
-          ...form,
-          lat: form.latitude || null,
-          lng: form.longitude || null,
-        });
-      }
-      resetForm();
-      load();
-    } catch (e) {
-      logger.error('Error al guardar dirección', e);
+      await addressService.save(
+        profile.id,
+        {
+          type: form.type,
+          label: form.label,
+          streetAddress: form.streetAddress,
+          city: form.city,
+          state: form.state,
+          postalCode: form.postalCode,
+          country: form.country,
+          latitude: form.latitude,
+          longitude: form.longitude,
+          accuracy: form.accuracy ?? undefined,
+          isPrimary: form.isPrimary,
+          instructions: form.instructions,
+        },
+        editingId,
+      );
+      setShowForm(false);
+      toast.success('Dirección y coordenadas guardadas');
+      await load();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : 'No se pudo guardar');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    await clientService.deleteAddress(id);
-    load();
-  };
-
-  const handleSetDefault = async (id: string) => {
+  const remove = async (address: DeliveryAddress) => {
     if (!profile?.id) return;
-    await clientService.setDefaultAddress(id, profile.id);
-    load();
+    try {
+      await addressService.remove(profile.id, address.id);
+      toast.success('Dirección eliminada');
+      await load();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : 'No se pudo eliminar');
+    }
   };
 
   return (
-    <MapsProvider>
-    <div className="min-h-screen bg-background pb-16 lg:pb-0">
-      <div className="sticky top-0 z-30 bg-background/70 backdrop-blur-2xl supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <h1 className="text-base font-bold text-foreground">Direcciones</h1>
-          <button
-            onClick={() => { resetForm(); setShowForm(true); }}
-            className="flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground"
-          >
-            <Plus className="h-3.5 w-3.5" /> Nueva
-          </button>
+    <main className="mx-auto max-w-4xl space-y-5 px-4 py-6">
+      <header className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-black">Mis direcciones</h1>
+          <p className="text-sm text-muted-foreground">La ubicación exacta se usa para calcular la tarifa y seguir el pedido.</p>
         </div>
-      </div>
+        <button type="button" onClick={openNew} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground">
+          <Plus className="h-4 w-4" /> Nueva
+        </button>
+      </header>
 
-      <div className="mx-auto max-w-3xl space-y-4 px-4 py-5 sm:px-6 lg:px-8">
-        {showForm && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            className="overflow-hidden rounded-2xl border border-border/30 bg-card p-5"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-bold text-foreground">{editingId ? 'Editar dirección' : 'Nueva dirección'}</h2>
-              <button onClick={resetForm} className="text-xs text-muted-foreground hover:text-foreground">Cancelar</button>
-            </div>
-            <div className="space-y-3">
-              <div className="flex gap-2">
-                {['home', 'work', 'other'].map(t => (
-                  <button
-                    key={t}
-                    onClick={() => setForm(f => ({ ...f, type: t }))}
-                    className={`flex-1 rounded-lg py-2 text-xs font-semibold capitalize transition-all ${
-                      form.type === t ? 'bg-primary text-primary-foreground' : 'bg-muted/50 text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {t === 'home' ? 'Casa' : t === 'work' ? 'Trabajo' : 'Otro'}
-                  </button>
-                ))}
-              </div>
-              <PlacesAutocomplete
-                onPlaceSelected={handlePlaceSelected}
-                placeholder="Buscar dirección *"
-                defaultValue={form.street_address}
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="Ciudad *" className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground outline-none focus:border-primary" />
-                <input value={form.state_province} onChange={e => setForm(f => ({ ...f, state_province: e.target.value }))} placeholder="Departamento" className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground outline-none focus:border-primary" />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <input value={form.postal_code} onChange={e => setForm(f => ({ ...f, postal_code: e.target.value }))} placeholder="Código postal" className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground outline-none focus:border-primary" />
-                <input value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} placeholder="País" className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground outline-none focus:border-primary" />
-              </div>
-              <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                <input type="checkbox" checked={form.is_primary} onChange={e => setForm(f => ({ ...f, is_primary: e.target.checked }))} className="rounded border-border" />
-                Establecer como dirección principal
-              </label>
-              <button
-                onClick={handleSave}
-                disabled={saving || !form.street_address || !form.city}
-                className="w-full rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-              >
-                {saving ? 'Guardando...' : editingId ? 'Guardar cambios' : 'Agregar dirección'}
-              </button>
-            </div>
-          </motion.div>
-        )}
+      {showForm && (
+        <section className="rounded-3xl border bg-card p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-bold">{editingId ? 'Editar dirección' : 'Nueva dirección'}</h2>
+            <button type="button" onClick={() => setShowForm(false)}><X className="h-5 w-5" /></button>
+          </div>
 
-        {loading ? (
-          <SkeletonList />
-        ) : addresses.length === 0 && !showForm ? (
-          <EmptyState
-            icon={<MapPin className="h-6 w-6" />}
-            title="Sin direcciones"
-            description="Agrega tu primera dirección para recibir pedidos."
-            action={
-              <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-2 rounded-2xl bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground">
-                <Plus className="h-4 w-4" /> Agregar dirección
-              </button>
-            }
-          />
-        ) : (
-          <AnimatePresence>
-            {addresses.map((addr, i) => {
-              const Icon = TYPE_ICONS[addr.type] ?? MapPin;
-              return (
-                <motion.div
-                  key={addr.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="relative rounded-2xl border border-border/30 bg-card/50 p-5 transition-all hover:border-primary/20"
-                >
-                  {addr.is_primary && (
-                    <span className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-semibold text-primary">
-                      <Star className="h-3 w-3 fill-current" /> Principal
-                    </span>
-                  )}
-                  <div className="flex items-start gap-3">
-                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${addr.type === 'work' ? 'bg-blue-50 text-blue-500' : addr.type === 'home' ? 'bg-emerald-50 text-emerald-500' : 'bg-purple-50 text-purple-500'}`}>
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-foreground">
-                        {addr.type === 'home' ? 'Casa' : addr.type === 'work' ? 'Trabajo' : 'Otro'}
-                      </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{addr.street_address}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {[addr.city, addr.state_province, addr.country].filter(Boolean).join(', ')}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center gap-2 border-t border-border/20 pt-3">
-                    <button onClick={() => handleEdit(addr)} className="flex items-center gap-1 rounded-lg bg-muted/50 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground">
-                      <Pencil className="h-3 w-3" /> Editar
-                    </button>
-                    {!addr.is_primary && (
-                      <button onClick={() => handleSetDefault(addr.id)} className="flex items-center gap-1 rounded-lg bg-muted/50 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground">
-                        <Star className="h-3 w-3" /> Principal
-                      </button>
-                    )}
-                    <button onClick={() => handleDelete(addr.id)} className="ml-auto flex items-center gap-1 rounded-lg bg-muted/50 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50">
-                      <Trash2 className="h-3 w-3" /> Eliminar
-                    </button>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        )}
-      </div>
-    </div>
-    </MapsProvider>
+          <button type="button" onClick={() => void shareLocation()} disabled={locating} className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-black text-primary-foreground disabled:opacity-60">
+            <LocateFixed className={`h-4 w-4 ${locating ? 'animate-pulse' : ''}`} />
+            {locating ? 'Obteniendo ubicación exacta…' : 'Compartir mi ubicación actual'}
+          </button>
+
+          <div className="relative my-4 text-center text-xs text-muted-foreground before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t before:border-border">
+            <span className="relative bg-card px-3">o busca la dirección manualmente</span>
+          </div>
+
+          <div className="space-y-3">
+            <PlacesAutocomplete
+              defaultValue={form.streetAddress}
+              placeholder="Busca calle, carrera, edificio o barrio"
+              onPlaceSelected={(place) => setForm((current) => ({
+                ...current,
+                streetAddress: place.formattedAddress,
+                city: place.city || current.city,
+                state: place.state || current.state,
+                postalCode: place.postalCode || current.postalCode,
+                country: place.country || current.country,
+                latitude: place.lat,
+                longitude: place.lng,
+                accuracy: null,
+              }))}
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <input value={form.label} onChange={(event) => setForm((current) => ({ ...current, label: event.target.value }))} placeholder="Nombre: Casa, Trabajo…" className="rounded-xl border bg-background px-3 py-2.5 text-sm" />
+              <select value={form.type} onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))} className="rounded-xl border bg-background px-3 py-2.5 text-sm">
+                <option value="home">Casa</option><option value="work">Trabajo</option><option value="other">Otra</option>
+              </select>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <input value={form.city} onChange={(event) => setForm((current) => ({ ...current, city: event.target.value }))} placeholder="Ciudad" className="rounded-xl border bg-background px-3 py-2.5 text-sm" />
+              <input value={form.state} onChange={(event) => setForm((current) => ({ ...current, state: event.target.value }))} placeholder="Departamento" className="rounded-xl border bg-background px-3 py-2.5 text-sm" />
+            </div>
+            <textarea value={form.instructions} onChange={(event) => setForm((current) => ({ ...current, instructions: event.target.value }))} placeholder="Apartamento, torre, referencia o indicaciones" className="min-h-20 w-full rounded-xl border bg-background px-3 py-2.5 text-sm" />
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.isPrimary} onChange={(event) => setForm((current) => ({ ...current, isPrimary: event.target.checked }))} /> Usar como dirección principal</label>
+            <div className={`rounded-xl p-3 text-xs font-semibold ${form.latitude != null ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+              {form.latitude != null ? `Coordenadas listas: ${form.latitude.toFixed(6)}, ${form.longitude?.toFixed(6)}` : 'Aún faltan las coordenadas exactas.'}
+            </div>
+            <button type="button" onClick={() => void save()} disabled={saving} className="w-full rounded-xl bg-primary py-3 text-sm font-black text-primary-foreground disabled:opacity-60">{saving ? 'Guardando…' : 'Guardar dirección'}</button>
+          </div>
+        </section>
+      )}
+
+      {loading ? <SkeletonCard /> : addresses.length === 0 ? (
+        <section className="rounded-3xl border border-dashed p-10 text-center"><MapPin className="mx-auto h-10 w-10 text-muted-foreground" /><p className="mt-3 font-bold">No tienes direcciones guardadas</p></section>
+      ) : (
+        <section className="grid gap-3 sm:grid-cols-2">
+          {addresses.map((address) => (
+            <article key={address.id} className="rounded-2xl border bg-card p-4">
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl bg-primary/10 p-2 text-primary"><Home className="h-5 w-5" /></div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2"><h2 className="font-bold">{address.label || 'Dirección'}</h2>{address.is_primary && <Star className="h-4 w-4 fill-primary text-primary" />}</div>
+                  <p className="mt-1 text-sm text-muted-foreground">{address.street_address}</p>
+                  <p className={`mt-2 text-xs font-semibold ${address.latitude != null ? 'text-success' : 'text-warning'}`}>{address.latitude != null ? 'Ubicación exacta guardada' : 'Faltan coordenadas'}</p>
+                </div>
+              </div>
+              <div className="mt-4 flex gap-2 border-t pt-3">
+                <button type="button" onClick={() => edit(address)} className="flex items-center gap-1 rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold"><Pencil className="h-3 w-3" /> Editar</button>
+                {!address.is_primary && <button type="button" onClick={() => profile?.id && addressService.setPrimary(profile.id, address.id).then(load)} className="rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold">Principal</button>}
+                <button type="button" onClick={() => void remove(address)} className="ml-auto rounded-lg bg-destructive/10 p-2 text-destructive"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            </article>
+          ))}
+        </section>
+      )}
+    </main>
   );
 }
