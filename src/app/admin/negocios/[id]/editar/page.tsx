@@ -11,6 +11,8 @@ const DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', '
 const TYPES = [['restaurant','Restaurante'],['fast_food','Comida rápida'],['cafe','Cafetería'],['bakery','Panadería'],['supermarket','Supermercado'],['pharmacy','Farmacia'],['store','Tienda'],['other','Otro']];
 
 type Hours = { day_of_week: number; opens_at: string; closes_at: string; is_closed: boolean };
+type Address = { id: string; is_primary?: boolean | null; street_address?: string | null; city?: string | null; latitude?: number | string | null; longitude?: number | string | null };
+type BusinessHour = { day_of_week: number; opens_at?: string | null; closes_at?: string | null; is_closed?: boolean | null };
 
 export default function EditarNegocioPage() {
   const id = useParams().id as string;
@@ -29,7 +31,8 @@ export default function EditarNegocioPage() {
       try {
         const detail = await getBusinessFullDetail(id);
         if (!detail) return toast.error('Negocio no encontrado');
-        const address = detail.addresses?.find((a: any) => a.is_primary) || detail.addresses?.[0];
+        const addresses = (detail.addresses || []) as Address[];
+        const address = addresses.find((item) => item.is_primary) || addresses[0];
         setForm({
           name: detail.business.name || '', description: detail.business.description || '',
           cuisineType: detail.business.cuisine_type || '', businessType: detail.business.business_type || 'restaurant',
@@ -37,7 +40,13 @@ export default function EditarNegocioPage() {
           isVerified: !!detail.business.is_verified, addressId: address?.id || '', address: address?.street_address || '',
           city: address?.city || 'Santa Marta', latitude: address?.latitude?.toString() || '', longitude: address?.longitude?.toString() || '',
         });
-        setHours(detail.hours?.map((h:any) => ({ day_of_week:h.day_of_week, opens_at:h.opens_at?.slice(0,5)||'08:00', closes_at:h.closes_at?.slice(0,5)||'22:00', is_closed:!!h.is_closed })) || []);
+        const businessHours = (detail.hours || []) as BusinessHour[];
+        setHours(businessHours.map((hour) => ({
+          day_of_week: hour.day_of_week,
+          opens_at: hour.opens_at?.slice(0,5) || '08:00',
+          closes_at: hour.closes_at?.slice(0,5) || '22:00',
+          is_closed: !!hour.is_closed,
+        })));
       } catch { toast.error('No se pudieron cargar los datos'); }
       finally { setLoading(false); }
     })();
