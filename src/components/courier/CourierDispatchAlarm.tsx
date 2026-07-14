@@ -55,7 +55,7 @@ export function CourierDispatchAlarm() {
   const [accepting, setAccepting] = useState(false);
   const [soundBlocked, setSoundBlocked] = useState(false);
   const audioContextRef = useRef<BrowserAudioContext | null>(null);
-  const alarmIntervalRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
+  const alarmIntervalRef = useRef<number | null>(null);
 
   const loadActiveNotifications = useCallback(async () => {
     if (!profile?.id) return;
