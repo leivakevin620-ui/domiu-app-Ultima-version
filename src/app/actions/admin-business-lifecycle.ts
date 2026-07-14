@@ -21,6 +21,12 @@ const assignOwnerSchema = z.object({
   reason: z.string().trim().min(3, 'Debes indicar un motivo').max(500),
 });
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 async function requireAdmin() {
   const result = await requireAuth();
   if (result.error || !result.session) {
@@ -48,7 +54,7 @@ export async function setBusinessActiveStateAction(input: z.infer<typeof statusS
 
   const { data: current, error: currentError } = await supabase
     .from('businesses')
-    .select('id, name, owner_id, is_active, deleted_at')
+    .select('id, name, owner_id, is_active, metadata, deleted_at')
     .eq('id', businessId)
     .maybeSingle();
 
@@ -59,12 +65,16 @@ export async function setBusinessActiveStateAction(input: z.infer<typeof statusS
   }
 
   const now = new Date().toISOString();
-  const metadata = {
+  const lifecycleChange = {
     changed_by: auth.session.user.id,
     changed_at: now,
     reason,
     previous_state: current.is_active,
     new_state: isActive,
+  };
+  const metadata = {
+    ...asRecord(current.metadata),
+    last_lifecycle_change: lifecycleChange,
   };
 
   const { data: updated, error: updateError } = await supabase
@@ -72,7 +82,7 @@ export async function setBusinessActiveStateAction(input: z.infer<typeof statusS
     .update({
       is_active: isActive,
       updated_at: now,
-      metadata: metadata,
+      metadata,
     })
     .eq('id', businessId)
     .select('id, name, owner_id, is_active, updated_at')
@@ -100,7 +110,7 @@ export async function setBusinessActiveStateAction(input: z.infer<typeof statusS
     isActive ? 'reactivate_business' : 'suspend_business',
     'businesses',
     businessId,
-    metadata,
+    lifecycleChange,
   );
 
   return { success: true, business: updated };
@@ -118,18 +128,19 @@ export async function assignBusinessOwnerAction(input: z.infer<typeof assignOwne
   const supabase = getServiceClient();
   const { businessId, ownerId, reason } = parsed.data;
 
-  const [{ data: business, error: businessError }, { data: owner, error: ownerError }] = await Promise.all([
-    supabase
-      .from('businesses')
-      .select('id, name, owner_id, deleted_at')
-      .eq('id', businessId)
-      .maybeSingle(),
-    supabase
-      .from('profiles')
-      .select('id, email, first_name, last_name, role, status, deleted_at')
-      .eq('id', ownerId)
-      .maybeSingle(),
-  ]);
+  const [{ data: business, error: businessError }, { data: owner, error: ownerError }] =
+    await Promise.all([
+      supabase
+        .from('businesses')
+        .select('id, name, owner_id, deleted_at')
+        .eq('id', businessId)
+        .maybeSingle(),
+      supabase
+        .from('profiles')
+        .select('id, email, first_name, last_name, role, status, metadata, deleted_at')
+        .eq('id', ownerId)
+        .maybeSingle(),
+    ]);
 
   if (businessError) return { error: 'No se pudo consultar el negocio: ' + businessError.message };
   if (!business || business.deleted_at) return { error: 'Negocio no encontrado' };
@@ -146,6 +157,11 @@ export async function assignBusinessOwnerAction(input: z.infer<typeof assignOwne
 
   const now = new Date().toISOString();
   const previousOwnerId = business.owner_id;
+  const { data: previousOwner } = await supabase
+    .from('profiles')
+    .select('id, metadata')
+    .eq('id', previousOwnerId)
+    .maybeSingle();
 
   const { error: updateBusinessError } = await supabase
     .from('businesses')
@@ -156,22 +172,51 @@ export async function assignBusinessOwnerAction(input: z.infer<typeof assignOwne
     return { error: 'No se pudo asignar el propietario: ' + updateBusinessError.message };
   }
 
+  const nextOwnerMetadata = {
+    ...asRecord(owner.metadata),
+    business_id: businessId,
+    assigned_as_business_owner_at: now,
+    assigned_by: auth.session.user.id,
+  };
+
   const { error: profileError } = await supabase
     .from('profiles')
     .update({
       role: 'merchant',
       updated_at: now,
-      metadata: {
-        business_id: businessId,
-        assigned_as_business_owner_at: now,
-        assigned_by: auth.session.user.id,
-      },
+      metadata: nextOwnerMetadata,
     })
     .eq('id', ownerId);
 
   if (profileError) {
-    await supabase.from('businesses').update({ owner_id: previousOwnerId, updated_at: now }).eq('id', businessId);
+    await supabase
+      .from('businesses')
+      .update({ owner_id: previousOwnerId, updated_at: now })
+      .eq('id', businessId);
     return { error: 'No se pudo actualizar el perfil del propietario: ' + profileError.message };
+  }
+
+  if (previousOwner && previousOwner.id !== ownerId) {
+    const previousMetadata = { ...asRecord(previousOwner.metadata) };
+    if (previousMetadata.business_id === businessId) {
+      delete previousMetadata.business_id;
+      previousMetadata.last_business_reassignment_at = now;
+      await supabase
+        .from('profiles')
+        .update({ metadata: previousMetadata, updated_at: now })
+        .eq('id', previousOwner.id);
+    }
+
+    await supabase.from('notifications').insert({
+      recipient_id: previousOwner.id,
+      sender_id: auth.session.user.id,
+      notification_type: 'system_alert',
+      title: 'Negocio reasignado',
+      message: `Ya no eres el propietario asignado de "${business.name}". Motivo: ${reason}`,
+      action_url: '/cliente',
+      is_read: false,
+      channels: ['in_app'],
+    });
   }
 
   await supabase.from('notifications').insert({
