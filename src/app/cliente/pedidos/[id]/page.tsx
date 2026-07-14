@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { useOrders } from '@/contexts/OrderContext';
 import { useCart } from '@/contexts/CartContext';
 import { useChat } from '@/contexts/ChatContext';
 import { orderService, type OrderData } from '@/services/orders';
@@ -27,7 +26,6 @@ export default function ClientePedidoDetalle() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { profile } = useAuth();
-  const { getOrderById } = useOrders();
   const { clearCart, addItem } = useCart();
   const { openConversation, closeConversation } = useChat();
   const [order, setOrder] = useState<OrderData | null>(null);
@@ -45,7 +43,7 @@ export default function ClientePedidoDetalle() {
     let active = true;
     void (async () => {
       try {
-        const result = (await getOrderById(params.id)) || (await orderService.getOrderById(params.id));
+        const result = await orderService.getOrderById(params.id);
         if (active) setOrder(result);
       } finally {
         if (active) setLoading(false);
@@ -54,7 +52,7 @@ export default function ClientePedidoDetalle() {
     return () => {
       active = false;
     };
-  }, [getOrderById, params.id]);
+  }, [params.id]);
 
   useEffect(() => {
     if (order?.status === 'delivered' && !reviewSubmitted && profile) {
@@ -150,7 +148,7 @@ export default function ClientePedidoDetalle() {
         </div>
       </section>
 
-      <OrderTimeline orderId={order.id} status={order.status} />
+      <OrderTimeline status={order.status} />
 
       <section className="rounded-2xl border bg-card p-5">
         <h2 className="font-semibold">Productos</h2>
@@ -207,7 +205,7 @@ export default function ClientePedidoDetalle() {
         )}
       </div>
 
-      {showChat && <ChatWindow onClose={handleCloseChat} />}
+      {showChat && <ChatWindow userRole="customer" onClose={handleCloseChat} />}
       {showReview && profile && (
         <ReviewModal
           orderId={order.id}
