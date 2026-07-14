@@ -3,45 +3,66 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
+const REQUIRED_ENV_VARS = [
+  'NEXT_PUBLIC_SUPABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+  'NEXT_PUBLIC_APP_URL',
+  'NEXT_PUBLIC_GOOGLE_MAPS_API_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
+] as const;
+
 export async function GET() {
-  const envVars = {
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'set' : 'missing',
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'set' : 'missing',
-    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ? 'set' : 'missing',
-    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? 'set' : 'missing',
-    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? 'set' : 'missing',
-    NODE_ENV: process.env.NODE_ENV || 'not set',
-  };
+  const missingConfiguration = REQUIRED_ENV_VARS.filter((name) => !process.env[name]);
+  let databaseStatus: 'ok' | 'error' | 'skipped' = 'skipped';
+  let databaseError: string | null = null;
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  let dbStatus = 'unknown';
-  let dbError: string | null = null;
-
-  if (url && anonKey) {
+  if (url && serviceRoleKey) {
     try {
-      const supabase = createClient(url, anonKey);
-      const { error } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).limit(1);
+      const supabase = createClient(url, serviceRoleKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const { error } = await supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true });
+
       if (error) {
-        dbStatus = 'error';
-        dbError = error.message;
+        databaseStatus = 'error';
+        databaseError = error.message || error.code || 'Database health query failed';
       } else {
-        dbStatus = 'ok';
+        databaseStatus = 'ok';
       }
-    } catch (e) {
-      dbStatus = 'error';
-      dbError = e instanceof Error ? e.message : 'Unknown error';
+    } catch (error) {
+      databaseStatus = 'error';
+      databaseError = error instanceof Error ? error.message : 'Database health query failed';
     }
-  } else {
-    dbStatus = 'skipped';
   }
 
-  return NextResponse.json({
-    timestamp: new Date().toISOString(),
-    env: envVars,
-    supabase: {
-      db: { status: dbStatus, error: dbError },
+  const healthy = missingConfiguration.length === 0 && databaseStatus === 'ok';
+
+  return NextResponse.json(
+    {
+      status: healthy ? 'ok' : 'degraded',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'unknown',
+      configuration: {
+        status: missingConfiguration.length === 0 ? 'ok' : 'error',
+        missing: missingConfiguration,
+      },
+      services: {
+        database: {
+          status: databaseStatus,
+          error: databaseError,
+        },
+      },
     },
-  });
+    {
+      status: healthy ? 200 : 503,
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+      },
+    },
+  );
 }
