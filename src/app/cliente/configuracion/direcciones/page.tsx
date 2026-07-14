@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { MapsProvider } from '@/contexts/MapsContext';
 import { addressService, type DeliveryAddress } from '@/services/addresses';
-import { getCurrentExactLocation } from '@/lib/maps/geolocation';
+import { getCurrentExactLocation, isCoordinateFallback } from '@/lib/maps/geolocation';
 import { SkeletonCard } from '@/components/ui/skeleton';
 
 const PlacesAutocomplete = dynamic(
@@ -103,11 +103,14 @@ function AddressSettingsContent() {
       const location = await getCurrentExactLocation();
       setForm((current) => ({
         ...current,
-        streetAddress: location.formattedAddress,
-        city: location.city,
-        state: location.state,
-        postalCode: location.postalCode,
-        country: location.country,
+        streetAddress:
+          isCoordinateFallback(location.formattedAddress) && current.streetAddress.trim()
+            ? current.streetAddress
+            : location.formattedAddress,
+        city: location.city || current.city,
+        state: location.state || current.state,
+        postalCode: location.postalCode || current.postalCode,
+        country: location.country || current.country,
         latitude: location.lat,
         longitude: location.lng,
         accuracy: location.accuracy,
@@ -122,26 +125,38 @@ function AddressSettingsContent() {
 
   const save = async () => {
     if (!profile?.id || saving) return;
-    if (!form.streetAddress.trim() || !form.city.trim()) return toast.error('Escribe o selecciona una dirección válida');
-    if (form.latitude == null || form.longitude == null) return toast.error('Comparte la ubicación o selecciona una dirección de Google para guardar las coordenadas');
+    if (!form.streetAddress.trim() || !form.city.trim()) {
+      toast.error('Escribe una dirección válida');
+      return;
+    }
+    if (form.latitude == null || form.longitude == null) {
+      toast.error('Comparte tu ubicación actual para guardar las coordenadas exactas');
+      return;
+    }
 
     setSaving(true);
     try {
-      await addressService.save(profile.id, {
-        type: form.type,
-        label: form.label,
-        streetAddress: form.streetAddress,
-        city: form.city,
-        state: form.state,
-        postalCode: form.postalCode,
-        country: form.country,
-        latitude: form.latitude,
-        longitude: form.longitude,
-        accuracy: form.accuracy ?? undefined,
-        isPrimary: form.isPrimary,
-        instructions: form.instructions,
-      }, editingId);
+      await addressService.save(
+        profile.id,
+        {
+          type: form.type,
+          label: form.label,
+          streetAddress: form.streetAddress,
+          city: form.city,
+          state: form.state,
+          postalCode: form.postalCode,
+          country: form.country,
+          latitude: form.latitude,
+          longitude: form.longitude,
+          accuracy: form.accuracy ?? undefined,
+          isPrimary: form.isPrimary,
+          instructions: form.instructions,
+        },
+        editingId,
+      );
       setShowForm(false);
+      setEditingId(undefined);
+      setForm({ ...EMPTY_FORM });
       toast.success('Dirección y coordenadas guardadas permanentemente');
       await load();
     } catch (cause) {
@@ -159,6 +174,17 @@ function AddressSettingsContent() {
       toast.success('Dirección eliminada');
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : 'No se pudo eliminar');
+    }
+  };
+
+  const setAsPrimary = async (address: DeliveryAddress) => {
+    if (!profile?.id || address.is_primary) return;
+    try {
+      await addressService.setPrimary(profile.id, address.id);
+      await load();
+      toast.success('Dirección principal actualizada');
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : 'No se pudo actualizar la dirección principal');
     }
   };
 
@@ -182,11 +208,34 @@ function AddressSettingsContent() {
           </div>
           <button type="button" onClick={() => void shareLocation()} disabled={locating} className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-black text-primary-foreground disabled:opacity-60">
             <LocateFixed className={`h-4 w-4 ${locating ? 'animate-pulse' : ''}`} />
-            {locating ? 'Obteniendo ubicación exacta…' : 'Compartir mi ubicación actual'}
+            {locating ? 'Obteniendo coordenadas exactas…' : 'Compartir mi ubicación actual'}
           </button>
-          <div className="relative my-4 text-center text-xs text-muted-foreground before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t"><span className="relative bg-card px-3">o busca la dirección manualmente</span></div>
+          <div className="relative my-4 text-center text-xs text-muted-foreground before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t"><span className="relative bg-card px-3">dirección de entrega</span></div>
           <div className="space-y-3">
-            <PlacesAutocomplete defaultValue={form.streetAddress} placeholder="Busca calle, carrera, edificio o barrio" onPlaceSelected={(place) => setForm((current) => ({ ...current, streetAddress: place.formattedAddress, city: place.city || current.city, state: place.state || current.state, postalCode: place.postalCode || current.postalCode, country: place.country || current.country, latitude: place.lat, longitude: place.lng, accuracy: null }))} />
+            <PlacesAutocomplete
+              defaultValue={form.streetAddress}
+              placeholder="Escribe o busca calle, carrera, edificio o barrio"
+              onValueChange={(streetAddress) =>
+                setForm((current) =>
+                  streetAddress === current.streetAddress
+                    ? current
+                    : { ...current, streetAddress, latitude: null, longitude: null, accuracy: null },
+                )
+              }
+              onPlaceSelected={(place) =>
+                setForm((current) => ({
+                  ...current,
+                  streetAddress: place.formattedAddress,
+                  city: place.city || current.city,
+                  state: place.state || current.state,
+                  postalCode: place.postalCode || current.postalCode,
+                  country: place.country || current.country,
+                  latitude: place.lat,
+                  longitude: place.lng,
+                  accuracy: null,
+                }))
+              }
+            />
             <div className="grid gap-3 sm:grid-cols-2">
               <input value={form.label} onChange={(event) => setForm((current) => ({ ...current, label: event.target.value }))} placeholder="Nombre: Casa, Trabajo…" className="rounded-xl border bg-background px-3 py-2.5 text-sm" />
               <select value={form.type} onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))} className="rounded-xl border bg-background px-3 py-2.5 text-sm"><option value="home">Casa</option><option value="work">Trabajo</option><option value="other">Otra</option></select>
@@ -197,8 +246,8 @@ function AddressSettingsContent() {
             </div>
             <textarea value={form.instructions} onChange={(event) => setForm((current) => ({ ...current, instructions: event.target.value }))} placeholder="Apartamento, torre, referencia o indicaciones" className="min-h-20 w-full rounded-xl border bg-background px-3 py-2.5 text-sm" />
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.isPrimary} onChange={(event) => setForm((current) => ({ ...current, isPrimary: event.target.checked }))} /> Usar como dirección principal</label>
-            <div className={`rounded-xl p-3 text-xs font-semibold ${form.latitude != null ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>{form.latitude != null ? `Coordenadas listas: ${form.latitude.toFixed(6)}, ${form.longitude?.toFixed(6)}` : 'Aún faltan las coordenadas exactas.'}</div>
-            <button type="button" onClick={() => void save()} disabled={saving} className="w-full rounded-xl bg-primary py-3 text-sm font-black text-primary-foreground disabled:opacity-60">{saving ? 'Guardando…' : 'Guardar dirección'}</button>
+            <div className={`rounded-xl p-3 text-xs font-semibold ${form.latitude != null ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>{form.latitude != null ? `Coordenadas listas: ${form.latitude.toFixed(6)}, ${form.longitude?.toFixed(6)}` : 'Escribe la dirección y comparte tu ubicación para agregar las coordenadas.'}</div>
+            <button type="button" onClick={() => void save()} disabled={saving || locating} className="w-full rounded-xl bg-primary py-3 text-sm font-black text-primary-foreground disabled:opacity-60">{saving ? 'Guardando y verificando…' : 'Guardar dirección'}</button>
           </div>
         </section>
       )}
@@ -210,7 +259,7 @@ function AddressSettingsContent() {
           {addresses.map((address) => (
             <article key={address.id} className="rounded-2xl border bg-card p-4">
               <div className="flex items-start gap-3"><div className="rounded-xl bg-primary/10 p-2 text-primary"><Home className="h-5 w-5" /></div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><h2 className="font-bold">{address.label || 'Dirección'}</h2>{address.is_primary && <Star className="h-4 w-4 fill-primary text-primary" />}</div><p className="mt-1 text-sm text-muted-foreground">{address.street_address}</p><p className={`mt-2 text-xs font-semibold ${address.latitude != null ? 'text-success' : 'text-warning'}`}>{address.latitude != null ? 'Ubicación exacta guardada' : 'Faltan coordenadas'}</p></div></div>
-              <div className="mt-4 flex gap-2 border-t pt-3"><button type="button" onClick={() => edit(address)} className="flex items-center gap-1 rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold"><Pencil className="h-3 w-3" /> Editar</button>{!address.is_primary && <button type="button" onClick={() => profile?.id && addressService.setPrimary(profile.id, address.id).then(load)} className="rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold">Principal</button>}<button type="button" onClick={() => void remove(address)} className="ml-auto rounded-lg bg-destructive/10 p-2 text-destructive"><Trash2 className="h-4 w-4" /></button></div>
+              <div className="mt-4 flex gap-2 border-t pt-3"><button type="button" onClick={() => edit(address)} className="flex items-center gap-1 rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold"><Pencil className="h-3 w-3" /> Editar</button>{!address.is_primary && <button type="button" onClick={() => void setAsPrimary(address)} className="rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold">Principal</button>}<button type="button" onClick={() => void remove(address)} className="ml-auto rounded-lg bg-destructive/10 p-2 text-destructive"><Trash2 className="h-4 w-4" /></button></div>
             </article>
           ))}
         </section>
