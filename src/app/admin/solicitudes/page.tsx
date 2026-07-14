@@ -19,6 +19,10 @@ import {
   type CourierApplication,
   type BusinessApplication,
 } from '@/app/actions/admin-applications';
+import {
+  approveBusinessApplicationSafe,
+  rejectBusinessApplicationSafe,
+} from '@/app/actions/admin-business-applications';
 
 const statusBadge: Record<string, 'warning' | 'success' | 'destructive' | 'outline'> = {
   pending: 'warning',
@@ -92,7 +96,7 @@ export default function AdminSolicitudesPage() {
       if (activeTab === 'couriers') {
         res = await approveCourierApplication(app.id, reviewNote.trim() || undefined);
       } else {
-        res = await approveBusinessApplication(app.id, reviewNote.trim() || undefined);
+        res = await approveBusinessApplicationSafe(app.id, reviewNote.trim() || undefined);
       }
       if (res.error) { toast.error(res.error); return; }
       toast.success('Solicitud aprobada correctamente');
@@ -114,7 +118,7 @@ export default function AdminSolicitudesPage() {
       if (activeTab === 'couriers') {
         res = await rejectCourierApplication(app.id, rejectReason.trim());
       } else {
-        res = await rejectBusinessApplication(app.id, rejectReason.trim());
+        res = await rejectBusinessApplicationSafe(app.id, rejectReason.trim());
       }
       if (res.error) { toast.error(res.error); return; }
       toast.success('Solicitud rechazada');

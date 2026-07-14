@@ -1,12 +1,30 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import type { MarketplaceProduct } from '@/services/marketplace';
+
+export interface CartCustomization {
+  [key: string]: unknown;
+  style?: string;
+  sauces?: string[];
+  saucePresentation?: 'banadas' | 'aparte';
+  extras?: Array<{ name: string; price: number; quantity: number }>;
+  preparationNote?: string;
+}
 
 export interface CartItem {
   id: string;
   product: MarketplaceProduct;
   quantity: number;
+  unitPrice: number;
+  customization?: CartCustomization;
   notes?: string;
 }
 
@@ -16,6 +34,12 @@ interface CartState {
   items: CartItem[];
 }
 
+interface AddItemOptions {
+  quantity?: number;
+  unitPrice?: number;
+  customization?: CartCustomization;
+}
+
 interface CartContextValue {
   items: CartItem[];
   businessId: string | null;
@@ -23,100 +47,165 @@ interface CartContextValue {
   itemCount: number;
   subtotal: number;
   isEmpty: boolean;
-  addItem: (product: MarketplaceProduct, businessId: string, businessName: string, quantity?: number) => void;
-  removeItem: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
+  addItem: (
+    product: MarketplaceProduct,
+    businessId: string,
+    businessName: string,
+    options?: AddItemOptions,
+  ) => void;
+  removeItem: (itemId: string) => void;
+  updateQuantity: (itemId: string, quantity: number) => void;
   clearCart: () => void;
 }
 
-const CartContext = createContext<CartContextValue | null>(null);
+const EMPTY_CART: CartState = {
+  businessId: null,
+  businessName: null,
+  items: [],
+};
 
+const CartContext = createContext<CartContextValue | null>(null);
 const STORAGE_KEY = 'domiu-cart';
 
 function loadCart(): CartState {
-  if (typeof window === 'undefined') return { businessId: null, businessName: null, items: [] };
+  if (typeof window === 'undefined') return EMPTY_CART;
+
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as CartState;
-  } catch { /* ignore */ }
-  return { businessId: null, businessName: null, items: [] };
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return EMPTY_CART;
+
+    const parsed = JSON.parse(raw) as CartState;
+    if (!Array.isArray(parsed.items)) return EMPTY_CART;
+
+    return {
+      businessId: parsed.businessId ?? null,
+      businessName: parsed.businessName ?? null,
+      items: parsed.items.map((item) => ({
+        ...item,
+        unitPrice: item.unitPrice ?? item.product.price,
+      })),
+    };
+  } catch {
+    return EMPTY_CART;
+  }
 }
 
 function saveCart(state: CartState) {
   if (typeof window === 'undefined') return;
+
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch { /* ignore */ }
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // El carrito sigue funcionando en memoria si el navegador bloquea localStorage.
+  }
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<CartState>({ businessId: null, businessName: null, items: [] });
-  const [ready, setReady] = useState(false);
+  const [state, setState] = useState<CartState>(EMPTY_CART);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setState(loadCart()); // eslint-disable-line react-hooks/set-state-in-effect
-    setReady(true);
+    const timeout = window.setTimeout(() => {
+      setState(loadCart());
+      setHydrated(true);
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
   }, []);
 
   useEffect(() => {
-    if (ready) saveCart(state);
-  }, [state, ready]);
+    if (!hydrated) return;
+    saveCart(state);
+  }, [state, hydrated]);
 
-  const addItem = useCallback((product: MarketplaceProduct, businessId: string, businessName: string, quantity = 1) => {
-    setState((prev) => {
-      if (prev.businessId && prev.businessId !== businessId && prev.items.length > 0) {
-        return {
-          businessId,
-          businessName,
-          items: [{ id: crypto.randomUUID?.() ?? Math.random().toString(36), product, quantity }],
-        };
-      }
-      const existing = prev.items.find((i) => i.product.id === product.id);
-      if (existing) {
-        return {
-          ...prev,
-          businessId,
-          businessName,
-          items: prev.items.map((i) =>
-            i.product.id === product.id ? { ...i, quantity: i.quantity + quantity } : i,
-          ),
-        };
-      }
-      return {
-        businessId,
-        businessName,
-        items: [...prev.items, { id: crypto.randomUUID?.() ?? Math.random().toString(36), product, quantity }],
+  const addItem = useCallback(
+    (
+      product: MarketplaceProduct,
+      businessId: string,
+      businessName: string,
+      options: AddItemOptions = {},
+    ) => {
+      const quantity = options.quantity ?? 1;
+      const unitPrice = options.unitPrice ?? product.price;
+      const item: CartItem = {
+        id: crypto.randomUUID?.() ?? Math.random().toString(36),
+        product,
+        quantity,
+        unitPrice,
+        customization: options.customization,
+        notes: options.customization?.preparationNote,
       };
+
+      setState((previous) => {
+        if (
+          previous.businessId &&
+          previous.businessId !== businessId &&
+          previous.items.length > 0
+        ) {
+          return { businessId, businessName, items: [item] };
+        }
+
+        const signature = JSON.stringify(options.customization ?? {});
+        const existing = previous.items.find(
+          (current) =>
+            current.product.id === product.id &&
+            JSON.stringify(current.customization ?? {}) === signature &&
+            current.unitPrice === unitPrice,
+        );
+
+        if (existing) {
+          return {
+            ...previous,
+            businessId,
+            businessName,
+            items: previous.items.map((current) =>
+              current.id === existing.id
+                ? { ...current, quantity: current.quantity + quantity }
+                : current,
+            ),
+          };
+        }
+
+        return {
+          businessId,
+          businessName,
+          items: [...previous.items, item],
+        };
+      });
+    },
+    [],
+  );
+
+  const removeItem = useCallback((itemId: string) => {
+    setState((previous) => {
+      const items = previous.items.filter((item) => item.id !== itemId);
+      return items.length ? { ...previous, items } : EMPTY_CART;
     });
   }, []);
 
-  const removeItem = useCallback((productId: string) => {
-    setState((prev) => {
-      const items = prev.items.filter((i) => i.product.id !== productId);
-      if (items.length === 0) return { businessId: null, businessName: null, items: [] };
-      return { ...prev, items };
-    });
-  }, []);
-
-  const updateQuantity = useCallback((productId: string, quantity: number) => {
+  const updateQuantity = useCallback((itemId: string, quantity: number) => {
     if (quantity <= 0) return;
-    setState((prev) => ({
-      ...prev,
-      items: prev.items.map((i) => (i.product.id === productId ? { ...i, quantity } : i)),
+
+    setState((previous) => ({
+      ...previous,
+      items: previous.items.map((item) =>
+        item.id === itemId ? { ...item, quantity } : item,
+      ),
     }));
   }, []);
 
-  const clearCart = useCallback(() => {
-    setState({ businessId: null, businessName: null, items: [] });
-  }, []);
+  const clearCart = useCallback(() => setState(EMPTY_CART), []);
 
   const value = useMemo(
     () => ({
       items: state.items,
       businessId: state.businessId,
       businessName: state.businessName,
-      itemCount: state.items.reduce((sum, i) => sum + i.quantity, 0),
-      subtotal: state.items.reduce((sum, i) => sum + i.product.price * i.quantity, 0),
+      itemCount: state.items.reduce((sum, item) => sum + item.quantity, 0),
+      subtotal: state.items.reduce(
+        (sum, item) => sum + item.unitPrice * item.quantity,
+        0,
+      ),
       isEmpty: state.items.length === 0,
       addItem,
       removeItem,
@@ -130,7 +219,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useCart(): CartContextValue {
-  const ctx = useContext(CartContext);
-  if (!ctx) throw new Error('useCart must be used within a CartProvider');
-  return ctx;
+  const context = useContext(CartContext);
+  if (!context) throw new Error('useCart must be used within a CartProvider');
+  return context;
 }

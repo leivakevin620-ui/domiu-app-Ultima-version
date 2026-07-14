@@ -1,145 +1,291 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { businessService, type BusinessOrder } from '@/services/business';
 import { SkeletonList } from '@/components/ui/skeleton';
-import { ClipboardList, MapPin, User, Package } from 'lucide-react';
+import { OrderCustomizationDetails } from '@/components/business/order-customization-details';
+import { getBrowserClient } from '@/lib/db/supabase';
+import {
+  ClipboardList,
+  Clock3,
+  CreditCard,
+  Mail,
+  MapPin,
+  Package,
+  Phone,
+  RefreshCw,
+  Send,
+  User,
+} from 'lucide-react';
+import { toast } from 'sonner';
 
 const COLUMNS = [
-  { key: 'pending', label: 'Pendiente', color: 'border-l-warning', bg: 'bg-warning/5' },
-  { key: 'confirmed', label: 'Confirmado', color: 'border-l-info', bg: 'bg-info/5' },
-  { key: 'preparing', label: 'Preparando', color: 'border-l-primary', bg: 'bg-primary/5' },
-  { key: 'ready', label: 'Listo', color: 'border-l-success', bg: 'bg-success/5' },
-  { key: 'assigned', label: 'Asignado', color: 'border-l-info', bg: 'bg-info/5' },
-  { key: 'in_transit', label: 'En camino', color: 'border-l-primary', bg: 'bg-primary/5' },
-  { key: 'delivered', label: 'Entregado', color: 'border-l-success', bg: 'bg-success/5' },
-];
+  { key: 'pending', label: 'Pendiente' },
+  { key: 'confirmed', label: 'Confirmado' },
+  { key: 'preparing', label: 'Preparando' },
+  { key: 'ready', label: 'Publicado' },
+  { key: 'assigned', label: 'Asignado' },
+  { key: 'accepted', label: 'Aceptado' },
+  { key: 'picked_up', label: 'Recogido' },
+  { key: 'in_transit', label: 'En camino' },
+  { key: 'delivered', label: 'Entregado' },
+  { key: 'cancelled', label: 'Cancelado' },
+] as const;
 
-const STATUS_FLOW: Record<string, string> = {
-  pending: 'confirmed',
-  confirmed: 'preparing',
-  preparing: 'ready',
-  ready: 'assigned',
-  assigned: 'in_transit',
-  in_transit: 'delivered',
+const STATUS_ACTION: Record<string, { next: string; label: string }> = {
+  pending: { next: 'confirmed', label: 'Confirmar pedido' },
+  confirmed: { next: 'preparing', label: 'Iniciar preparación' },
+  preparing: { next: 'ready', label: 'Marcar listo y publicar' },
 };
 
-const formatCurrency = (n: number) => '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0 });
-const formatTime = (s: string) => { const d = new Date(s); return d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }); };
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    maximumFractionDigits: 0,
+  }).format(value);
+
+const formatDateTime = (value: string) =>
+  new Date(value).toLocaleString('es-CO', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+const paymentLabel: Record<string, string> = {
+  pending: 'Pago pendiente',
+  paid: 'Pagado',
+  failed: 'Pago fallido',
+  refunded: 'Reembolsado',
+};
 
 export default function NegocioPedidos() {
   const { profile } = useAuth();
+  const [businessId, setBusinessId] = useState<string | null>(null);
   const [orders, setOrders] = useState<BusinessOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<BusinessOrder | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [updating, setUpdating] = useState<string | null>(null);
+  const [error, setError] = useState('');
 
-  const loadOrders = async () => {
+  const loadOrders = useCallback(async (showSpinner = false) => {
     if (!profile?.id) return;
-    const bizId = await businessService.getBusinessId(profile.id);
-    if (bizId) setOrders(await businessService.getBusinessOrders(bizId));
-  };
-
-  useEffect(() => { (async () => { await loadOrders(); setLoading(false); })(); }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (showSpinner) setRefreshing(true);
+    try {
+      const id = businessId || (await businessService.getBusinessId(profile.id));
+      if (!id) {
+        setOrders([]);
+        setError('No se encontró un negocio asociado a esta cuenta.');
+        return;
+      }
+      if (!businessId) setBusinessId(id);
+      const result = await businessService.getBusinessOrders(id);
+      setOrders(result);
+      setError('');
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'No se pudieron cargar los pedidos.';
+      setError(message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [businessId, profile?.id]);
 
   useEffect(() => {
-    const id = setInterval(() => { loadOrders(); }, 10000);
-    return () => clearInterval(id);
-  }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    void loadOrders();
+  }, [loadOrders]);
 
-  const advanceStatus = async (orderId: string, currentStatus: string) => {
-    const next = STATUS_FLOW[currentStatus];
-    if (!next) return;
-    const supabase = (await import('@/lib/db/supabase')).getBrowserClient;
-    const client = await supabase();
-    await client.from('orders').update({ status: next } as never).eq('id', orderId);
-    setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: next } : o));
-  };
+  useEffect(() => {
+    if (!businessId) return;
+    const supabase = getBrowserClient();
+    const channel = supabase
+      .channel(`business-orders-${businessId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+          filter: `business_id=eq.${businessId}`,
+        },
+        () => void loadOrders(),
+      )
+      .subscribe();
 
-  const rejectOrder = async (orderId: string) => {
-    const supabase = (await import('@/lib/db/supabase')).getBrowserClient;
-    const client = await supabase();
-    await client.from('orders').update({ status: 'cancelled' } as never).eq('id', orderId);
-    setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: 'cancelled' } : o));
+    const timer = window.setInterval(() => void loadOrders(), 15000);
+    return () => {
+      window.clearInterval(timer);
+      void supabase.removeChannel(channel);
+    };
+  }, [businessId, loadOrders]);
+
+  const changeStatus = async (order: BusinessOrder, status: string) => {
+    setUpdating(order.id);
+    try {
+      await businessService.updateOrderStatus(order.id, status);
+      await loadOrders();
+      if (status === 'ready') {
+        toast.success(`Pedido #${order.order_number} publicado para los repartidores`);
+      } else {
+        toast.success('Estado actualizado correctamente');
+      }
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : 'No se pudo actualizar el pedido');
+    } finally {
+      setUpdating(null);
+    }
   };
 
   if (loading) return <SkeletonList />;
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-warning/10 to-warning/5">
-            <ClipboardList className="h-5 w-5 text-warning" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Pedidos</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Gestiona los pedidos en tiempo real</p>
-          </div>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Pedidos</h1>
+          <p className="text-sm text-muted-foreground">
+            Los pedidos nuevos aparecen en tiempo real con su ticket, cliente, dirección y productos.
+          </p>
         </div>
-        <button onClick={loadOrders} className="rounded-xl border border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted">Actualizar</button>
+        <button
+          onClick={() => void loadOrders(true)}
+          disabled={refreshing}
+          className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+          Actualizar
+        </button>
       </div>
 
-      <div className="flex gap-4 overflow-x-auto pb-4 snap-x">
-        {COLUMNS.map((col) => {
-          const colOrders = orders.filter((o) => o.status === col.key);
+      {error && (
+        <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      <div className="flex gap-4 overflow-x-auto pb-4">
+        {COLUMNS.map((column) => {
+          const columnOrders = orders.filter((order) => order.status === column.key);
           return (
-            <div key={col.key} className={`min-w-[260px] flex-shrink-0 rounded-2xl border border-border bg-card ${col.bg}`}>
-              <div className={`border-b border-border/50 px-4 py-3 border-l-4 ${col.color} rounded-t-2xl`}>
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-foreground">{col.label}</h3>
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">{colOrders.length}</span>
-                </div>
-              </div>
-              <div className="p-3 space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto">
-                {colOrders.length === 0 ? (
-                  <div className="py-6 text-center">
-                    <ClipboardList className="mx-auto h-5 w-5 text-muted-foreground/40" />
-                    <p className="mt-1 text-xs text-muted-foreground/60">Vacío</p>
+            <section key={column.key} className="min-w-[330px] rounded-2xl border bg-card">
+              <header className="flex items-center justify-between border-b p-3">
+                <h2 className="font-semibold">{column.label}</h2>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{columnOrders.length}</span>
+              </header>
+
+              <div className="space-y-3 p-3">
+                {columnOrders.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-muted-foreground">
+                    <ClipboardList className="mx-auto mb-2 h-5 w-5" />
+                    Vacío
                   </div>
                 ) : (
-                  colOrders.map((order) => (
-                    <div
-                      key={order.id}
-                      onClick={() => setSelected(selected?.id === order.id ? null : order)}
-                      className="rounded-xl border border-border/50 bg-card p-3 shadow-sm transition-all hover:shadow-md cursor-pointer active:scale-[0.98]"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-foreground">#{order.order_number}</span>
-                        <span className="text-xs font-semibold text-foreground">{formatCurrency(order.total_amount)}</span>
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">{order.customer_name}</p>
-                      <p className="text-[10px] text-muted-foreground/60">{order.items?.length || 0} productos · {formatTime(order.created_at)}</p>
-                      <div className="mt-2 flex gap-1">
-                        {STATUS_FLOW[order.status] && (
-                          <button onClick={(e) => { e.stopPropagation(); advanceStatus(order.id, order.status); }} className="flex-1 rounded-lg bg-primary/10 py-1.5 text-[10px] font-medium text-primary hover:bg-primary/20 transition-colors">
-                            {order.status === 'pending' ? 'Confirmar' : order.status === 'confirmed' ? 'Preparar' : order.status === 'preparing' ? 'Listo' : order.status === 'ready' ? 'Asignar' : 'Avanzar'}
-                          </button>
-                        )}
-                        {order.status === 'pending' && (
-                          <button onClick={(e) => { e.stopPropagation(); rejectOrder(order.id); }} className="rounded-lg bg-destructive/10 px-2 py-1.5 text-[10px] font-medium text-destructive hover:bg-destructive/20 transition-colors">Rechazar</button>
-                        )}
-                      </div>
-                      {selected?.id === order.id && (
-                        <div className="mt-2 pt-2 border-t border-border/30 space-y-1.5 animate-in slide-in-from-top-1">
-                          <p className="text-[10px] text-muted-foreground"><MapPin className="inline h-3 w-3 mr-1" />{order.delivery_address || 'Dirección no disponible'}</p>
-                          {order.special_instructions && <p className="text-[10px] text-muted-foreground"><Package className="inline h-3 w-3 mr-1" />{order.special_instructions}</p>}
-                          {order.courier_name && <p className="text-[10px] text-muted-foreground"><User className="inline h-3 w-3 mr-1" />{order.courier_name}</p>}
-                          <div className="mt-1 space-y-1">
-                            {order.items?.map((item) => (
-                              <div key={item.id} className="flex justify-between text-[10px]">
-                                <span className="text-muted-foreground">{item.quantity}x {item.name}</span>
-                                <span className="text-foreground font-medium">{formatCurrency(item.unit_price * item.quantity)}</span>
-                              </div>
-                            ))}
+                  columnOrders.map((order) => {
+                    const action = STATUS_ACTION[order.status];
+                    const isSelected = selected === order.id;
+                    return (
+                      <article key={order.id} className="rounded-xl border bg-background p-3 shadow-sm">
+                        <button
+                          type="button"
+                          onClick={() => setSelected(isSelected ? null : order.id)}
+                          className="w-full text-left"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                Ticket
+                              </p>
+                              <strong className="text-sm">#{order.order_number}</strong>
+                            </div>
+                            <strong className="text-sm">{formatCurrency(order.total_amount)}</strong>
                           </div>
+                          <p className="mt-2 text-sm font-medium">{order.customer_name}</p>
+                          <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                            <Clock3 className="h-3 w-3" /> {formatDateTime(order.created_at)}
+                          </div>
+                          <div className="mt-2 flex items-center justify-between text-xs">
+                            <span className="rounded-full bg-muted px-2 py-1">
+                              {order.items.reduce((total, item) => total + item.quantity, 0)} productos
+                            </span>
+                            <span className={order.payment_status === 'paid' ? 'text-success' : 'text-warning'}>
+                              {paymentLabel[order.payment_status] || order.payment_status}
+                            </span>
+                          </div>
+                        </button>
+
+                        {order.status === 'ready' && !order.courier_id && (
+                          <div className="mt-3 flex items-center gap-2 rounded-lg bg-primary/10 p-2 text-xs font-medium text-primary">
+                            <Send className="h-3.5 w-3.5" /> Publicado: esperando que un repartidor lo tome
+                          </div>
+                        )}
+
+                        <div className="mt-3 flex gap-2">
+                          {action && (
+                            <button
+                              type="button"
+                              disabled={updating === order.id}
+                              onClick={() => void changeStatus(order, action.next)}
+                              className="flex-1 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+                            >
+                              {updating === order.id ? 'Actualizando…' : action.label}
+                            </button>
+                          )}
+                          {order.status === 'pending' && (
+                            <button
+                              type="button"
+                              disabled={updating === order.id}
+                              onClick={() => void changeStatus(order, 'cancelled')}
+                              className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive disabled:opacity-50"
+                            >
+                              Rechazar
+                            </button>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  ))
+
+                        {isSelected && (
+                          <div className="mt-3 space-y-3 border-t pt-3">
+                            <div className="space-y-1 text-xs text-muted-foreground">
+                              <p><User className="mr-1 inline h-3 w-3" />{order.customer_name}</p>
+                              {order.customer_email && <p><Mail className="mr-1 inline h-3 w-3" />{order.customer_email}</p>}
+                              <p><Phone className="mr-1 inline h-3 w-3" />{order.customer_phone || 'Teléfono no registrado'}</p>
+                              <p><MapPin className="mr-1 inline h-3 w-3" />{order.delivery_address}</p>
+                              {order.delivery_instructions && <p>Referencia: {order.delivery_instructions}</p>}
+                              <p><CreditCard className="mr-1 inline h-3 w-3" />{paymentLabel[order.payment_status] || order.payment_status}</p>
+                              {order.courier_name && <p>Repartidor: {order.courier_name}</p>}
+                            </div>
+
+                            <div className="space-y-2 rounded-lg bg-muted/40 p-2">
+                              {order.items.map((item) => (
+                                <div key={item.id} className="text-xs">
+                                  <div className="flex justify-between gap-2 font-medium">
+                                    <span>{item.quantity}x {item.name}</span>
+                                    <span>{formatCurrency(item.item_total)}</span>
+                                  </div>
+                                  {item.special_instructions && (
+                                    <p className="mt-1 text-muted-foreground">Nota: {item.special_instructions}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+
+                            {order.special_instructions && (
+                              <p className="text-xs text-muted-foreground">
+                                <Package className="mr-1 inline h-3 w-3" />
+                                Instrucción general: {order.special_instructions}
+                              </p>
+                            )}
+                            <OrderCustomizationDetails orderId={order.id} />
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })
                 )}
               </div>
-            </div>
+            </section>
           );
         })}
       </div>

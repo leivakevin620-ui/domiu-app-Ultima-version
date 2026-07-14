@@ -1,7 +1,33 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { orderService, type OrderData, type OrderStatus } from '@/services/orders';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import {
+  orderService,
+  type CreateOrderItemInput,
+  type OrderData,
+  type OrderStatus,
+} from '@/services/orders';
+
+interface CreateOrderInput {
+  customerId: string;
+  customerName: string;
+  businessId: string;
+  businessName: string;
+  items: CreateOrderItemInput[];
+  subtotal: number;
+  deliveryFee: number;
+  taxAmount: number;
+  totalAmount: number;
+  deliveryAddress: string;
+  instructions: string;
+}
 
 interface OrderContextValue {
   customerOrders: OrderData[];
@@ -9,19 +35,7 @@ interface OrderContextValue {
   loading: boolean;
   refreshOrders: () => Promise<void>;
   getOrder: (id: string) => OrderData | undefined;
-  createOrder: (input: {
-    customerId: string;
-    customerName: string;
-    businessId: string;
-    businessName: string;
-    items: { productId: string; productName: string; quantity: number; unitPrice: number }[];
-    subtotal: number;
-    deliveryFee: number;
-    taxAmount: number;
-    totalAmount: number;
-    deliveryAddress: string;
-    instructions: string;
-  }) => Promise<OrderData>;
+  createOrder: (input: CreateOrderInput) => Promise<OrderData>;
   updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
   acceptOrder: (orderId: string) => Promise<void>;
   rejectOrder: (orderId: string) => Promise<void>;
@@ -43,73 +57,67 @@ export function OrderProvider({
   const [loading, setLoading] = useState(true);
 
   const refreshOrders = useCallback(async () => {
-    if (customerId) {
-      const orders = await orderService.getCustomerOrders(customerId);
-      setCustomerOrders(orders);
+    try {
+      const [nextCustomerOrders, nextBusinessOrders] = await Promise.all([
+        customerId ? orderService.getCustomerOrders(customerId) : Promise.resolve([]),
+        businessId ? orderService.getBusinessOrders(businessId) : Promise.resolve([]),
+      ]);
+
+      setCustomerOrders(nextCustomerOrders);
+      setBusinessOrders(nextBusinessOrders);
+    } finally {
+      setLoading(false);
     }
-    if (businessId) {
-      const orders = await orderService.getBusinessOrders(businessId);
-      setBusinessOrders(orders);
-    }
-    setLoading(false);
   }, [customerId, businessId]);
 
   useEffect(() => {
-    refreshOrders(); // eslint-disable-line react-hooks/set-state-in-effect
-  }, [customerId, businessId]); // eslint-disable-line react-hooks/exhaustive-deps
+    const timeout = window.setTimeout(() => {
+      void refreshOrders();
+    }, 0);
 
-  useEffect(() => {
-    const unsub = orderService.subscribe((updated) => {
-      setCustomerOrders((prev) => {
-        const exists = prev.findIndex((o) => o.id === updated.id);
-        if (exists >= 0) {
-          const next = [...prev];
-          next[exists] = updated;
+    return () => window.clearTimeout(timeout);
+  }, [refreshOrders]);
+
+  useEffect(
+    () =>
+      orderService.subscribe((updated) => {
+        setCustomerOrders((previous) => {
+          const index = previous.findIndex((order) => order.id === updated.id);
+          if (index < 0) return [updated, ...previous];
+          const next = [...previous];
+          next[index] = updated;
           return next;
-        }
-        return [updated, ...prev];
-      });
-      setBusinessOrders((prev) => {
-        const exists = prev.findIndex((o) => o.id === updated.id);
-        if (exists >= 0) {
-          const next = [...prev];
-          next[exists] = updated;
+        });
+
+        setBusinessOrders((previous) => {
+          const index = previous.findIndex((order) => order.id === updated.id);
+          if (index < 0) return [updated, ...previous];
+          const next = [...previous];
+          next[index] = updated;
           return next;
-        }
-        return [updated, ...prev];
-      });
-    });
-    return unsub;
-  }, []);
-
-  const getOrder = useCallback(
-    (id: string) => customerOrders.find((o) => o.id === id) ?? businessOrders.find((o) => o.id === id),
-    [customerOrders, businessOrders],
-  );
-
-  const createOrderFn = useCallback(
-    async (input: {
-      customerId: string;
-      customerName: string;
-      businessId: string;
-      businessName: string;
-      items: { productId: string; productName: string; quantity: number; unitPrice: number }[];
-      subtotal: number;
-      deliveryFee: number;
-      taxAmount: number;
-      totalAmount: number;
-      deliveryAddress: string;
-      instructions: string;
-    }) => {
-      const order = await orderService.createOrder(input);
-      return order;
-    },
+        });
+      }),
     [],
   );
 
-  const updateOrderStatus = useCallback(async (orderId: string, status: OrderStatus) => {
-    await orderService.updateStatus(orderId, status);
-  }, []);
+  const getOrder = useCallback(
+    (id: string) =>
+      customerOrders.find((order) => order.id === id) ??
+      businessOrders.find((order) => order.id === id),
+    [customerOrders, businessOrders],
+  );
+
+  const createOrder = useCallback(
+    (input: CreateOrderInput) => orderService.createOrder(input),
+    [],
+  );
+
+  const updateOrderStatus = useCallback(
+    async (orderId: string, status: OrderStatus) => {
+      await orderService.updateStatus(orderId, status);
+    },
+    [],
+  );
 
   const acceptOrder = useCallback(async (orderId: string) => {
     await orderService.acceptOrder(orderId);
@@ -126,19 +134,29 @@ export function OrderProvider({
       loading,
       refreshOrders,
       getOrder,
-      createOrder: createOrderFn,
+      createOrder,
       updateOrderStatus,
       acceptOrder,
       rejectOrder,
     }),
-    [customerOrders, businessOrders, loading, refreshOrders, getOrder, createOrderFn, updateOrderStatus, acceptOrder, rejectOrder],
+    [
+      customerOrders,
+      businessOrders,
+      loading,
+      refreshOrders,
+      getOrder,
+      createOrder,
+      updateOrderStatus,
+      acceptOrder,
+      rejectOrder,
+    ],
   );
 
   return <OrderContext.Provider value={value}>{children}</OrderContext.Provider>;
 }
 
 export function useOrders(): OrderContextValue {
-  const ctx = useContext(OrderContext);
-  if (!ctx) throw new Error('useOrders must be used within an OrderProvider');
-  return ctx;
+  const context = useContext(OrderContext);
+  if (!context) throw new Error('useOrders must be used within an OrderProvider');
+  return context;
 }

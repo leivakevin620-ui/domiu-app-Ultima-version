@@ -1,244 +1,252 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
+import { Clock, DollarSign, MapPin, Plus, RefreshCw, Truck, User } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { businessService } from '@/services/business';
+import { getBrowserClient } from '@/lib/db/supabase';
 import { SkeletonList } from '@/components/ui/skeleton';
-import { Truck, MapPin, User, DollarSign, Clock } from 'lucide-react';
 
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  pending: { label: 'Pendiente', color: 'text-warning border-l-warning' },
-  accepted: { label: 'Aceptado', color: 'text-info border-l-info' },
-  picked_up: { label: 'Recogido', color: 'text-primary border-l-primary' },
-  in_transit: { label: 'En camino', color: 'text-primary border-l-primary' },
-  delivered: { label: 'Entregado', color: 'text-success border-l-success' },
-  cancelled: { label: 'Cancelado', color: 'text-destructive border-l-destructive' },
-};
-
-const formatCurrency = (n: number | null | undefined) => {
-  if (n == null) return '-';
-  return '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0 });
-};
-
-const formatTime = (s: string) => {
-  const d = new Date(s);
-  return d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+const STATUS_CONFIG: Record<string, { label: string; text: string; border: string }> = {
+  pending: { label: 'Pendiente', text: 'text-warning', border: 'border-l-warning' },
+  assigned: { label: 'Asignado', text: 'text-info', border: 'border-l-info' },
+  accepted: { label: 'Aceptado', text: 'text-info', border: 'border-l-info' },
+  picked_up: { label: 'Recogido', text: 'text-primary', border: 'border-l-primary' },
+  in_transit: { label: 'En camino', text: 'text-primary', border: 'border-l-primary' },
+  delivered: { label: 'Entregado', text: 'text-success', border: 'border-l-success' },
+  cancelled: { label: 'Cancelado', text: 'text-destructive', border: 'border-l-destructive' },
 };
 
 interface ManualDelivery {
   id: string;
-  order_number: string;
-  order_code: string | null;
-  customer_id: string;
-  courier_id: string | null;
+  orderNumber: string;
   status: string;
-  total_amount: number;
-  delivery_fee: number;
-  courier_earnings: number | null;
-  platform_earnings: number | null;
-  delivery_address: string;
-  customer_phone: string | null;
-  special_instructions: string | null;
-  created_at: string;
-  updated_at: string;
-  courier_name: string | null;
-  customer_name: string;
-  pickup_address: string | null;
-  delivery_distance_km: number | null;
+  totalAmount: number;
+  deliveryFee: number;
+  courierEarnings: number | null;
+  platformEarnings: number | null;
+  deliveryAddress: string;
+  customerPhone: string | null;
+  specialInstructions: string | null;
+  createdAt: string;
+  courierName: string | null;
+  customerName: string;
+  pickupAddress: string | null;
+  distanceKm: number | null;
 }
 
-export default function NegocioDomicilios() {
+type RelationName = { first_name?: string | null; last_name?: string | null };
+type DeliveryRelation = { street_address?: string | null; city?: string | null };
+type DeliveryRow = Record<string, unknown>;
+
+function firstRelation<T>(value: unknown): T | null {
+  if (Array.isArray(value)) return (value[0] as T | undefined) || null;
+  return value && typeof value === 'object' ? (value as T) : null;
+}
+
+function fullName(value: unknown, fallback: string) {
+  const relation = firstRelation<RelationName>(value);
+  return relation
+    ? [relation.first_name, relation.last_name].filter(Boolean).join(' ') || fallback
+    : fallback;
+}
+
+function currency(value: number | null | undefined) {
+  if (value == null) return '-';
+  return Number(value).toLocaleString('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    maximumFractionDigits: 0,
+  });
+}
+
+function dateTime(value: string) {
+  return new Date(value).toLocaleString('es-CO', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export default function NegocioDomiciliosPage() {
   const { profile } = useAuth();
   const [orders, setOrders] = useState<ManualDelivery[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<ManualDelivery | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const loadOrders = async () => {
+  const loadOrders = useCallback(async (silent = false) => {
     if (!profile?.id) return;
-    const bizId = await businessService.getBusinessId(profile.id);
-    if (!bizId) return;
-    const supabase = (await import('@/lib/db/supabase')).getBrowserClient;
-    const client = await supabase();
-    const { data } = await client
-      .from('orders')
-      .select(`
-        id, order_number, order_code, customer_id, courier_id, status,
-        total_amount, delivery_fee, courier_earnings, platform_earnings,
-        delivery_address, customer_phone, special_instructions,
-        created_at, updated_at, pickup_address, delivery_distance_km,
-        profiles!orders_customer_id_fkey(first_name, last_name),
-        courier:drivers!orders_courier_id_fkey(id, first_name, last_name)
-      `)
-      .eq('business_id', bizId)
-      .eq('order_type', 'manual_delivery')
-      .order('created_at', { ascending: false })
-      .limit(50);
+    if (!silent) setRefreshing(true);
+    setError(null);
 
-    type Row = Record<string, unknown>;
+    try {
+      const businessId = await businessService.getBusinessId(profile.id);
+      if (!businessId) {
+        setOrders([]);
+        setError('No encontramos un negocio asociado a tu cuenta.');
+        return;
+      }
 
-    const rows = (data || []) as Row[];
-    setOrders(rows.map((o: Row) => {
-      const profileData = o.profiles;
-      const profile = Array.isArray(profileData) ? profileData[0] : profileData;
-      const courierData = o.courier;
-      const courier = Array.isArray(courierData) ? courierData[0] : courierData;
-      return {
-      id: o.id as string,
-      order_number: o.order_number as string,
-      order_code: (o.order_code as string) || null,
-      customer_id: o.customer_id as string,
-      courier_id: (o.courier_id as string) || null,
-      status: o.status as string,
-      total_amount: (o.total_amount as number) || 0,
-      delivery_fee: (o.delivery_fee as number) || 0,
-      courier_earnings: (o.courier_earnings as number) || null,
-      platform_earnings: (o.platform_earnings as number) || null,
-      delivery_address: (o.delivery_address as string) || '',
-      customer_phone: (o.customer_phone as string) || null,
-      special_instructions: (o.special_instructions as string) || null,
-      created_at: o.created_at as string,
-      updated_at: o.updated_at as string,
-      pickup_address: (o.pickup_address as string) || null,
-      delivery_distance_km: (o.delivery_distance_km as number) || null,
-      customer_name: profile
-        ? [profile.first_name, profile.last_name].filter(Boolean).join(' ')
-        : 'Cliente',
-      courier_name: courier
-        ? [courier.first_name, courier.last_name].filter(Boolean).join(' ') || 'Asignado'
-        : null,
-    };
-    }));
-  };
+      const client = await getBrowserClient();
+      const { data, error: queryError } = await client
+        .from('orders')
+        .select(`
+          id, order_number, order_code, status, total_amount, delivery_fee,
+          courier_earnings, platform_earnings, customer_phone,
+          special_instructions, created_at, pickup_address, delivery_distance_km,
+          customer:profiles!orders_customer_id_fkey(first_name, last_name),
+          courier:profiles!orders_courier_id_fkey(first_name, last_name),
+          delivery:addresses!orders_delivery_address_id_fkey(street_address, city)
+        `)
+        .eq('business_id', businessId)
+        .eq('order_type', 'manual_delivery')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(100);
 
-  useEffect(() => {
-    (async () => {
-      await loadOrders();
+      if (queryError) throw new Error(queryError.message);
+
+      setOrders(((data || []) as DeliveryRow[]).map((row) => {
+        const delivery = firstRelation<DeliveryRelation>(row.delivery);
+        const deliveryAddress = [delivery?.street_address, delivery?.city].filter(Boolean).join(', ');
+        return {
+          id: String(row.id),
+          orderNumber: String(row.order_code || row.order_number || '').replace(/^#/, ''),
+          status: String(row.status || 'pending'),
+          totalAmount: Number(row.total_amount || 0),
+          deliveryFee: Number(row.delivery_fee || 0),
+          courierEarnings: row.courier_earnings == null ? null : Number(row.courier_earnings),
+          platformEarnings: row.platform_earnings == null ? null : Number(row.platform_earnings),
+          deliveryAddress: deliveryAddress || 'Dirección no disponible',
+          customerPhone: row.customer_phone ? String(row.customer_phone) : null,
+          specialInstructions: row.special_instructions ? String(row.special_instructions) : null,
+          createdAt: String(row.created_at),
+          courierName: firstRelation<RelationName>(row.courier) ? fullName(row.courier, 'Repartidor') : null,
+          customerName: fullName(row.customer, 'Cliente'),
+          pickupAddress: row.pickup_address ? String(row.pickup_address) : null,
+          distanceKm: row.delivery_distance_km == null ? null : Number(row.delivery_distance_km),
+        };
+      }));
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'No se pudieron cargar los domicilios.');
+    } finally {
       setLoading(false);
-    })();
-  }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+      setRefreshing(false);
+    }
+  }, [profile?.id]);
 
   useEffect(() => {
-    const id = setInterval(() => { loadOrders(); }, 15000);
-    return () => clearInterval(id);
-  }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    void loadOrders();
+  }, [loadOrders]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => void loadOrders(true), 15000);
+    return () => window.clearInterval(interval);
+  }, [loadOrders]);
 
   if (loading) return <SkeletonList />;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-info/10 to-info/5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-info/10">
             <Truck className="h-5 w-5 text-info" />
           </div>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">Domicilios</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Domicilios manuales solicitados a repartidores</p>
+            <p className="mt-1 text-sm text-muted-foreground">Envíos manuales creados por tu negocio</p>
           </div>
         </div>
-        <button onClick={loadOrders} className="rounded-xl border border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted">
-          Actualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void loadOrders()}
+            disabled={refreshing}
+            className="inline-flex items-center gap-2 rounded-xl border border-border px-3.5 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> Actualizar
+          </button>
+          <Link
+            href="/negocio/domicilios/crear"
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-95"
+          >
+            <Plus className="h-4 w-4" /> Nuevo domicilio
+          </Link>
+        </div>
       </div>
 
+      {error && <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>}
+
       {orders.length === 0 ? (
-        <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-12 text-center">
-          <Truck className="mx-auto h-8 w-8 text-muted-foreground/50" />
-          <p className="mt-3 text-sm text-muted-foreground">No hay domicilios manuales</p>
-          <p className="text-xs text-muted-foreground/70">Los domicilios aparecerán aquí cuando los solicites</p>
+        <div className="rounded-2xl border border-border/50 bg-card p-12 text-center">
+          <Truck className="mx-auto h-9 w-9 text-muted-foreground/50" />
+          <p className="mt-3 font-medium text-foreground">Todavía no hay domicilios</p>
+          <p className="mt-1 text-sm text-muted-foreground">Crea el primer envío recibido por WhatsApp, llamada o directamente en el local.</p>
+          <Link href="/negocio/domicilios/crear" className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground">
+            <Plus className="h-4 w-4" /> Crear domicilio
+          </Link>
         </div>
       ) : (
         <div className="space-y-3">
           {orders.map((order) => {
-            const cfg = STATUS_CONFIG[order.status] || { label: order.status, color: 'text-muted-foreground border-l-muted' };
+            const config = STATUS_CONFIG[order.status] || {
+              label: order.status,
+              text: 'text-muted-foreground',
+              border: 'border-l-muted',
+            };
+            const expanded = selectedId === order.id;
+
             return (
-              <div
+              <article
                 key={order.id}
-                onClick={() => setSelected(selected?.id === order.id ? null : order)}
-                className={`rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm shadow-card hover:shadow-md transition-all cursor-pointer border-l-4 ${cfg.color.split(' ').find(c => c.startsWith('border-l-')) || 'border-l-muted'}`}
+                className={`overflow-hidden rounded-2xl border border-border/60 border-l-4 bg-card shadow-sm transition hover:shadow-md ${config.border}`}
               >
-                <div className="p-4">
-                  <div className="flex items-start justify-between">
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(expanded ? null : order.id)}
+                  className="w-full p-4 text-left"
+                >
+                  <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-foreground">
-                          {order.order_code || `#${order.order_number}`}
-                        </span>
-                        <span className={`text-[10px] font-medium uppercase ${cfg.color.split(' ').find(c => c.startsWith('text-')) || 'text-muted-foreground'}`}>
-                          {cfg.label}
-                        </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-bold text-foreground">{order.orderNumber || order.id.slice(0, 8)}</span>
+                        <span className={`text-[11px] font-semibold uppercase tracking-wide ${config.text}`}>{config.label}</span>
                       </div>
-                      <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                        <MapPin className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{order.delivery_address || 'Sin dirección'}</span>
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <User className="h-3 w-3" />
-                          {order.customer_name}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <DollarSign className="h-3 w-3" />
-                          {formatCurrency(order.total_amount)}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {formatTime(order.created_at)}
-                        </span>
+                      <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <MapPin className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{order.deliveryAddress}</span>
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1"><User className="h-3.5 w-3.5" />{order.customerName}</span>
+                        <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" />{currency(order.totalAmount)}</span>
+                        <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{dateTime(order.createdAt)}</span>
                       </div>
                     </div>
                   </div>
+                </button>
 
-                  {selected?.id === order.id && (
-                    <div className="mt-3 pt-3 border-t border-border/30 space-y-2 animate-in slide-in-from-top-1">
-                      {order.courier_name && (
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Truck className="h-3 w-3 text-info" />
-                          <span>Repartidor: <strong className="text-foreground">{order.courier_name}</strong></span>
-                        </div>
-                      )}
-                      {order.customer_phone && (
-                        <div className="text-xs text-muted-foreground">
-                          📞 {order.customer_phone}
-                        </div>
-                      )}
-                      {order.pickup_address && (
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <MapPin className="h-3 w-3 text-warning" />
-                          <span>Recoger en: <strong className="text-foreground">{order.pickup_address}</strong></span>
-                        </div>
-                      )}
-                      {order.delivery_distance_km != null && (
-                        <div className="text-xs text-muted-foreground">
-                          Distancia: {order.delivery_distance_km.toFixed(1)} km
-                        </div>
-                      )}
-                      {order.courier_earnings != null && (
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div className="rounded-lg bg-success/5 p-2">
-                            <span className="text-muted-foreground">Ganancia repartidor</span>
-                            <p className="font-semibold text-success">{formatCurrency(order.courier_earnings)}</p>
-                          </div>
-                          <div className="rounded-lg bg-primary/5 p-2">
-                            <span className="text-muted-foreground">Ganancia DomiU</span>
-                            <p className="font-semibold text-primary">{formatCurrency(order.platform_earnings)}</p>
-                          </div>
-                        </div>
-                      )}
-                      {order.special_instructions && (
-                        <div className="text-xs text-muted-foreground bg-muted/30 rounded-lg p-2">
-                          📝 {order.special_instructions}
-                        </div>
-                      )}
-                      {order.delivery_fee > 0 && (
-                        <div className="text-xs text-muted-foreground">
-                          Tarifa de domicilio: {formatCurrency(order.delivery_fee)}
-                        </div>
-                      )}
+                {expanded && (
+                  <div className="border-t border-border/50 bg-muted/20 px-4 py-4">
+                    <div className="grid gap-3 text-sm md:grid-cols-2">
+                      <p><span className="text-muted-foreground">Teléfono:</span> {order.customerPhone || 'No registrado'}</p>
+                      <p><span className="text-muted-foreground">Repartidor:</span> {order.courierName || 'Pendiente por aceptar'}</p>
+                      <p><span className="text-muted-foreground">Recoger en:</span> {order.pickupAddress || 'Dirección del negocio'}</p>
+                      <p><span className="text-muted-foreground">Distancia:</span> {order.distanceKm == null ? 'No registrada' : `${order.distanceKm.toFixed(2)} km`}</p>
                     </div>
-                  )}
-                </div>
-              </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      <div className="rounded-xl bg-background p-3"><p className="text-xs text-muted-foreground">Tarifa</p><p className="mt-1 font-semibold">{currency(order.deliveryFee)}</p></div>
+                      <div className="rounded-xl bg-success/5 p-3"><p className="text-xs text-muted-foreground">Repartidor</p><p className="mt-1 font-semibold text-success">{currency(order.courierEarnings)}</p></div>
+                      <div className="rounded-xl bg-primary/5 p-3"><p className="text-xs text-muted-foreground">DomiU</p><p className="mt-1 font-semibold text-primary">{currency(order.platformEarnings)}</p></div>
+                    </div>
+                    {order.specialInstructions && <p className="mt-3 rounded-xl bg-background p-3 text-sm text-muted-foreground">📝 {order.specialInstructions}</p>}
+                  </div>
+                )}
+              </article>
             );
           })}
         </div>
