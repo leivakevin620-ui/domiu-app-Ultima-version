@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { CourierSidebar } from '@/components/courier/layout/CourierSidebar';
 import { CourierTopbar } from '@/components/courier/layout/CourierTopbar';
+import { CourierDispatchAlarm } from '@/components/courier/CourierDispatchAlarm';
 import { BottomNavigation } from '@/components/ui/bottom-navigation';
 import { SkeletonCard } from '@/components/ui/skeleton';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -38,6 +39,7 @@ export default function RepartidorLayout({ children }: { children: React.ReactNo
   return (
     <div className="min-h-screen bg-background">
       <CourierProvider courierId={profile.id}>
+        <CourierDispatchAlarm />
         <CourierSidebar />
         <div className="transition-all duration-300 lg:pl-72 pb-16 lg:pb-0">
           <CourierTopbar />
