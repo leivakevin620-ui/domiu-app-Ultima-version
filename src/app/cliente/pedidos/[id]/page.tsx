@@ -206,11 +206,15 @@ export default function ClientePedidoDetalle() {
       </div>
 
       {showChat && <ChatWindow userRole="customer" onClose={handleCloseChat} />}
-      {showReview && profile && (
+      {profile && (
         <ReviewModal
+          open={showReview}
           orderId={order.id}
+          customerId={profile.id}
           businessId={order.business_id}
-          courierId={order.courier_id || undefined}
+          businessName={order.business_name}
+          courierId={order.courier_id}
+          courierName={order.courier_name}
           onClose={() => setShowReview(false)}
           onSubmitted={() => {
             setReviewSubmitted(true);
