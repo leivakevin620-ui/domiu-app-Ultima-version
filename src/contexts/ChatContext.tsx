@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { chatService, type ChatMessage, type ChatConversation } from '@/services/chat';
+import { getBrowserClient } from '@/lib/db/supabase';
 
 interface ChatContextValue {
   conversations: ChatConversation[];
@@ -34,21 +35,50 @@ export function ChatProvider({
   useEffect(() => {
     const unsub = chatService.subscribe((msg) => {
       setCurrentMessages((prev) => {
-        if (msg.chat_id === currentConv?.id) {
-          return [...prev, msg];
-        }
-        return prev;
+        if (msg.chat_id !== currentConv?.id || prev.some((item) => item.id === msg.id)) return prev;
+        return [...prev, msg];
       });
       setConversations((prev) =>
-        prev.map((c) =>
-          c.id === msg.chat_id
-            ? { ...c, last_message: msg.content, last_message_at: msg.created_at, unread_count: c.unread_count + (msg.sender_id !== userId ? 1 : 0) }
-            : c,
+        prev.map((conversation) =>
+          conversation.id === msg.chat_id
+            ? {
+                ...conversation,
+                last_message: msg.content,
+                last_message_at: msg.created_at,
+                unread_count: conversation.unread_count + (msg.sender_id !== userId ? 1 : 0),
+              }
+            : conversation,
         ),
       );
     });
     return unsub;
   }, [currentConv?.id, userId]);
+
+  useEffect(() => {
+    if (!currentConv?.id) return;
+    const chatId = currentConv.id;
+    const supabase = getBrowserClient();
+
+    const reloadMessages = async () => {
+      const rows = await chatService.getMessages(chatId);
+      setCurrentMessages(rows);
+    };
+
+    const channel = supabase
+      .channel(`delivery-chat-${chatId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` },
+        () => void reloadMessages(),
+      )
+      .subscribe();
+
+    const polling = window.setInterval(() => void reloadMessages(), 4_000);
+    return () => {
+      window.clearInterval(polling);
+      void supabase.removeChannel(channel);
+    };
+  }, [currentConv?.id]);
 
   const openConversation = useCallback(async (
     orderId: string,
@@ -58,21 +88,28 @@ export function ChatProvider({
     courierName: string,
   ) => {
     setLoading(true);
-    const conv = await chatService.getOrCreateConversation(orderId, customerId, customerName, courierId, courierName);
-    const msgs = await chatService.getMessages(conv.id);
-    setCurrentConv(conv);
-    setCurrentMessages(msgs);
-    await chatService.markAsRead(conv.id, userId);
-    setConversations((prev) => {
-      const exists = prev.findIndex((c) => c.id === conv.id);
-      if (exists >= 0) {
+    try {
+      const conversation = await chatService.getOrCreateConversation(
+        orderId,
+        customerId,
+        customerName,
+        courierId,
+        courierName,
+      );
+      const messages = await chatService.getMessages(conversation.id);
+      setCurrentConv(conversation);
+      setCurrentMessages(messages);
+      await chatService.markAsRead(conversation.id, userId);
+      setConversations((prev) => {
+        const index = prev.findIndex((item) => item.id === conversation.id);
+        if (index < 0) return [...prev, { ...conversation, unread_count: 0 }];
         const next = [...prev];
-        next[exists] = { ...conv, unread_count: 0 };
+        next[index] = { ...conversation, unread_count: 0 };
         return next;
-      }
-      return [...prev, { ...conv, unread_count: 0 }];
-    });
-    setLoading(false);
+      });
+    } finally {
+      setLoading(false);
+    }
   }, [userId]);
 
   const closeConversation = useCallback(() => {
@@ -96,12 +133,12 @@ export function ChatProvider({
     if (!currentConv) return;
     await chatService.markAsRead(currentConv.id, userId);
     setConversations((prev) =>
-      prev.map((c) => (c.id === currentConv.id ? { ...c, unread_count: 0 } : c)),
+      prev.map((item) => (item.id === currentConv.id ? { ...item, unread_count: 0 } : item)),
     );
   }, [currentConv, userId]);
 
   const unreadTotal = useMemo(
-    () => conversations.reduce((sum, c) => sum + c.unread_count, 0),
+    () => conversations.reduce((sum, conversation) => sum + conversation.unread_count, 0),
     [conversations],
   );
 
@@ -124,7 +161,7 @@ export function ChatProvider({
 }
 
 export function useChat(): ChatContextValue {
-  const ctx = useContext(ChatContext);
-  if (!ctx) throw new Error('useChat must be used within a ChatProvider');
-  return ctx;
+  const context = useContext(ChatContext);
+  if (!context) throw new Error('useChat must be used within a ChatProvider');
+  return context;
 }
