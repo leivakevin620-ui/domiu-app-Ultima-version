@@ -162,7 +162,6 @@ export default function CheckoutPage() {
     if (!profile) return setError('Debes iniciar sesión para confirmar el pedido.');
     if (!businessId || !businessName || items.length === 0) return setError('El carrito no contiene un pedido válido.');
     if (!selectedAddressId || !selectedAddress) return setError('Selecciona una dirección de entrega.');
-    if (selectedAddress.latitude == null || selectedAddress.longitude == null) return setError('Comparte la ubicación exacta de la dirección antes de confirmar.');
     if (!quote) return setError(quoteError || 'Espera mientras calculamos el domicilio.');
 
     setPlacing(true);
@@ -221,7 +220,7 @@ export default function CheckoutPage() {
         <form onSubmit={submit} className="space-y-5 lg:col-span-3">
           <section className="rounded-2xl border bg-card p-5">
             <div className="mb-4 flex items-start justify-between gap-3">
-              <div><h2 className="font-bold">Dirección de entrega</h2><p className="mt-1 text-xs text-muted-foreground">Las coordenadas se usan para tarifa y seguimiento.</p></div>
+              <div><h2 className="font-bold">Dirección de entrega</h2><p className="mt-1 text-xs text-muted-foreground">La ubicación exacta mejora la tarifa; sin ella se aplicará el domicilio mínimo.</p></div>
               <Link href="/cliente/direcciones" className="text-xs font-semibold text-primary">Administrar</Link>
             </div>
             {loadingAddresses ? <p className="text-sm text-muted-foreground">Cargando direcciones…</p> : addresses.length > 0 ? (
@@ -230,7 +229,7 @@ export default function CheckoutPage() {
                   <label key={address.id} className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${selectedAddressId === address.id ? 'border-primary bg-primary/5' : ''}`}>
                     <input type="radio" name="address" checked={selectedAddressId === address.id} onChange={() => setSelectedAddressId(address.id)} />
                     <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                    <span className="min-w-0 text-sm"><strong className="block">{address.label || 'Dirección'}</strong><span className="block text-xs text-muted-foreground">{address.street_address}</span><span className={`mt-1 block text-[11px] font-medium ${address.latitude != null ? 'text-success' : 'text-warning'}`}>{address.latitude != null ? 'Ubicación exacta guardada' : 'Faltan coordenadas'}</span></span>
+                    <span className="min-w-0 text-sm"><strong className="block">{address.label || 'Dirección'}</strong><span className="block text-xs text-muted-foreground">{address.street_address}</span><span className={`mt-1 block text-[11px] font-medium ${address.latitude != null ? 'text-success' : 'text-warning'}`}>{address.latitude != null ? 'Ubicación exacta guardada' : 'Sin coordenadas: se aplicará domicilio mínimo'}</span></span>
                   </label>
                 ))}
               </div>
@@ -241,6 +240,7 @@ export default function CheckoutPage() {
           <section className="rounded-2xl border bg-card p-5"><h2 className="mb-3 font-bold">Instrucciones de entrega</h2><textarea value={instructions} onChange={(event) => setInstructions(event.target.value)} placeholder="Ejemplo: llamar al llegar o entregar en portería." rows={4} className="w-full resize-y rounded-xl border bg-background px-3 py-3 text-sm outline-none" /></section>
           {quoteLoading && <p className="rounded-xl bg-muted p-3 text-sm text-muted-foreground">Calculando distancia y tarifa…</p>}
           {quoteError && <p className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">{quoteError}</p>}
+          {selectedAddress && selectedAddress.latitude == null && quote && <p className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">Pedido habilitado con domicilio mínimo de {formatCurrency(quote.delivery_fee)}. Puedes confirmar ahora o actualizar la ubicación para calcular la distancia exacta.</p>}
           {error && <p className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
           <button type="submit" disabled={placing || quoteLoading || !quote} className="w-full rounded-2xl bg-primary py-4 font-bold text-primary-foreground disabled:opacity-60">{placing ? 'Creando pedido…' : `Confirmar pedido — ${formatCurrency(total)}`}</button>
         </form>
@@ -249,7 +249,7 @@ export default function CheckoutPage() {
           <h2 className="font-bold">Resumen del pedido</h2><p className="mb-4 text-sm text-muted-foreground">{businessName}</p>
           <div className="space-y-4">{items.map((item) => <article key={item.id} className="border-b pb-4 last:border-0"><div className="flex justify-between gap-3"><span className="font-medium">{item.quantity}x {item.product.name}</span><span className="font-semibold">{formatCurrency(item.unitPrice * item.quantity)}</span></div>{customizationSummary(item.customization).map((row) => <p key={row} className="mt-1 text-xs text-muted-foreground">{row}</p>)}</article>)}</div>
           <div className="mt-4 space-y-2 border-t pt-4 text-sm"><div className="flex justify-between"><span>Productos</span><span>{formatCurrency(subtotal)}</span></div><div className="flex justify-between font-semibold"><span>Domicilio</span><span>{quote ? formatCurrency(deliveryFee) : 'Por calcular'}</span></div></div>
-          {quote && <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-muted/50 p-3 text-xs"><div className="flex items-center gap-2"><Route className="h-4 w-4 text-primary" />{quote.distance_km.toFixed(2)} km</div><div className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-primary" />aprox. {quote.duration_minutes} min</div></div>}
+          {quote && <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-muted/50 p-3 text-xs"><div className="flex items-center gap-2"><Route className="h-4 w-4 text-primary" />{selectedAddress?.latitude == null ? 'Tarifa mínima' : `${quote.distance_km.toFixed(2)} km`}</div><div className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-primary" />aprox. {quote.duration_minutes} min</div></div>}
           <div className="mt-4 flex justify-between border-t pt-4 text-lg font-bold"><span>Total</span><span>{formatCurrency(total)}</span></div>
         </aside>
       </div>
