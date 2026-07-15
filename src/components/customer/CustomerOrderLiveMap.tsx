@@ -1,15 +1,13 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import dynamic from 'next/dynamic';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Clock3, MapPin, Navigation, Radio, Route } from 'lucide-react';
 import { getBrowserClient } from '@/lib/db/supabase';
-import { SkeletonMap } from '@/components/ui/skeleton';
-
-const DynamicMapWrapper = dynamic(
-  () => import('@/components/tracking/maps/DynamicMapWrapper').then((module) => module.DynamicMapWrapper),
-  { ssr: false, loading: () => <SkeletonMap className="h-[360px]" /> },
-);
+import {
+  OpenStreetLiveMap,
+  type OpenStreetMapPoint,
+  type ResolvedRoute,
+} from '@/components/tracking/maps/OpenStreetLiveMap';
 
 type Point = { lat: number; lng: number };
 
@@ -30,6 +28,7 @@ interface CustomerOrderLiveMapProps {
 const SANTA_MARTA: Point = { lat: 11.2408, lng: -74.199 };
 
 function point(lat: number | null, lng: number | null): Point | null {
+  if (lat == null || lng == null) return null;
   const latitude = Number(lat);
   const longitude = Number(lng);
   return Number.isFinite(latitude) && Number.isFinite(longitude) ? { lat: latitude, lng: longitude } : null;
@@ -58,22 +57,22 @@ export function CustomerOrderLiveMap({
   storedDistanceKm,
   estimatedDeliveryTime,
 }: CustomerOrderLiveMapProps) {
-  const [map, setMap] = useState<google.maps.Map | null>(null);
   const [courierLocation, setCourierLocation] = useState<Point | null>(null);
-  const [eta, setEta] = useState<{ distance: string; duration: string } | null>(null);
+  const [resolvedRoute, setResolvedRoute] = useState<ResolvedRoute | null>(null);
   const [locationUpdatedAt, setLocationUpdatedAt] = useState<string | null>(null);
-  const directionsRef = useRef<google.maps.DirectionsRenderer | null>(null);
 
   const pickup = useMemo(() => point(pickupLat, pickupLng), [pickupLat, pickupLng]);
   const delivery = useMemo(() => point(deliveryLat, deliveryLng), [deliveryLat, deliveryLng]);
   const goingToCustomer = status === 'picked_up' || status === 'in_transit';
   const destinationPoint = goingToCustomer ? delivery : pickup;
-  const originPoint = courierLocation || pickup;
-  const destination: Point | string = destinationPoint || (goingToCustomer ? deliveryAddress : pickupAddress);
-  const origin: Point | string = originPoint || pickupAddress;
+  const originPoint = courierLocation || (goingToCustomer ? pickup : null);
 
   useEffect(() => {
-    if (!courierId) return;
+    if (!courierId) {
+      setCourierLocation(null);
+      setLocationUpdatedAt(null);
+      return;
+    }
     const supabase = getBrowserClient();
 
     const loadLatest = async () => {
@@ -107,79 +106,51 @@ export function CustomerOrderLiveMap({
       )
       .subscribe();
 
-    const polling = window.setInterval(() => void loadLatest(), 8_000);
+    const polling = window.setInterval(() => void loadLatest(), 7_000);
     return () => {
       window.clearInterval(polling);
       void supabase.removeChannel(channel);
     };
   }, [courierId, orderId]);
 
-  useEffect(() => {
-    if (!map || !window.google?.maps) return;
-    directionsRef.current?.setMap(null);
+  const mapPoints = useMemo<OpenStreetMapPoint[]>(
+    () => [
+      ...(pickup
+        ? [{ id: 'pickup', ...pickup, label: `Recogida: ${pickupAddress}`, color: '#F97316', kind: 'pickup' as const }]
+        : []),
+      ...(delivery
+        ? [{ id: 'delivery', ...delivery, label: `Entrega: ${deliveryAddress}`, color: '#4F46E5', kind: 'delivery' as const }]
+        : []),
+      ...(courierLocation
+        ? [{ id: 'courier', ...courierLocation, label: 'Tu pedido se mueve aquí', color: '#7C3AED', kind: 'courier' as const }]
+        : []),
+    ],
+    [courierLocation, delivery, deliveryAddress, pickup, pickupAddress],
+  );
 
-    const renderer = new google.maps.DirectionsRenderer({
-      map,
-      preserveViewport: false,
-      suppressMarkers: false,
-      polylineOptions: {
-        strokeColor: goingToCustomer ? '#4F46E5' : '#F97316',
-        strokeWeight: 6,
-        strokeOpacity: 0.9,
-      },
-    });
-    const service = new google.maps.DirectionsService();
-    let active = true;
+  const liveRoute = useMemo(
+    () => (originPoint && destinationPoint ? [originPoint, destinationPoint] : []),
+    [destinationPoint, originPoint],
+  );
 
-    service.route(
-      {
-        origin,
-        destination,
-        travelMode: google.maps.TravelMode.DRIVING,
-        drivingOptions: { departureTime: new Date() },
-      },
-      (result, routeStatus) => {
-        if (!active) return;
-        if (routeStatus === 'OK' && result) {
-          renderer.setDirections(result);
-          directionsRef.current = renderer;
-          const leg = result.routes?.[0]?.legs?.[0];
-          setEta({
-            distance: leg?.distance?.text || '',
-            duration: leg?.duration_in_traffic?.text || leg?.duration?.text || 'Calculando',
-          });
-        } else {
-          renderer.setMap(null);
-          setEta(null);
-        }
-      },
-    );
-
-    return () => {
-      active = false;
-      renderer.setMap(null);
-    };
-  }, [destination, goingToCustomer, map, origin]);
+  const handleRouteResolved = useCallback((nextRoute: ResolvedRoute) => {
+    setResolvedRoute(nextRoute);
+  }, []);
 
   const fallbackDistance = originPoint && destinationPoint
     ? haversineKm(originPoint, destinationPoint)
     : storedDistanceKm ?? null;
-  const fallbackDuration = fallbackDistance == null ? null : Math.max(2, Math.ceil((fallbackDistance / 25) * 60));
+  const distanceKm = resolvedRoute?.distanceKm ?? fallbackDistance;
+  const routeMinutes = resolvedRoute?.durationMinutes;
+  const fallbackDuration = distanceKm == null ? null : Math.max(2, Math.ceil((distanceKm / 25) * 60));
   const storedMinutes = estimatedDeliveryTime
     ? Math.max(0, Math.ceil((new Date(estimatedDeliveryTime).getTime() - Date.now()) / 60_000))
     : null;
-
-  const fallbackPoints = [
-    ...(pickup ? [{ id: 'pickup', ...pickup, label: `Recogida: ${pickupAddress}`, color: '#F97316' }] : []),
-    ...(delivery ? [{ id: 'delivery', ...delivery, label: `Entrega: ${deliveryAddress}`, color: '#4F46E5' }] : []),
-    ...(courierLocation ? [{ id: 'courier', ...courierLocation, label: 'Repartidor en tiempo real', color: '#7C3AED' }] : []),
-  ];
-
-  const fallbackRoute = originPoint && destinationPoint ? [originPoint, destinationPoint] : [];
+  const durationMinutes = routeMinutes ?? fallbackDuration ?? storedMinutes;
 
   return (
-    <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-      <div className="border-b p-5">
+    <section className="overflow-hidden rounded-2xl border bg-card shadow-sm sm:rounded-3xl">
+      <div className="border-b p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-primary">Seguimiento en vivo</p>
@@ -194,47 +165,43 @@ export function CustomerOrderLiveMap({
           )}
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <div className="rounded-xl bg-muted/60 p-3">
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="rounded-xl bg-muted/60 p-2.5 sm:p-3">
             <Route className="h-4 w-4 text-primary" />
-            <p className="mt-1 text-sm font-black">{eta?.distance || (fallbackDistance != null ? `${fallbackDistance.toFixed(2)} km` : 'Calculando')}</p>
-            <p className="text-[10px] text-muted-foreground">Distancia restante</p>
+            <p className="mt-1 truncate text-sm font-black">{distanceKm != null ? `${distanceKm.toFixed(2)} km` : '—'}</p>
+            <p className="text-[10px] text-muted-foreground">Restante</p>
           </div>
-          <div className="rounded-xl bg-muted/60 p-3">
+          <div className="rounded-xl bg-muted/60 p-2.5 sm:p-3">
             <Clock3 className="h-4 w-4 text-primary" />
-            <p className="mt-1 text-sm font-black">{eta?.duration || `${fallbackDuration ?? storedMinutes ?? '—'} min`}</p>
-            <p className="text-[10px] text-muted-foreground">Tiempo estimado</p>
+            <p className="mt-1 text-sm font-black">{durationMinutes != null ? `${durationMinutes} min` : '—'}</p>
+            <p className="text-[10px] text-muted-foreground">Estimado</p>
           </div>
-          <div className="col-span-2 rounded-xl bg-muted/60 p-3 sm:col-span-1">
+          <div className="rounded-xl bg-muted/60 p-2.5 sm:p-3">
             <Navigation className="h-4 w-4 text-primary" />
-            <p className="mt-1 text-sm font-black">{goingToCustomer ? 'Entrega' : courierId ? 'Recogida' : 'Asignación'}</p>
-            <p className="text-[10px] text-muted-foreground">Etapa actual</p>
+            <p className="mt-1 truncate text-sm font-black">{goingToCustomer ? 'Entrega' : courierId ? 'Recogida' : 'Asignando'}</p>
+            <p className="text-[10px] text-muted-foreground">Etapa</p>
           </div>
         </div>
       </div>
 
-      <div className="relative h-[360px] bg-muted">
-        <DynamicMapWrapper
-          config={{
-            center: courierLocation || pickup || delivery || SANTA_MARTA,
-            zoom: 14,
-            options: { mapTypeControl: false, streetViewControl: false, fullscreenControl: true },
-          }}
-          className="absolute inset-0 h-full w-full"
-          onLoad={setMap}
-          fallbackPoints={fallbackPoints}
-          fallbackRoute={fallbackRoute}
-        >
-          {() => null}
-        </DynamicMapWrapper>
+      <div className="relative h-[330px] bg-muted sm:h-[420px]">
+        <OpenStreetLiveMap
+          points={mapPoints}
+          route={liveRoute}
+          center={courierLocation || pickup || delivery || SANTA_MARTA}
+          zoom={15}
+          className="absolute inset-0 h-full w-full rounded-none"
+          followPointId={courierLocation ? 'courier' : undefined}
+          onRouteResolved={handleRouteResolved}
+        />
       </div>
 
       <div className="grid gap-3 border-t p-4 sm:grid-cols-2">
-        <div className="flex gap-2"><MapPin className="mt-0.5 h-4 w-4 text-orange-500" /><div><p className="text-[10px] font-bold uppercase text-muted-foreground">Recogida</p><p className="text-xs font-semibold">{pickupAddress}</p></div></div>
-        <div className="flex gap-2"><MapPin className="mt-0.5 h-4 w-4 text-indigo-600" /><div><p className="text-[10px] font-bold uppercase text-muted-foreground">Entrega</p><p className="text-xs font-semibold">{deliveryAddress}</p></div></div>
+        <div className="flex gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" /><div><p className="text-[10px] font-bold uppercase text-muted-foreground">Recogida</p><p className="text-xs font-semibold">{pickupAddress}</p></div></div>
+        <div className="flex gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" /><div><p className="text-[10px] font-bold uppercase text-muted-foreground">Entrega</p><p className="text-xs font-semibold">{deliveryAddress}</p></div></div>
       </div>
 
-      {locationUpdatedAt && <p className="border-t px-4 py-2 text-[10px] text-muted-foreground">Última ubicación recibida: {new Date(locationUpdatedAt).toLocaleTimeString('es-CO')}</p>}
+      {locationUpdatedAt && <p className="border-t px-4 py-2 text-[10px] text-muted-foreground">Última ubicación: {new Date(locationUpdatedAt).toLocaleTimeString('es-CO')}</p>}
     </section>
   );
 }
