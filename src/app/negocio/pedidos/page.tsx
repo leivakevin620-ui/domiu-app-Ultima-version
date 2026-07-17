@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { businessService, type BusinessOrder } from '@/services/business';
 import { SkeletonList } from '@/components/ui/skeleton';
 import { OrderCustomizationDetails } from '@/components/business/order-customization-details';
+import { BusinessPaymentVerification } from '@/components/business/BusinessPaymentVerification';
 import { getBrowserClient } from '@/lib/db/supabase';
 import {
   ClipboardList,
@@ -56,9 +57,19 @@ const formatDateTime = (value: string) =>
 
 const paymentLabel: Record<string, string> = {
   pending: 'Pago pendiente',
+  pending_verification: 'Verificar transferencia',
+  completed: 'Pago completado',
   paid: 'Pagado',
   failed: 'Pago fallido',
   refunded: 'Reembolsado',
+};
+
+const paymentMethodLabel: Record<string, string> = {
+  cash: 'Efectivo contra entrega',
+  transfer: 'Transferencia',
+  credit_card: 'Tarjeta de crédito',
+  debit_card: 'Tarjeta débito',
+  wallet: 'Billetera digital',
 };
 
 export default function NegocioPedidos() {
@@ -71,28 +82,32 @@ export default function NegocioPedidos() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  const loadOrders = useCallback(async (showSpinner = false) => {
-    if (!profile?.id) return;
-    if (showSpinner) setRefreshing(true);
-    try {
-      const id = businessId || (await businessService.getBusinessId(profile.id));
-      if (!id) {
-        setOrders([]);
-        setError('No se encontró un negocio asociado a esta cuenta.');
-        return;
+  const loadOrders = useCallback(
+    async (showSpinner = false) => {
+      if (!profile?.id) return;
+      if (showSpinner) setRefreshing(true);
+      try {
+        const id = businessId || (await businessService.getBusinessId(profile.id));
+        if (!id) {
+          setOrders([]);
+          setError('No se encontró un negocio asociado a esta cuenta.');
+          return;
+        }
+        if (!businessId) setBusinessId(id);
+        const result = await businessService.getBusinessOrders(id);
+        setOrders(result);
+        setError('');
+      } catch (cause) {
+        const message =
+          cause instanceof Error ? cause.message : 'No se pudieron cargar los pedidos.';
+        setError(message);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-      if (!businessId) setBusinessId(id);
-      const result = await businessService.getBusinessOrders(id);
-      setOrders(result);
-      setError('');
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'No se pudieron cargar los pedidos.';
-      setError(message);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [businessId, profile?.id]);
+    },
+    [businessId, profile?.id],
+  );
 
   useEffect(() => {
     void loadOrders();
@@ -114,11 +129,20 @@ export default function NegocioPedidos() {
         () => void loadOrders(),
       )
       .subscribe();
+    const paymentChannel = supabase
+      .channel(`business-payments-${businessId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'payment_transactions' },
+        () => void loadOrders(),
+      )
+      .subscribe();
 
-    const timer = window.setInterval(() => void loadOrders(), 15000);
+    const timer = window.setInterval(() => void loadOrders(), 15_000);
     return () => {
       window.clearInterval(timer);
       void supabase.removeChannel(channel);
+      void supabase.removeChannel(paymentChannel);
     };
   }, [businessId, loadOrders]);
 
@@ -147,7 +171,7 @@ export default function NegocioPedidos() {
         <div>
           <h1 className="text-2xl font-bold">Pedidos</h1>
           <p className="text-sm text-muted-foreground">
-            Los pedidos nuevos aparecen en tiempo real con su ticket, cliente, dirección y productos.
+            Los pedidos nuevos aparecen en tiempo real con ticket, pago, cliente, dirección y productos.
           </p>
         </div>
         <button
@@ -186,6 +210,7 @@ export default function NegocioPedidos() {
                   columnOrders.map((order) => {
                     const action = STATUS_ACTION[order.status];
                     const isSelected = selected === order.id;
+                    const paymentCompleted = order.payment_status === 'completed';
                     return (
                       <article key={order.id} className="rounded-xl border bg-background p-3 shadow-sm">
                         <button
@@ -195,9 +220,7 @@ export default function NegocioPedidos() {
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                Ticket
-                              </p>
+                              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Ticket</p>
                               <strong className="text-sm">#{order.order_number}</strong>
                             </div>
                             <strong className="text-sm">{formatCurrency(order.total_amount)}</strong>
@@ -206,11 +229,11 @@ export default function NegocioPedidos() {
                           <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                             <Clock3 className="h-3 w-3" /> {formatDateTime(order.created_at)}
                           </div>
-                          <div className="mt-2 flex items-center justify-between text-xs">
+                          <div className="mt-2 flex items-center justify-between gap-2 text-xs">
                             <span className="rounded-full bg-muted px-2 py-1">
                               {order.items.reduce((total, item) => total + item.quantity, 0)} productos
                             </span>
-                            <span className={order.payment_status === 'paid' ? 'text-success' : 'text-warning'}>
+                            <span className={paymentCompleted ? 'font-bold text-success' : order.payment_status === 'failed' ? 'font-bold text-destructive' : 'font-bold text-warning'}>
                               {paymentLabel[order.payment_status] || order.payment_status}
                             </span>
                           </div>
@@ -253,9 +276,11 @@ export default function NegocioPedidos() {
                               <p><Phone className="mr-1 inline h-3 w-3" />{order.customer_phone || 'Teléfono no registrado'}</p>
                               <p><MapPin className="mr-1 inline h-3 w-3" />{order.delivery_address}</p>
                               {order.delivery_instructions && <p>Referencia: {order.delivery_instructions}</p>}
-                              <p><CreditCard className="mr-1 inline h-3 w-3" />{paymentLabel[order.payment_status] || order.payment_status}</p>
+                              <p><CreditCard className="mr-1 inline h-3 w-3" />{paymentMethodLabel[order.payment_method] || order.payment_method} · {paymentLabel[order.payment_status] || order.payment_status}</p>
                               {order.courier_name && <p>Repartidor: {order.courier_name}</p>}
                             </div>
+
+                            <BusinessPaymentVerification orderId={order.id} onUpdated={() => void loadOrders()} />
 
                             <div className="space-y-2 rounded-lg bg-muted/40 p-2">
                               {order.items.map((item) => (
