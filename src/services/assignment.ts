@@ -55,6 +55,15 @@ async function getClient() {
   return getBrowserClient();
 }
 
+function statusFlags(status: DriverStatus) {
+  return {
+    status,
+    is_active: status !== 'offline',
+    is_available: status === 'available',
+    updated_at: now(),
+  };
+}
+
 function mapDriverToCourier(driver: Driver, firstName?: string | null, lastName?: string | null): CourierDriver {
   const name = [firstName, lastName].filter(Boolean).join(' ') || 'Repartidor';
   return {
@@ -102,7 +111,7 @@ export const assignmentService = {
 
   getAvailableCouriers: async (): Promise<CourierDriver[]> => {
     const couriers = await assignmentService.getCouriers();
-    return couriers.filter((c) => c.is_active && c.is_available);
+    return couriers.filter((c) => c.is_active && c.is_available && c.status === 'available');
   },
 
   getCourierById: async (id: string): Promise<CourierDriver | undefined> => {
@@ -124,42 +133,45 @@ export const assignmentService = {
     const { data: driver } = await supabase.from('drivers').select('*').eq('id', courierId).single();
     if (!driver) return undefined;
 
-    const newStatus = driver.is_active ? 'offline' as const : 'available' as const;
+    const nextStatus: DriverStatus =
+      driver.status === 'available' && driver.is_available ? 'offline' : 'available';
 
-    const { data: updated } = await supabase
+    const { data: updated, error } = await supabase
       .from('drivers')
-      .update({ is_active: !driver.is_active, status: newStatus })
+      .update(statusFlags(nextStatus))
       .eq('id', courierId)
       .select()
       .single();
 
+    if (error) throw new Error(error.message);
     if (!updated) return undefined;
     return mapDriverToCourier(updated);
   },
 
   setCourierStatus: async (courierId: string, status: DriverStatus): Promise<CourierDriver | undefined> => {
     const supabase = await getClient();
-    const isActive = status !== 'offline';
-    const { data: updated } = await supabase
+    const { data: updated, error } = await supabase
       .from('drivers')
-      .update({ status, is_active: isActive })
+      .update(statusFlags(status))
       .eq('id', courierId)
       .select()
       .single();
+    if (error) throw new Error(error.message);
     if (!updated) return undefined;
     return mapDriverToCourier(updated);
   },
 
   setAvailability: async (courierId: string, available: boolean): Promise<CourierDriver | undefined> => {
     const supabase = await getClient();
-    const status = available ? 'available' as const : 'offline' as const;
-    const { data: updated } = await supabase
+    const status: DriverStatus = available ? 'available' : 'offline';
+    const { data: updated, error } = await supabase
       .from('drivers')
-      .update({ is_active: available, status })
+      .update(statusFlags(status))
       .eq('id', courierId)
       .select()
       .single();
 
+    if (error) throw new Error(error.message);
     if (!updated) return undefined;
     return mapDriverToCourier(updated);
   },
