@@ -72,6 +72,12 @@ const paymentMethodLabel: Record<string, string> = {
   wallet: 'Billetera digital',
 };
 
+const getPaymentLabel = (value: string | null | undefined) =>
+  paymentLabel[String(value || '')] || value || 'Pago pendiente';
+
+const getPaymentMethodLabel = (value: string | null | undefined) =>
+  paymentMethodLabel[String(value || '')] || value || 'Método no definido';
+
 export default function NegocioPedidos() {
   const { profile } = useAuth();
   const [businessId, setBusinessId] = useState<string | null>(null);
@@ -234,7 +240,7 @@ export default function NegocioPedidos() {
                               {order.items.reduce((total, item) => total + item.quantity, 0)} productos
                             </span>
                             <span className={paymentCompleted ? 'font-bold text-success' : order.payment_status === 'failed' ? 'font-bold text-destructive' : 'font-bold text-warning'}>
-                              {paymentLabel[order.payment_status] || order.payment_status}
+                              {getPaymentLabel(order.payment_status)}
                             </span>
                           </div>
                         </button>
@@ -276,7 +282,7 @@ export default function NegocioPedidos() {
                               <p><Phone className="mr-1 inline h-3 w-3" />{order.customer_phone || 'Teléfono no registrado'}</p>
                               <p><MapPin className="mr-1 inline h-3 w-3" />{order.delivery_address}</p>
                               {order.delivery_instructions && <p>Referencia: {order.delivery_instructions}</p>}
-                              <p><CreditCard className="mr-1 inline h-3 w-3" />{paymentMethodLabel[order.payment_method] || order.payment_method} · {paymentLabel[order.payment_status] || order.payment_status}</p>
+                              <p><CreditCard className="mr-1 inline h-3 w-3" />{getPaymentMethodLabel(order.payment_method)} · {getPaymentLabel(order.payment_status)}</p>
                               {order.courier_name && <p>Repartidor: {order.courier_name}</p>}
                             </div>
 
