@@ -107,10 +107,9 @@ export function OrderProvider({
     [customerOrders, businessOrders],
   );
 
-  const createOrder = useCallback(
-    (input: CreateOrderInput) => orderService.createOrder(input),
-    [],
-  );
+  const createOrder = useCallback(async (_input: CreateOrderInput) => {
+    return orderService.createOrder();
+  }, []);
 
   const updateOrderStatus = useCallback(
     async (orderId: string, status: OrderStatus) => {
