@@ -6,12 +6,16 @@ export interface DeliveryAddress {
   type: string;
   label: string | null;
   street_address: string;
+  formatted_address: string | null;
   city: string;
   state_province: string | null;
+  neighborhood: string | null;
   postal_code: string | null;
   country: string;
   latitude: number | null;
   longitude: number | null;
+  place_id: string | null;
+  location_accuracy_meters: number | null;
   is_primary: boolean;
   instructions: string | null;
 }
@@ -20,12 +24,15 @@ export interface SaveDeliveryAddressInput {
   type?: string;
   label?: string;
   streetAddress: string;
+  formattedAddress?: string;
   city: string;
   state?: string;
+  neighborhood?: string;
   postalCode?: string;
   country?: string;
   latitude: number;
   longitude: number;
+  placeId?: string;
   accuracy?: number;
   isPrimary?: boolean;
   instructions?: string;
@@ -38,12 +45,17 @@ function normalize(row: Record<string, unknown>): DeliveryAddress {
     type: String(row.type || 'home'),
     label: row.label ? String(row.label) : null,
     street_address: String(row.street_address || ''),
+    formatted_address: row.formatted_address ? String(row.formatted_address) : null,
     city: String(row.city || ''),
     state_province: row.state_province ? String(row.state_province) : null,
+    neighborhood: row.neighborhood ? String(row.neighborhood) : null,
     postal_code: row.postal_code ? String(row.postal_code) : null,
     country: String(row.country || 'Colombia'),
     latitude: row.latitude == null ? null : Number(row.latitude),
     longitude: row.longitude == null ? null : Number(row.longitude),
+    place_id: row.place_id ? String(row.place_id) : null,
+    location_accuracy_meters:
+      row.location_accuracy_meters == null ? null : Number(row.location_accuracy_meters),
     is_primary: Boolean(row.is_primary),
     instructions: row.instructions ? String(row.instructions) : null,
   };
@@ -54,7 +66,7 @@ export const addressService = {
     const supabase = getBrowserClient();
     const { data, error } = await supabase
       .from('addresses')
-      .select('id,user_id,type,label,street_address,city,state_province,postal_code,country,latitude,longitude,is_primary,instructions')
+      .select('id,user_id,type,label,street_address,formatted_address,city,state_province,neighborhood,postal_code,country,latitude,longitude,place_id,location_accuracy_meters,is_primary,instructions')
       .eq('user_id', userId)
       .is('deleted_at', null)
       .order('is_primary', { ascending: false })
@@ -81,17 +93,24 @@ export const addressService = {
       type: input.type || 'home',
       label: input.label?.trim() || null,
       street_address: input.streetAddress.trim(),
+      formatted_address: input.formattedAddress?.trim() || input.streetAddress.trim(),
       city: input.city.trim() || 'Santa Marta',
       state_province: input.state?.trim() || 'Magdalena',
+      neighborhood: input.neighborhood?.trim() || null,
       postal_code: input.postalCode?.trim() || null,
       country: input.country?.trim() || 'Colombia',
       latitude: input.latitude,
       longitude: input.longitude,
+      place_id: input.placeId?.trim() || null,
+      location_accuracy_meters: input.accuracy ?? null,
       is_primary: isPrimary,
       instructions: input.instructions?.trim() || null,
       metadata: {
         location_accuracy_meters: input.accuracy ?? null,
-        coordinates_source: 'user_device_or_google_places',
+        coordinates_source: input.placeId ? 'google_places_or_map' : 'user_device_gps',
+        place_id: input.placeId?.trim() || null,
+        neighborhood: input.neighborhood?.trim() || null,
+        location_verified: true,
       },
       updated_at: new Date().toISOString(),
     };
