@@ -1,5 +1,11 @@
 import { AdminLiveDashboard } from '@/components/admin/live-dashboard/AdminLiveDashboard';
+import { LiveOperationsMapCard } from '@/components/operations/LiveOperationsMapCard';
 
 export default function AdminDashboard() {
-  return <AdminLiveDashboard />;
+  return (
+    <div className="space-y-6">
+      <LiveOperationsMapCard scope="admin" />
+      <AdminLiveDashboard />
+    </div>
+  );
 }
