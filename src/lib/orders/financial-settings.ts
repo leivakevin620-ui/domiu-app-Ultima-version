@@ -7,12 +7,18 @@ import {
   type FinancialSettings,
 } from '@/lib/orders/order-earnings';
 
+function percentToBasisPoints(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.round(parsed * 100);
+}
+
 export async function loadActiveFinancialSettings(): Promise<FinancialSettings> {
   const supabase = getServiceClient();
   const { data, error } = await supabase
     .from('platform_financial_settings')
     .select(
-      'courier_delivery_rate_bps,platform_delivery_rate_bps,customer_service_rate_bps,customer_service_minimum_cop,customer_service_maximum_cop,manual_delivery_service_fee_cop,rounding_increment_cop,service_fee_enabled',
+      'service_fee_rate,service_fee_min,service_fee_max,service_fee_rounding,delivery_commission_rate,is_active,effective_from',
     )
     .eq('is_active', true)
     .lte('effective_from', new Date().toISOString())
@@ -20,18 +26,32 @@ export async function loadActiveFinancialSettings(): Promise<FinancialSettings> 
     .limit(1)
     .maybeSingle();
 
-  if (error || !data) {
-    return DEFAULT_FINANCIAL_SETTINGS;
-  }
+  if (error || !data) return DEFAULT_FINANCIAL_SETTINGS;
+
+  const platformDeliveryRateBps = percentToBasisPoints(
+    data.delivery_commission_rate,
+    DEFAULT_FINANCIAL_SETTINGS.platformDeliveryRateBps,
+  );
 
   return validateFinancialSettings({
-    courierDeliveryRateBps: Number(data.courier_delivery_rate_bps),
-    platformDeliveryRateBps: Number(data.platform_delivery_rate_bps),
-    customerServiceRateBps: Number(data.customer_service_rate_bps),
-    customerServiceMinimumCop: Number(data.customer_service_minimum_cop),
-    customerServiceMaximumCop: Number(data.customer_service_maximum_cop),
-    manualDeliveryServiceFeeCop: Number(data.manual_delivery_service_fee_cop),
-    roundingIncrementCop: Number(data.rounding_increment_cop),
-    serviceFeeEnabled: Boolean(data.service_fee_enabled),
+    courierDeliveryRateBps: 10_000 - platformDeliveryRateBps,
+    platformDeliveryRateBps,
+    customerServiceRateBps: percentToBasisPoints(
+      data.service_fee_rate,
+      DEFAULT_FINANCIAL_SETTINGS.customerServiceRateBps,
+    ),
+    customerServiceMinimumCop: Number(
+      data.service_fee_min ?? DEFAULT_FINANCIAL_SETTINGS.customerServiceMinimumCop,
+    ),
+    customerServiceMaximumCop: Number(
+      data.service_fee_max ?? DEFAULT_FINANCIAL_SETTINGS.customerServiceMaximumCop,
+    ),
+    manualDeliveryServiceFeeCop: Number(
+      data.service_fee_min ?? DEFAULT_FINANCIAL_SETTINGS.manualDeliveryServiceFeeCop,
+    ),
+    roundingIncrementCop: Number(
+      data.service_fee_rounding ?? DEFAULT_FINANCIAL_SETTINGS.roundingIncrementCop,
+    ),
+    serviceFeeEnabled: true,
   });
 }
