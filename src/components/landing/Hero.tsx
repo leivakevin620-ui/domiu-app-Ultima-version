@@ -78,7 +78,7 @@ export function Hero() {
 
         <motion.div variants={fadeIn} className="relative flex min-h-[520px] items-center justify-center rounded-[2.25rem] bg-gradient-to-br from-[#FFF7C4] via-[#FFD400] to-[#F3B800] p-6 shadow-[0_30px_90px_-45px_rgba(115,86,0,.65)] sm:p-10">
           <div className="absolute left-6 top-6 rounded-full bg-white/75 px-4 py-2 text-xs font-black uppercase tracking-[0.13em] text-[#685300] backdrop-blur">DomiU en vivo</div>
-          <DomiUMark className="h-52 w-64 sm:h-64 sm:w-80" />
+          <DomiUMark className="h-28 w-40 sm:h-32 sm:w-44" />
 
           <div className="absolute inset-x-5 bottom-5 grid grid-cols-3 gap-2 sm:inset-x-8 sm:bottom-8 sm:gap-3">
             {[
