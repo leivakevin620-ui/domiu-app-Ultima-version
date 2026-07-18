@@ -4,19 +4,16 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Search, MapPin, Sparkles, Bike, Store, Clock3 } from 'lucide-react';
-import { DomiULogo } from '@/components/brand/DomiULogo';
+import { Bike, ChevronRight, Clock3, MapPin, Search, ShieldCheck, Store } from 'lucide-react';
+import { DomiUMark } from '@/components/brand/DomiULogo';
 
 const fadeIn = {
-  initial: { opacity: 0, y: 30 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' as const } },
+  initial: { opacity: 0, y: 24 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.55, ease: 'easeOut' as const } },
 };
 
-const stagger = {
-  animate: { transition: { staggerChildren: 0.1 } },
-};
-
-const POPULAR_TAGS = ['Pizza', 'Sushi', 'Hamburguesas', 'Café'];
+const stagger = { animate: { transition: { staggerChildren: 0.08 } } };
+const POPULAR_TAGS = ['Pizza', 'Hamburguesas', 'Pollo', 'Farmacia', 'Mercado'];
 
 export function Hero() {
   const router = useRouter();
@@ -24,125 +21,83 @@ export function Hero() {
 
   const handleSearch = (event: React.FormEvent) => {
     event.preventDefault();
-    if (searchQuery.trim()) {
-      router.push(`/cliente?search=${encodeURIComponent(searchQuery.trim())}`);
-    }
+    const query = searchQuery.trim();
+    router.push(query ? `/cliente/search?q=${encodeURIComponent(query)}` : '/register');
   };
 
   return (
-    <section className="relative flex min-h-[94vh] items-center overflow-hidden pt-20">
-      <div className="absolute inset-0 bg-[linear-gradient(135deg,#101216_0%,#181B21_46%,#111317_100%)]" />
-      <div className="absolute -left-28 top-24 h-[28rem] w-[28rem] rounded-full bg-[#FFE600]/20 blur-[120px]" />
-      <div className="absolute -right-28 top-8 h-[30rem] w-[30rem] rounded-full bg-[#FF9D00]/15 blur-[130px]" />
-      <div className="absolute bottom-[-12rem] left-1/3 h-[30rem] w-[30rem] rounded-full bg-cyan-400/10 blur-[140px]" />
-      <div className="absolute inset-0 opacity-30 [background-image:radial-gradient(circle_at_center,rgba(255,230,0,.22)_0,transparent_1px)] [background-size:26px_26px]" />
-
-      <motion.div
-        className="relative mx-auto grid w-full max-w-7xl items-center gap-12 px-4 py-14 sm:px-6 lg:grid-cols-[1.12fr_.88fr] lg:px-8"
-        variants={stagger}
-        initial="initial"
-        animate="animate"
-      >
-        <div className="text-center lg:text-left">
-          <motion.div variants={fadeIn} className="mb-7 inline-flex items-center gap-2 rounded-full border border-[#FFE600]/35 bg-[#FFE600]/10 px-4 py-2 shadow-[0_0_26px_rgba(255,222,0,.16)] backdrop-blur-md">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FFE600] opacity-75" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#FFE600]" />
-            </span>
-            <span className="text-xs font-extrabold uppercase tracking-[0.16em] text-[#FFF4A5]">Activos en Santa Marta</span>
+    <section className="relative overflow-hidden border-b border-[#E7E9ED] bg-white pt-24 sm:pt-28">
+      <div className="absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-[#FFF9DE] to-transparent" />
+      <motion.div className="relative mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1.05fr_.95fr] lg:px-8 lg:py-20" variants={stagger} initial="initial" animate="animate">
+        <div className="flex flex-col justify-center">
+          <motion.div variants={fadeIn} className="inline-flex w-fit items-center gap-2 rounded-full border border-[#E7C300] bg-[#FFF8CF] px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-[#745C00]">
+            <span className="h-2 w-2 rounded-full bg-[#E3B800]" /> Activos en Santa Marta
           </motion.div>
 
-          <motion.h1 variants={fadeIn} className="font-heading text-5xl font-black leading-[1.02] tracking-[-0.045em] text-white sm:text-6xl lg:text-7xl">
-            Pide lo que quieres.
-            <span className="mt-2 block bg-gradient-to-r from-[#FFF000] via-[#FFD400] to-[#FF9D00] bg-clip-text text-transparent drop-shadow-[0_0_24px_rgba(255,218,0,.22)]">
-              Recíbelo con vida.
-            </span>
+          <motion.h1 variants={fadeIn} className="mt-6 max-w-3xl text-5xl font-black leading-[.98] tracking-[-0.055em] text-[#17191F] sm:text-6xl lg:text-7xl">
+            Pide lo que necesitas. <span className="text-[#C99D00]">Recíbelo con DomiU.</span>
           </motion.h1>
 
-          <motion.p variants={fadeIn} className="mx-auto mt-7 max-w-xl text-lg leading-relaxed text-[#C9CED6] lg:mx-0">
-            Restaurantes, farmacias, supermercados y comercios locales conectados con repartidores y seguimiento en tiempo real.
+          <motion.p variants={fadeIn} className="mt-6 max-w-2xl text-base font-medium leading-relaxed text-[#606874] sm:text-lg">
+            Restaurantes, supermercados, farmacias y comercios locales conectados con repartidores y seguimiento visible en una sola plataforma.
           </motion.p>
 
-          <motion.div variants={fadeIn} className="mt-9 max-w-2xl">
-            <form onSubmit={handleSearch} className="group flex flex-col gap-2 rounded-2xl border border-[#FFE600]/25 bg-[#20242B]/90 p-2 shadow-[0_24px_60px_-24px_rgba(0,0,0,.95),0_0_34px_rgba(255,218,0,.08)] backdrop-blur-xl sm:flex-row sm:items-center">
-              <div className="flex items-center gap-2 rounded-xl bg-[#15181D] px-4 py-3 sm:border-r sm:border-border sm:bg-transparent sm:py-2">
-                <MapPin className="h-4 w-4 shrink-0 text-[#FFE000]" />
-                <span className="whitespace-nowrap text-sm font-bold text-white">Santa Marta</span>
+          <motion.form variants={fadeIn} onSubmit={handleSearch} className="mt-8 rounded-2xl border border-[#E2E5EA] bg-white p-2 shadow-[0_18px_50px_-28px_rgba(16,24,40,.42)]">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="flex h-12 shrink-0 items-center gap-2 rounded-xl bg-[#F4F6F8] px-4 text-sm font-black text-[#343840]">
+                <MapPin className="h-5 w-5 text-[#C59B00]" /> Santa Marta
               </div>
-              <div className="flex flex-1 items-center gap-2 rounded-xl bg-[#15181D] px-3 py-3 sm:bg-transparent sm:py-2">
-                <Search className="h-4 w-4 shrink-0 text-[#AAB0BA]" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Busca un restaurante o producto..."
-                  className="flex-1 bg-transparent text-sm text-white placeholder:text-[#8F96A1] focus:outline-none"
-                />
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#7B828C]" />
+                <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Busca un comercio, plato o producto…" className="h-12 w-full rounded-xl bg-[#F4F6F8] pl-12 pr-4 text-sm font-semibold text-[#25282E] outline-none placeholder:text-[#858C96] focus:bg-white focus:ring-2 focus:ring-[#FFD400]" />
               </div>
-              <button type="submit" className="domiu-brand-glow flex h-12 items-center justify-center gap-2 rounded-xl bg-primary px-6 text-sm font-black text-primary-foreground sm:h-11">
+              <button type="submit" className="flex h-12 items-center justify-center gap-2 rounded-xl bg-[#FFD400] px-6 text-sm font-black text-[#17191F] shadow-lg shadow-[#FFD400]/20 transition hover:brightness-105">
                 <Search className="h-4 w-4" /> Buscar
               </button>
-            </form>
+            </div>
+          </motion.form>
 
-            <motion.div variants={fadeIn} className="mt-5 flex flex-wrap items-center justify-center gap-2 text-sm lg:justify-start">
-              <span className="text-xs font-semibold text-[#8F96A1]">Populares:</span>
-              {POPULAR_TAGS.map((tag) => (
-                <button
-                  key={tag}
-                  onClick={() => router.push(`/cliente?search=${encodeURIComponent(tag)}`)}
-                  className="rounded-full border border-[#FFE600]/15 bg-[#20242B]/80 px-3.5 py-1.5 text-xs font-bold text-[#DDE1E7] transition-all hover:-translate-y-0.5 hover:border-[#FFE600]/50 hover:bg-[#FFE600]/10 hover:text-[#FFF5AD]"
-                >
-                  {tag}
-                </button>
-              ))}
-            </motion.div>
+          <motion.div variants={fadeIn} className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-xs font-bold text-[#7A818C]">Lo más buscado:</span>
+            {POPULAR_TAGS.map((tag) => (
+              <button key={tag} type="button" onClick={() => router.push(`/cliente/search?q=${encodeURIComponent(tag)}`)} className="rounded-full border border-[#DDE1E7] bg-white px-3.5 py-2 text-xs font-black text-[#454A52] transition hover:border-[#FFD400] hover:bg-[#FFF9D8]">
+                {tag}
+              </button>
+            ))}
           </motion.div>
 
-          <motion.div variants={fadeIn} className="mt-9 flex flex-col items-center gap-3 sm:flex-row lg:justify-start">
-            <Link href="/register" className="domiu-brand-glow inline-flex h-12 items-center justify-center rounded-xl bg-primary px-8 text-sm font-black text-primary-foreground">
-              Crear cuenta gratis
+          <motion.div variants={fadeIn} className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <Link href="/register" className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#17191F] px-7 text-sm font-black text-white transition hover:bg-[#2A2E35]">
+              Crear cuenta gratis <ChevronRight className="h-4 w-4" />
             </Link>
-            <Link href="/login" className="inline-flex h-12 items-center justify-center rounded-xl border border-white/15 bg-white/[0.055] px-8 text-sm font-bold text-white backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-[#FFE600]/40 hover:bg-[#FFE600]/10 hover:text-[#FFF4A5]">
+            <Link href="/login" className="inline-flex h-12 items-center justify-center rounded-xl border border-[#D8DCE3] bg-white px-7 text-sm font-black text-[#292D34] transition hover:border-[#FFD400]">
               Iniciar sesión
             </Link>
           </motion.div>
         </div>
 
-        <motion.div variants={fadeIn} className="relative mx-auto w-full max-w-md">
-          <div className="absolute -inset-10 rounded-full bg-gradient-to-br from-[#FFE600]/25 via-[#FFB000]/12 to-transparent blur-3xl" />
-          <div className="relative overflow-hidden rounded-[2.2rem] border border-[#FFE600]/30 bg-gradient-to-br from-[#2B3038] via-[#1C2026] to-[#15181D] p-5 shadow-[0_35px_80px_-30px_rgba(0,0,0,.95),0_0_55px_rgba(255,218,0,.16)]">
-            <div className="absolute right-4 top-4 flex items-center gap-1.5 rounded-full border border-[#FFE600]/25 bg-[#FFE600]/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-[#FFF3A0]">
-              <Sparkles className="h-3 w-3" /> DomiU en vivo
-            </div>
-            <div className="domiu-float mx-auto mt-7 flex justify-center">
-              <DomiULogo showTagline className="scale-110 sm:scale-125" />
-            </div>
+        <motion.div variants={fadeIn} className="relative flex min-h-[520px] items-center justify-center rounded-[2.25rem] bg-gradient-to-br from-[#FFF7C4] via-[#FFD400] to-[#F3B800] p-6 shadow-[0_30px_90px_-45px_rgba(115,86,0,.65)] sm:p-10">
+          <div className="absolute left-6 top-6 rounded-full bg-white/75 px-4 py-2 text-xs font-black uppercase tracking-[0.13em] text-[#685300] backdrop-blur">DomiU en vivo</div>
+          <DomiUMark className="h-52 w-64 sm:h-64 sm:w-80" />
 
-            <div className="mt-10 grid grid-cols-3 gap-2.5">
-              {[
-                { icon: Store, label: 'Negocios', value: 'Locales' },
-                { icon: Bike, label: 'Reparto', value: 'En vivo' },
-                { icon: Clock3, label: 'Entrega', value: 'Rápida' },
-              ].map(({ icon: Icon, label, value }) => (
-                <div key={label} className="rounded-2xl border border-white/8 bg-white/[0.045] p-3 text-center backdrop-blur-sm">
-                  <Icon className="mx-auto h-5 w-5 text-[#FFE000]" />
-                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8F96A1]">{label}</p>
-                  <p className="mt-0.5 text-xs font-black text-white">{value}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-[#FFE600]/18 bg-gradient-to-r from-[#FFE600]/12 to-[#FF9D00]/8 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-black text-[#FFF2A0]">Seguimiento visible</p>
-                  <p className="mt-1 text-[11px] text-[#B8BEC8]">Pedido, ruta, repartidor y tiempo estimado.</p>
-                </div>
-                <div className="domiu-pulse-glow flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-                  <Bike className="h-5 w-5" />
-                </div>
+          <div className="absolute inset-x-5 bottom-5 grid grid-cols-3 gap-2 sm:inset-x-8 sm:bottom-8 sm:gap-3">
+            {[
+              { icon: Store, label: 'Comercios', value: 'Locales' },
+              { icon: Bike, label: 'Reparto', value: 'Visible' },
+              { icon: Clock3, label: 'Entrega', value: 'Organizada' },
+            ].map(({ icon: Icon, label, value }) => (
+              <div key={label} className="rounded-2xl border border-white/45 bg-white/80 p-3 text-center shadow-sm backdrop-blur sm:p-4">
+                <Icon className="mx-auto h-5 w-5 text-[#8D7000]" />
+                <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-[#77705A]">{label}</p>
+                <p className="mt-0.5 text-xs font-black text-[#22241F]">{value}</p>
               </div>
-            </div>
+            ))}
+          </div>
+
+          <div className="absolute -right-3 top-24 hidden rounded-2xl border border-[#E3E6EB] bg-white p-4 shadow-xl lg:block">
+            <ShieldCheck className="h-6 w-6 text-[#B18A00]" />
+            <p className="mt-2 text-xs font-black text-[#202329]">Operación segura</p>
+            <p className="mt-1 text-[11px] text-[#747B86]">Perfiles y pedidos organizados</p>
           </div>
         </motion.div>
       </motion.div>
