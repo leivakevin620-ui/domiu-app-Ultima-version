@@ -64,7 +64,7 @@ export function DomiULogo({
           src={DOMIU_OFFICIAL_LOGO_DATA_URI}
           alt="DomiU Magdalena — Pide fácil, recibe rápido"
           draggable={false}
-          className="h-auto w-36 select-none sm:w-44"
+          className="h-auto w-32 select-none object-contain"
         />
       </span>
     );
