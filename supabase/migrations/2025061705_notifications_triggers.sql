@@ -1,11 +1,95 @@
 -- Migration: 20250617_notifications_triggers.sql
 -- Description: Add notification types, triggers, and default templates for Phase 16
 
-ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'new_order';
-ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'new_order_available';
-ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'new_registration';
-ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'incident';
-ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'report';
+-- PostgreSQL no permite utilizar un valor agregado con ALTER TYPE antes de
+-- confirmar la transacción. Para mantener esta migración completamente
+-- atómica, se reconstruye el enum conservando sus valores y declarando los
+-- tipos posteriores que forman parte del esquema actual.
+DROP FUNCTION IF EXISTS create_notification(UUID, notification_type, VARCHAR, TEXT, UUID, VARCHAR, VARCHAR, JSONB);
+
+ALTER TABLE notifications
+  ALTER COLUMN notification_type TYPE TEXT
+  USING notification_type::TEXT;
+
+ALTER TABLE notification_templates
+  ALTER COLUMN type TYPE TEXT
+  USING type::TEXT;
+
+DROP TYPE notification_type;
+
+CREATE TYPE notification_type AS ENUM (
+  'order_placed',
+  'order_confirmed',
+  'order_preparing',
+  'order_ready',
+  'order_in_transit',
+  'order_delivered',
+  'order_cancelled',
+  'payment_received',
+  'payment_failed',
+  'new_message',
+  'promotion',
+  'rate_request',
+  'driver_assigned',
+  'courier_nearby',
+  'system_alert',
+  'review_reminder',
+  'new_order',
+  'new_order_available',
+  'new_registration',
+  'incident',
+  'report',
+  'manual_order_created',
+  'order_assigned',
+  'admin_alert',
+  'order_update'
+);
+
+ALTER TABLE notifications
+  ALTER COLUMN notification_type TYPE notification_type
+  USING notification_type::notification_type;
+
+ALTER TABLE notification_templates
+  ALTER COLUMN type TYPE notification_type
+  USING type::notification_type;
+
+CREATE OR REPLACE FUNCTION create_notification(
+  p_recipient_id UUID,
+  p_notification_type notification_type,
+  p_title VARCHAR,
+  p_message TEXT,
+  p_order_id UUID DEFAULT NULL,
+  p_reference_id VARCHAR DEFAULT NULL,
+  p_reference_type VARCHAR DEFAULT NULL,
+  p_metadata JSONB DEFAULT '{}'::jsonb
+)
+RETURNS notifications AS $$
+DECLARE
+  v_notification notifications;
+BEGIN
+  INSERT INTO notifications (
+    recipient_id,
+    notification_type,
+    title,
+    message,
+    order_id,
+    reference_id,
+    reference_type,
+    metadata
+  ) VALUES (
+    p_recipient_id,
+    p_notification_type,
+    p_title,
+    p_message,
+    p_order_id,
+    p_reference_id,
+    p_reference_type,
+    p_metadata
+  ) RETURNING * INTO v_notification;
+
+  RETURN v_notification;
+END;
+$$ LANGUAGE plpgsql;
 
 INSERT INTO notification_templates (type, title_template, message_template, action_text) VALUES
 ('new_order', 'Nuevo Pedido', 'Has recibido un nuevo pedido #{{order_number}}', 'Ver Pedido'),

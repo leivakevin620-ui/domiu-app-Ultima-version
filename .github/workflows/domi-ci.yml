@@ -7,6 +7,7 @@ on:
       - 'src/app/api/domi/**'
       - 'src/components/domi/**'
       - 'src/lib/domi/**'
+      - 'supabase/migrations/**domi**'
       - 'vitest.config.mts'
       - 'package.json'
       - 'package-lock.json'
@@ -17,6 +18,7 @@ on:
       - 'src/app/api/domi/**'
       - 'src/components/domi/**'
       - 'src/lib/domi/**'
+      - 'supabase/migrations/**domi**'
       - 'vitest.config.mts'
       - 'package.json'
       - 'package-lock.json'
@@ -51,6 +53,9 @@ jobs:
 
       - name: Probar planificador de herramientas
         run: npx vitest run src/lib/domi/tools/planner.test.ts --reporter=verbose
+
+      - name: Probar conversaciones persistentes
+        run: npx vitest run src/lib/domi/conversations.test.ts --reporter=verbose
 
       - name: Compilar y validar TypeScript
         run: npm run build
