@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  suggestedActions?: string[];
 }
 
 interface MobileViewport {
@@ -20,9 +21,28 @@ interface MobileViewport {
 const ROLE_LABEL: Record<string, string> = {
   customer: 'Asistente de cliente',
   merchant: 'Asistente de comercio',
+  business: 'Asistente de comercio',
   courier: 'Asistente de repartidor',
   admin: 'Asistente administrativo',
+  super_admin: 'Asistente administrativo',
+  admin_general: 'Asistente administrativo',
+  admin_financiero: 'Asistente financiero',
+  admin_operativo: 'Asistente operativo',
+  admin_comercial: 'Asistente comercial',
+  admin_soporte: 'Asistente de soporte',
 };
+
+function browserContext() {
+  const path = window.location.pathname;
+  const parts = path.split('/').filter(Boolean);
+  return {
+    path,
+    module: parts[0] || 'inicio',
+    screen: parts.slice(1).join('/') || 'principal',
+    locale: navigator.language || 'es-CO',
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Bogota',
+  };
+}
 
 export function DomiAssistant() {
   const { profile, isLoading } = useAuth();
@@ -109,23 +129,39 @@ export function DomiAssistant() {
     }, 120);
   };
 
-  const send = async () => {
-    const text = message.trim();
+  const send = async (override?: string) => {
+    const text = (override ?? message).trim();
     if (!text || sending) return;
     setMessage('');
     setError('');
     setMessages((current) => [...current, { role: 'user', content: text }]);
     setSending(true);
     try {
+      const requestId = window.crypto?.randomUUID?.();
       const response = await fetch('/api/domi/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, conversationId }),
+        body: JSON.stringify({
+          message: text,
+          conversationId,
+          ...(requestId ? { requestId } : {}),
+          context: browserContext(),
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Domi no pudo responder');
       setConversationId(data.conversationId);
-      setMessages((current) => [...current, { role: 'assistant', content: String(data.answer) }]);
+      const assistant = data.assistant as { message?: string; suggestedActions?: string[] } | undefined;
+      setMessages((current) => [
+        ...current,
+        {
+          role: 'assistant',
+          content: String(assistant?.message || data.answer),
+          suggestedActions: Array.isArray(assistant?.suggestedActions)
+            ? assistant.suggestedActions.slice(0, 3).map(String)
+            : [],
+        },
+      ]);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No se pudo conectar con Domi');
     } finally {
@@ -178,7 +214,7 @@ export function DomiAssistant() {
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#FFD400] text-[#17191F]"><Bot className="h-6 w-6" /></span>
               <div className="min-w-0 flex-1">
                 <h2 className="font-black">Domi</h2>
-                <p className="truncate text-[11px] text-white/65">{ROLE_LABEL[profile.role] || 'Asistente DomiU'} · conocimiento verificado</p>
+                <p className="truncate text-[11px] text-white/65">{ROLE_LABEL[profile.role] || 'Asistente DomiU'} · contexto protegido</p>
               </div>
               <button type="button" onClick={() => setOpen(false)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl hover:bg-white/10" aria-label="Cerrar"><X className="h-5 w-5" /></button>
             </header>
@@ -187,15 +223,30 @@ export function DomiAssistant() {
               {messages.length === 0 && (
                 <div className="rounded-2xl border bg-white p-4 shadow-sm">
                   <div className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-[#B38C00]" /><strong className="text-sm">Hola, {profile.first_name || 'bienvenido'}</strong></div>
-                  <p className="mt-2 text-sm leading-relaxed text-[#69717D]">Pregúntame cómo usar tu perfil, abrir una jornada, entender un pedido, revisar una ganancia o aprender una función de DomiU.</p>
+                  <p className="mt-2 text-sm leading-relaxed text-[#69717D]">Puedo orientarte según tu perfil y la pantalla donde estás. Las acciones sensibles siempre requieren autorización.</p>
                 </div>
               )}
               {messages.map((item, index) => (
                 <div key={`${item.role}-${index}`} className={item.role === 'user' ? 'ml-8 rounded-2xl rounded-br-md bg-[#FFD400] px-4 py-3 text-sm font-medium text-[#17191F]' : 'mr-6 rounded-2xl rounded-bl-md border bg-white px-4 py-3 text-sm leading-relaxed text-[#30353C] shadow-sm'}>
-                  {item.content}
+                  <p>{item.content}</p>
+                  {item.role === 'assistant' && item.suggestedActions && item.suggestedActions.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {item.suggestedActions.map((action) => (
+                        <button
+                          key={action}
+                          type="button"
+                          disabled={sending}
+                          onClick={() => void send(action)}
+                          className="rounded-full border border-[#D7B500]/40 bg-[#FFF9D6] px-3 py-1.5 text-[11px] font-bold text-[#5B4900] transition hover:bg-[#FFD400] disabled:opacity-50"
+                        >
+                          {action}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
-              {sending && <div className="mr-6 flex items-center gap-2 rounded-2xl border bg-white px-4 py-3 text-sm text-[#69717D]"><Loader2 className="h-4 w-4 animate-spin" />Domi está revisando la información…</div>}
+              {sending && <div className="mr-6 flex items-center gap-2 rounded-2xl border bg-white px-4 py-3 text-sm text-[#69717D]"><Loader2 className="h-4 w-4 animate-spin" />Domi está validando tu contexto…</div>}
               {error && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700">{error}</p>}
               <div ref={endRef} className="h-px" />
             </div>
@@ -220,7 +271,7 @@ export function DomiAssistant() {
                 />
                 <button type="button" onClick={() => void send()} disabled={!message.trim() || sending} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#17191F] text-white disabled:opacity-40" aria-label="Enviar"><Send className="h-4 w-4" /></button>
               </div>
-              {!viewport.keyboardOpen && <p className="mt-2 text-center text-[9px] text-[#8B929C]">Domi usa información registrada. Verifica siempre cifras y operaciones críticas.</p>}
+              {!viewport.keyboardOpen && <p className="mt-2 text-center text-[9px] text-[#8B929C]">Domi valida sesión, rol y contexto. No comparte información entre cuentas.</p>}
             </footer>
           </section>
         </div>
