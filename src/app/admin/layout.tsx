@@ -56,12 +56,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (!ADMIN_ROLES.includes(profile.role)) return null;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-[100dvh] w-full min-w-0 max-w-full overflow-x-clip bg-background">
       <AdminSidebar />
-      <div className={cn('transition-all duration-300 lg:pl-64 pb-16 lg:pb-0')}>
+      <div className={cn('min-w-0 max-w-full overflow-x-clip pb-[calc(5rem+env(safe-area-inset-bottom))] transition-all duration-300 lg:pl-64 lg:pb-0')}>
         <AdminHeader />
-        <main className="p-6">{children}</main>
-        <Footer />
+        <main className="min-w-0 max-w-full overflow-x-clip p-3 sm:p-5 lg:p-6">{children}</main>
+        <div className="hidden lg:block"><Footer /></div>
       </div>
       <BottomNavigation
         items={[
