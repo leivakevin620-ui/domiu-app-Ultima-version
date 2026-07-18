@@ -20,6 +20,7 @@ export interface MarketplaceBusiness {
   is_open: boolean;
   is_featured: boolean;
   accepting_orders: boolean;
+  operational_open: boolean;
   catalog_status: CatalogStatus;
   source_label?: string;
   distance?: string;
@@ -87,6 +88,7 @@ function mapBusinessToUI(biz: any): MarketplaceBusiness {
   const cuisineInfo = biz.cuisine_type ? CUISINE_MAP[biz.cuisine_type] : undefined;
   const catalogStatus = (biz.metadata?.catalog_status ?? 'live') as CatalogStatus;
   const acceptingOrders = Boolean(biz.metadata?.accepting_orders ?? catalogStatus === 'live');
+  const operationalOpen = Boolean(biz.metadata?.operational_open ?? false);
 
   return {
     id: biz.id,
@@ -101,9 +103,10 @@ function mapBusinessToUI(biz: any): MarketplaceBusiness {
     review_count: Number(biz.total_ratings ?? 0),
     delivery_time: biz.metadata?.delivery_time ?? '20-35 min',
     delivery_fee: biz.metadata?.delivery_fee ?? 'Calculado por distancia',
-    is_open: Boolean(biz.is_active && acceptingOrders),
+    is_open: Boolean(biz.is_active && acceptingOrders && operationalOpen),
     is_featured: Boolean(biz.is_verified),
     accepting_orders: acceptingOrders,
+    operational_open: operationalOpen,
     catalog_status: catalogStatus,
     source_label: biz.metadata?.source_name ?? undefined,
     business_type: biz.business_type ?? 'restaurant',
@@ -189,12 +192,12 @@ export const marketplaceService = {
     return data ? mapProductToUI(data) : null;
   },
   search: async (query: string) => {
-    const normalized = query.toLowerCase().trim();
-    if (!normalized) return { businesses: [], products: [] };
+    const q = query.toLowerCase().trim();
+    if (!q) return { businesses: [], products: [] };
     const supabase = await getClient();
     const [bizResult, prodResult] = await Promise.all([
-      supabase.from('businesses').select('*').ilike('name', `%${normalized}%`).eq('is_active', true).limit(10),
-      supabase.from('products').select('*, categories(name,display_order)').ilike('name', `%${normalized}%`).eq('status', 'available').limit(20),
+      supabase.from('businesses').select('*').ilike('name', `%${q}%`).eq('is_active', true).limit(10),
+      supabase.from('products').select('*, categories(name,display_order)').ilike('name', `%${q}%`).eq('status', 'available').limit(20),
     ]);
     return { businesses: (bizResult.data ?? []).map(mapBusinessToUI), products: (prodResult.data ?? []).map(mapProductToUI) };
   },
@@ -202,7 +205,7 @@ export const marketplaceService = {
   getFeaturedBusinesses: async () => marketplaceService.getBusinesses({ featured: true }),
   getRecommendedBusinesses: async () => {
     const supabase = await getClient();
-    const { data } = await supabase.from('businesses').select('*').eq('is_active', true).order('is_verified', { ascending: false }).order('rating', { ascending: false }).limit(8);
+    const { data } = await supabase.from('businesses').select('*').eq('is_active', true).order('is_verified', { ascending: false }).order('rating', { ascending: false }).limit(4);
     return (data ?? []).map(mapBusinessToUI);
   },
   getCategoriesWithBusinesses: async () => {
