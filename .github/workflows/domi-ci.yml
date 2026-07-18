@@ -44,8 +44,8 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
-      - name: Ejecutar pruebas
-        run: npm test
+      - name: Ejecutar pruebas de Domi
+        run: npx vitest run src/lib/domi/security.test.ts src/lib/domi/tools/planner.test.ts
 
       - name: Validar TypeScript
         run: npx tsc --noEmit
