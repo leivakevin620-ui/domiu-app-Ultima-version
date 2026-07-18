@@ -12,50 +12,24 @@ import {
   Landmark,
   MapPin,
   Paperclip,
+  ReceiptText,
   Route,
+  ShieldCheck,
   Store,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart, type CartCustomization } from '@/contexts/CartContext';
 import { getBrowserClient } from '@/lib/db/supabase';
+import { formatCOP } from '@/lib/formatters/currency';
 import { addressService, type DeliveryAddress } from '@/services/addresses';
+import { financeService, type FinancialConfig } from '@/services/finance';
 import {
   attachTransferProofAction,
   createCustomerOrderAction,
   quoteCustomerDeliveryAction,
 } from '@/app/actions/customer-orders';
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
-function customizationSummary(customization?: CartCustomization) {
-  if (!customization) return [];
-  const rows: string[] = [];
-  if (customization.style) rows.push(`Estilo: ${customization.style}`);
-  if (customization.sauces?.length) rows.push(`Salsas: ${customization.sauces.join(', ')}`);
-  if (customization.saucePresentation) {
-    rows.push(
-      `Presentación: ${customization.saucePresentation === 'aparte' ? 'salsas aparte' : 'alitas bañadas en salsa'}`,
-    );
-  }
-  if (customization.extras?.length) {
-    rows.push(
-      `Adicionales: ${customization.extras
-        .filter((extra) => extra.quantity > 0)
-        .map((extra) => `${extra.quantity}x ${extra.name}`)
-        .join(', ')}`,
-    );
-  }
-  if (customization.preparationNote?.trim()) {
-    rows.push(`Nota: ${customization.preparationNote.trim()}`);
-  }
-  return rows;
-}
+type PaymentMethod = 'cash' | 'transfer';
 
 type DeliveryQuote = {
   distanceKm: number;
@@ -73,8 +47,6 @@ type BusinessLocation = {
   longitude: number;
   isPrimary: boolean;
 };
-
-type PaymentMethod = 'cash' | 'transfer';
 
 type BusinessPaymentMethod = {
   method: PaymentMethod;
@@ -96,10 +68,30 @@ const PAYMENT_PRESENTATION: Record<
   },
   transfer: {
     title: 'Transferencia',
-    description: 'Adjunta referencia y comprobante para que el negocio valide el pago.',
+    description: 'Adjunta la referencia y el comprobante para validación.',
     icon: Landmark,
   },
 };
+
+function customizationSummary(customization?: CartCustomization) {
+  if (!customization) return [];
+  const rows: string[] = [];
+  if (customization.style) rows.push(`Estilo: ${customization.style}`);
+  if (customization.sauces?.length) rows.push(`Salsas: ${customization.sauces.join(', ')}`);
+  if (customization.saucePresentation) {
+    rows.push(
+      `Presentación: ${customization.saucePresentation === 'aparte' ? 'salsas aparte' : 'producto bañado en salsa'}`,
+    );
+  }
+  if (customization.extras?.length) {
+    const extras = customization.extras
+      .filter((extra) => extra.quantity > 0)
+      .map((extra) => `${extra.quantity}x ${extra.name}`);
+    if (extras.length) rows.push(`Adicionales: ${extras.join(', ')}`);
+  }
+  if (customization.preparationNote?.trim()) rows.push(`Nota: ${customization.preparationNote.trim()}`);
+  return rows;
+}
 
 function safeFileName(name: string) {
   const parts = name.split('.');
@@ -121,21 +113,20 @@ export default function CheckoutPage() {
   const [addresses, setAddresses] = useState<DeliveryAddress[]>([]);
   const [locations, setLocations] = useState<BusinessLocation[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<BusinessPaymentMethod[]>([]);
+  const [financialConfig, setFinancialConfig] = useState<FinancialConfig | null>(null);
   const [selectedAddressId, setSelectedAddressId] = useState('');
   const [selectedLocationId, setSelectedLocationId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>('');
   const [paymentReference, setPaymentReference] = useState('');
   const [paymentProof, setPaymentProof] = useState<File | null>(null);
-  const [loadingAddresses, setLoadingAddresses] = useState(true);
-  const [loadingLocations, setLoadingLocations] = useState(true);
-  const [loadingPayments, setLoadingPayments] = useState(true);
   const [quote, setQuote] = useState<DeliveryQuote | null>(null);
+  const [loading, setLoading] = useState(true);
   const [quoteLoading, setQuoteLoading] = useState(false);
-  const [quoteError, setQuoteError] = useState('');
   const [placing, setPlacing] = useState(false);
   const [placed, setPlaced] = useState(false);
-  const [error, setError] = useState('');
   const [instructions, setInstructions] = useState('');
+  const [error, setError] = useState('');
+  const [quoteError, setQuoteError] = useState('');
 
   const selectedAddress = useMemo(
     () => addresses.find((address) => address.id === selectedAddressId) ?? null,
@@ -150,49 +141,58 @@ export default function CheckoutPage() {
     [paymentMethod, paymentMethods],
   );
 
-  const loadAddresses = useCallback(async () => {
-    if (!profile?.id) return;
-    setLoadingAddresses(true);
-    try {
-      const rows = await addressService.list(profile.id);
-      setAddresses(rows);
-      const preferred = rows.find((row) => row.is_primary) ?? rows[0];
-      setSelectedAddressId(preferred?.id ?? '');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'No se pudieron cargar tus direcciones');
-    } finally {
-      setLoadingAddresses(false);
-    }
-  }, [profile?.id]);
+  const serviceFee = useMemo(
+    () => financialConfig ? financeService.calculateServiceFee(subtotal, financialConfig) : 0,
+    [financialConfig, subtotal],
+  );
+  const deliveryFee = quote?.deliveryFee ?? 0;
+  const total = subtotal + deliveryFee + serviceFee;
 
-  const loadBusinessConfiguration = useCallback(async () => {
-    if (!businessId) return;
-    setLoadingLocations(true);
-    setLoadingPayments(true);
+  const loadData = useCallback(async () => {
+    if (!profile?.id || !businessId) return;
+    setLoading(true);
+    setError('');
     try {
       const supabase = getBrowserClient();
-      const [{ data: locationRows, error: locationsError }, { data: paymentRows, error: paymentsError }] =
-        await Promise.all([
-          supabase
-            .from('business_addresses')
-            .select('id,name,street_address,formatted_address,city,state_province,latitude,longitude,is_primary')
-            .eq('business_id', businessId)
-            .eq('is_active', true)
-            .eq('delivery_available', true)
-            .is('deleted_at', null)
-            .order('is_primary', { ascending: false })
-            .order('created_at', { ascending: true }),
-          supabase
-            .from('business_payment_methods')
-            .select('method,display_name,provider,account_holder,account_identifier,instructions')
-            .eq('business_id', businessId)
-            .eq('is_enabled', true)
-            .in('method', ['cash', 'transfer']),
-        ]);
-      if (locationsError) throw new Error(locationsError.message);
-      if (paymentsError) throw new Error(paymentsError.message);
+      const [addressRows, config, locationsResult, paymentResult, businessResult] = await Promise.all([
+        addressService.list(profile.id),
+        financeService.getActiveConfig(),
+        supabase
+          .from('business_addresses')
+          .select('id,name,street_address,formatted_address,city,state_province,latitude,longitude,is_primary')
+          .eq('business_id', businessId)
+          .eq('is_active', true)
+          .eq('delivery_available', true)
+          .is('deleted_at', null)
+          .order('is_primary', { ascending: false }),
+        supabase
+          .from('business_payment_methods')
+          .select('method,display_name,provider,account_holder,account_identifier,instructions')
+          .eq('business_id', businessId)
+          .eq('is_enabled', true)
+          .in('method', ['cash', 'transfer']),
+        supabase
+          .from('businesses')
+          .select('metadata')
+          .eq('id', businessId)
+          .single(),
+      ]);
 
-      const normalizedLocations = (locationRows ?? [])
+      if (locationsResult.error) throw new Error(locationsResult.error.message);
+      if (paymentResult.error) throw new Error(paymentResult.error.message);
+      if (businessResult.error) throw new Error(businessResult.error.message);
+
+      const metadata = (businessResult.data?.metadata ?? {}) as Record<string, unknown>;
+      if (metadata.operational_open !== true || metadata.accepting_orders !== true) {
+        throw new Error('El comercio está cerrado y no puede recibir pedidos en este momento.');
+      }
+
+      setFinancialConfig(config);
+      setAddresses(addressRows);
+      const preferredAddress = addressRows.find((row) => row.is_primary) ?? addressRows[0];
+      setSelectedAddressId((current) => current || preferredAddress?.id || '');
+
+      const normalizedLocations = (locationsResult.data ?? [])
         .filter((row) => row.latitude != null && row.longitude != null)
         .map((row) => ({
           id: String(row.id),
@@ -211,13 +211,9 @@ export default function CheckoutPage() {
           : normalizedLocations.find((row) => row.isPrimary)?.id ?? normalizedLocations[0]?.id ?? '',
       );
 
-      const normalizedPayments = (paymentRows ?? [])
+      const normalizedPayments = (paymentResult.data ?? [])
         .filter((row) => row.method === 'cash' || row.method === 'transfer')
-        .filter(
-          (row) =>
-            row.method === 'cash' ||
-            Boolean(row.provider && row.account_holder && row.account_identifier),
-        )
+        .filter((row) => row.method === 'cash' || Boolean(row.provider && row.account_holder && row.account_identifier))
         .map((row) => ({
           method: row.method as PaymentMethod,
           displayName: String(row.display_name || PAYMENT_PRESENTATION[row.method as PaymentMethod].title),
@@ -235,22 +231,15 @@ export default function CheckoutPage() {
             : '',
       );
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : 'No se pudo cargar la configuración del negocio',
-      );
+      setError(cause instanceof Error ? cause.message : 'No se pudo preparar el checkout');
     } finally {
-      setLoadingLocations(false);
-      setLoadingPayments(false);
+      setLoading(false);
     }
-  }, [businessId]);
+  }, [businessId, profile?.id]);
 
   useEffect(() => {
-    void loadAddresses();
-  }, [loadAddresses]);
-
-  useEffect(() => {
-    void loadBusinessConfiguration();
-  }, [loadBusinessConfiguration]);
+    void loadData();
+  }, [loadData]);
 
   useEffect(() => {
     setPaymentReference('');
@@ -264,59 +253,40 @@ export default function CheckoutPage() {
     }
     if (selectedAddress?.latitude == null || selectedAddress.longitude == null) {
       setQuote(null);
-      setQuoteError(
-        'La dirección seleccionada no tiene coordenadas exactas. Corrígela antes de confirmar.',
-      );
+      setQuoteError('La dirección seleccionada no tiene coordenadas exactas. Corrígela antes de confirmar.');
       return;
     }
 
     let active = true;
-    const calculate = async () => {
-      setQuoteLoading(true);
-      setQuoteError('');
-      try {
-        const result = await quoteCustomerDeliveryAction({
-          businessId,
-          businessAddressId: selectedLocationId,
-          deliveryAddressId: selectedAddressId,
-        });
-        if (!active) return;
-        if (!result.success) {
-          setQuote(null);
-          setQuoteError(result.error);
-          return;
-        }
-        setQuote({
-          distanceKm: result.distanceKm,
-          durationMinutes: result.durationMinutes,
-          deliveryFee: result.deliveryFee,
-          routeSource: result.routeSource,
-          pickupAddress: result.pickupAddress,
-        });
-      } catch (cause) {
-        if (!active) return;
+    setQuoteLoading(true);
+    setQuoteError('');
+    void quoteCustomerDeliveryAction({
+      businessId,
+      businessAddressId: selectedLocationId,
+      deliveryAddressId: selectedAddressId,
+    }).then((result) => {
+      if (!active) return;
+      if (!result.success) {
         setQuote(null);
-        setQuoteError(
-          cause instanceof Error ? cause.message : 'No se pudo calcular el domicilio',
-        );
-      } finally {
-        if (active) setQuoteLoading(false);
+        setQuoteError(result.error);
+        return;
       }
-    };
-    void calculate();
+      setQuote({
+        distanceKm: result.distanceKm,
+        durationMinutes: result.durationMinutes,
+        deliveryFee: result.deliveryFee,
+        routeSource: result.routeSource,
+        pickupAddress: result.pickupAddress,
+      });
+    }).catch((cause) => {
+      if (active) setQuoteError(cause instanceof Error ? cause.message : 'No se pudo calcular el domicilio');
+    }).finally(() => {
+      if (active) setQuoteLoading(false);
+    });
     return () => {
       active = false;
     };
-  }, [
-    businessId,
-    selectedAddress?.latitude,
-    selectedAddress?.longitude,
-    selectedAddressId,
-    selectedLocationId,
-  ]);
-
-  const deliveryFee = quote?.deliveryFee ?? 0;
-  const total = subtotal + deliveryFee;
+  }, [businessId, selectedAddress?.latitude, selectedAddress?.longitude, selectedAddressId, selectedLocationId]);
 
   const validateProofFile = (file: File) => {
     const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
@@ -327,25 +297,19 @@ export default function CheckoutPage() {
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!profile) return setError('Debes iniciar sesión para confirmar el pedido.');
-    if (!businessId || !businessName || items.length === 0) {
-      return setError('El carrito no contiene un pedido válido.');
-    }
+    if (!businessId || !businessName || items.length === 0) return setError('El carrito no contiene un pedido válido.');
     if (!selectedLocationId || !selectedLocation) return setError('Selecciona el local de origen.');
     if (!selectedAddressId || !selectedAddress) return setError('Selecciona una dirección de entrega.');
-    if (selectedAddress.latitude == null || selectedAddress.longitude == null) {
-      return setError('La dirección elegida no tiene coordenadas exactas. Debes corregirla antes de pedir.');
-    }
+    if (selectedAddress.latitude == null || selectedAddress.longitude == null) return setError('La dirección elegida no tiene coordenadas exactas.');
     if (!paymentMethod || !selectedPaymentConfig) return setError('Selecciona cómo vas a pagar.');
+    if (!quote || !financialConfig) return setError(quoteError || 'Espera mientras calculamos el total.');
     if (paymentMethod === 'transfer') {
       if (!paymentReference.trim()) return setError('Escribe la referencia de la transferencia.');
       if (!paymentProof) return setError('Adjunta el comprobante de la transferencia.');
-      try {
-        validateProofFile(paymentProof);
-      } catch (cause) {
+      try { validateProofFile(paymentProof); } catch (cause) {
         return setError(cause instanceof Error ? cause.message : 'El comprobante no es válido');
       }
     }
-    if (!quote) return setError(quoteError || 'Espera mientras calculamos la ruta y el domicilio.');
 
     setPlacing(true);
     setError('');
@@ -390,26 +354,11 @@ export default function CheckoutPage() {
   };
 
   if (isEmpty && !placed) {
-    return (
-      <main className="mx-auto flex min-h-[70vh] max-w-3xl items-center justify-center px-4 py-12">
-        <section className="w-full rounded-3xl border border-dashed bg-card p-10 text-center">
-          <h1 className="text-xl font-bold">Tu carrito está vacío</h1>
-          <Link href="/cliente" className="mt-6 inline-flex rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground">Explorar negocios</Link>
-        </section>
-      </main>
-    );
+    return <main className="mx-auto flex min-h-[70vh] max-w-3xl items-center justify-center px-4 py-12"><section className="w-full rounded-3xl border border-dashed bg-card p-10 text-center"><h1 className="text-xl font-bold">Tu carrito está vacío</h1><Link href="/cliente" className="mt-6 inline-flex rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground">Explorar negocios</Link></section></main>;
   }
 
   if (placed) {
-    return (
-      <main className="flex min-h-screen items-center justify-center px-4">
-        <section className="max-w-md rounded-3xl border bg-card p-10 text-center shadow-sm">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-success/10 text-success"><CheckCircle2 className="h-9 w-9" /></div>
-          <h1 className="text-2xl font-bold">¡Pedido confirmado!</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Abriendo el seguimiento en vivo.</p>
-        </section>
-      </main>
-    );
+    return <main className="flex min-h-screen items-center justify-center px-4"><section className="max-w-md rounded-3xl border bg-card p-10 text-center shadow-sm"><div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-success/10 text-success"><CheckCircle2 className="h-9 w-9" /></div><h1 className="text-2xl font-bold">¡Pedido confirmado!</h1><p className="mt-2 text-sm text-muted-foreground">El total financiero fue calculado y guardado. Abriendo el seguimiento en vivo.</p></section></main>;
   }
 
   return (
@@ -417,43 +366,36 @@ export default function CheckoutPage() {
       <div className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-5">
         <form onSubmit={submit} className="space-y-5 lg:col-span-3">
           <section className="rounded-2xl border bg-card p-5">
-            <div className="mb-4 flex items-start justify-between gap-3"><div><h2 className="font-bold">Dirección de entrega</h2><p className="mt-1 text-xs text-muted-foreground">Cada pedido debe salir con coordenadas exactas verificadas.</p></div><Link href="/cliente/configuracion/direcciones" className="text-xs font-semibold text-primary">Administrar</Link></div>
-            {loadingAddresses ? <p className="text-sm text-muted-foreground">Cargando direcciones…</p> : addresses.length > 0 ? <div className="space-y-2">{addresses.map((address) => { const exact = address.latitude != null && address.longitude != null; return <label key={address.id} className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${selectedAddressId === address.id ? 'border-primary bg-primary/5' : ''} ${!exact ? 'opacity-70' : ''}`}><input type="radio" name="address" checked={selectedAddressId === address.id} onChange={() => setSelectedAddressId(address.id)} /><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span className="min-w-0 text-sm"><strong className="block">{address.label || 'Dirección'}</strong><span className="block text-xs text-muted-foreground">{address.formatted_address || address.street_address}</span><span className={`mt-1 block text-[11px] font-medium ${exact ? 'text-success' : 'text-destructive'}`}>{exact ? 'Ubicación exacta guardada' : 'Debes editarla y confirmar el punto en el mapa'}</span></span></label>; })}</div> : <p className="rounded-xl bg-warning/10 p-3 text-sm text-warning">No tienes una dirección guardada. Agrégala antes de continuar.</p>}
+            <div className="mb-4 flex items-start justify-between gap-3"><div><h2 className="font-bold">Dirección de entrega</h2><p className="mt-1 text-xs text-muted-foreground">Cada pedido requiere coordenadas exactas.</p></div><Link href="/cliente/configuracion/direcciones" className="text-xs font-semibold text-primary">Administrar</Link></div>
+            {loading ? <p className="text-sm text-muted-foreground">Cargando…</p> : addresses.length ? <div className="space-y-2">{addresses.map((address) => { const exact = address.latitude != null && address.longitude != null; return <label key={address.id} className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${selectedAddressId === address.id ? 'border-primary bg-primary/5' : ''} ${!exact ? 'opacity-65' : ''}`}><input type="radio" name="address" checked={selectedAddressId === address.id} onChange={() => setSelectedAddressId(address.id)} /><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span className="min-w-0 text-sm"><strong className="block">{address.label || 'Dirección'}</strong><span className="block text-xs text-muted-foreground">{address.formatted_address || address.street_address}</span><span className={`mt-1 block text-[11px] font-medium ${exact ? 'text-success' : 'text-destructive'}`}>{exact ? 'Ubicación exacta guardada' : 'Debes corregir el punto en el mapa'}</span></span></label>; })}</div> : <p className="rounded-xl bg-warning/10 p-3 text-sm text-warning">Agrega una dirección antes de continuar.</p>}
           </section>
 
           <section className="rounded-2xl border bg-card p-5">
-            <div className="mb-4"><h2 className="font-bold">Local de origen</h2><p className="mt-1 text-xs text-muted-foreground">La ruta y la tarifa parten del establecimiento seleccionado.</p></div>
-            {loadingLocations ? <p className="text-sm text-muted-foreground">Buscando locales disponibles…</p> : locations.length > 0 ? <div className="space-y-2">{locations.map((location) => <label key={location.id} className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${selectedLocationId === location.id ? 'border-orange-500 bg-orange-50/60' : ''}`}><input type="radio" name="business-location" checked={selectedLocationId === location.id} onChange={() => setSelectedLocationId(location.id)} /><Store className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" /><span className="min-w-0 text-sm"><strong className="block">{location.name}{location.isPrimary ? ' · principal' : ''}</strong><span className="block text-xs text-muted-foreground">{location.formattedAddress}</span></span></label>)}</div> : <p className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">Este negocio todavía no tiene un local activo con coordenadas exactas.</p>}
+            <div className="mb-4"><h2 className="font-bold">Local de origen</h2><p className="mt-1 text-xs text-muted-foreground">Solo se muestran locales con operación abierta.</p></div>
+            {locations.length ? <div className="space-y-2">{locations.map((location) => <label key={location.id} className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${selectedLocationId === location.id ? 'border-orange-500 bg-orange-50/60' : ''}`}><input type="radio" name="business-location" checked={selectedLocationId === location.id} onChange={() => setSelectedLocationId(location.id)} /><Store className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" /><span className="min-w-0 text-sm"><strong className="block">{location.name}{location.isPrimary ? ' · principal' : ''}</strong><span className="block text-xs text-muted-foreground">{location.formattedAddress}</span></span></label>)}</div> : !loading && <p className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">El comercio no tiene un local operativo disponible.</p>}
           </section>
 
           <section className="rounded-2xl border bg-card p-5">
-            <h2 className="font-bold">Método de pago</h2><p className="mt-1 text-xs text-muted-foreground">Solo aparecen los métodos configurados por el negocio.</p>
-            {loadingPayments ? <p className="mt-4 text-sm text-muted-foreground">Cargando métodos…</p> : paymentMethods.length > 0 ? <div className="mt-4 grid gap-3 sm:grid-cols-2">{paymentMethods.map((option) => { const presentation = PAYMENT_PRESENTATION[option.method]; const Icon = presentation.icon; const selected = paymentMethod === option.method; return <button key={option.method} type="button" onClick={() => setPaymentMethod(option.method)} className={`relative flex min-h-28 items-start gap-3 rounded-2xl border p-4 text-left transition ${selected ? 'border-primary bg-primary/5 ring-2 ring-primary/15' : 'hover:bg-muted/40'}`}><span className={`rounded-xl p-2 ${selected ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'}`}><Icon className="h-5 w-5" /></span><span><strong className="block text-sm">{option.displayName || presentation.title}</strong><span className="mt-1 block text-xs text-muted-foreground">{presentation.description}</span></span>{selected && <CheckCircle2 className="absolute right-3 top-3 h-5 w-5 text-primary" />}</button>; })}</div> : <p className="mt-4 rounded-xl bg-destructive/10 p-3 text-sm text-destructive">El negocio no tiene métodos de pago activos.</p>}
-
-            {paymentMethod === 'transfer' && selectedPaymentConfig && (
-              <div className="mt-4 space-y-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
-                <div><p className="text-[10px] font-bold uppercase text-muted-foreground">Enviar a</p><p className="mt-1 font-black">{selectedPaymentConfig.provider}</p><p className="text-sm">Titular: {selectedPaymentConfig.accountHolder}</p><p className="text-sm">Identificador: <strong>{selectedPaymentConfig.accountIdentifier}</strong></p>{selectedPaymentConfig.instructions && <p className="mt-2 text-xs text-muted-foreground">{selectedPaymentConfig.instructions}</p>}</div>
-                <label className="block text-xs font-semibold text-muted-foreground">Referencia de la transferencia<input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="Número o referencia del movimiento" className="mt-1 h-11 w-full rounded-xl border bg-background px-3 text-sm text-foreground" /></label>
-                <label className="block cursor-pointer rounded-xl border border-dashed bg-background p-4"><div className="flex items-center gap-3"><span className="rounded-xl bg-muted p-2"><Paperclip className="h-5 w-5" /></span><div className="min-w-0"><p className="text-sm font-bold">Adjuntar comprobante</p><p className="truncate text-xs text-muted-foreground">{paymentProof ? paymentProof.name : 'JPG, PNG, WEBP o PDF · máximo 5 MB'}</p></div>{paymentProof && <FileCheck2 className="ml-auto h-5 w-5 text-success" />}</div><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="sr-only" onChange={(event) => { const file = event.target.files?.[0] || null; if (!file) return setPaymentProof(null); try { validateProofFile(file); setPaymentProof(file); setError(''); } catch (cause) { setPaymentProof(null); setError(cause instanceof Error ? cause.message : 'Archivo no válido'); } }} /></label>
-              </div>
-            )}
-
-            <div className="mt-4 flex items-start gap-3 rounded-2xl border border-dashed bg-muted/30 p-4 opacity-70"><CreditCard className="h-5 w-5" /><div><p className="text-sm font-bold">Pago electrónico</p><p className="text-xs text-muted-foreground">Se activará únicamente cuando exista una pasarela real y un webhook verificado.</p></div></div>
+            <h2 className="font-bold">Método de pago</h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">{paymentMethods.map((option) => { const presentation = PAYMENT_PRESENTATION[option.method]; const Icon = presentation.icon; const selected = paymentMethod === option.method; return <button key={option.method} type="button" onClick={() => setPaymentMethod(option.method)} className={`relative flex min-h-28 items-start gap-3 rounded-2xl border p-4 text-left transition ${selected ? 'border-primary bg-primary/5 ring-2 ring-primary/15' : 'hover:bg-muted/40'}`}><span className={`rounded-xl p-2 ${selected ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}><Icon className="h-5 w-5" /></span><span><strong className="block text-sm">{option.displayName}</strong><span className="mt-1 block text-xs text-muted-foreground">{presentation.description}</span></span>{selected && <CheckCircle2 className="absolute right-3 top-3 h-5 w-5 text-primary" />}</button>; })}</div>
+            {paymentMethod === 'transfer' && selectedPaymentConfig && <div className="mt-4 space-y-3 rounded-2xl border border-primary/20 bg-primary/5 p-4"><div><p className="text-[10px] font-bold uppercase text-muted-foreground">Enviar a</p><p className="mt-1 font-black">{selectedPaymentConfig.provider}</p><p className="text-sm">Titular: {selectedPaymentConfig.accountHolder}</p><p className="text-sm">Identificador: <strong>{selectedPaymentConfig.accountIdentifier}</strong></p>{selectedPaymentConfig.instructions && <p className="mt-2 text-xs text-muted-foreground">{selectedPaymentConfig.instructions}</p>}</div><label className="block text-xs font-semibold text-muted-foreground">Referencia<input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} className="mt-1 h-11 w-full rounded-xl border bg-background px-3 text-sm" /></label><label className="block cursor-pointer rounded-xl border border-dashed bg-background p-4"><div className="flex items-center gap-3"><Paperclip className="h-5 w-5" /><div className="min-w-0"><p className="text-sm font-bold">Adjuntar comprobante</p><p className="truncate text-xs text-muted-foreground">{paymentProof ? paymentProof.name : 'JPG, PNG, WEBP o PDF · máximo 5 MB'}</p></div>{paymentProof && <FileCheck2 className="ml-auto h-5 w-5 text-success" />}</div><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="sr-only" onChange={(event) => { const file = event.target.files?.[0] || null; if (!file) return setPaymentProof(null); try { validateProofFile(file); setPaymentProof(file); setError(''); } catch (cause) { setPaymentProof(null); setError(cause instanceof Error ? cause.message : 'Archivo no válido'); } }} /></label></div>}
+            <div className="mt-4 flex items-start gap-3 rounded-2xl border border-dashed bg-muted/30 p-4 opacity-70"><CreditCard className="h-5 w-5" /><div><p className="text-sm font-bold">Pago electrónico</p><p className="text-xs text-muted-foreground">Se habilitará con una pasarela y webhook verificados.</p></div></div>
           </section>
 
-          <section className="rounded-2xl border bg-card p-5"><h2 className="mb-3 font-bold">Instrucciones de entrega</h2><textarea value={instructions} onChange={(event) => setInstructions(event.target.value)} placeholder="Ejemplo: llamar al llegar o entregar en portería." rows={4} className="w-full resize-y rounded-xl border bg-background px-3 py-3 text-sm outline-none" /></section>
-          {quoteLoading && <p className="rounded-xl bg-muted p-3 text-sm text-muted-foreground">Calculando ruta vial, distancia y tarifa…</p>}
+          <section className="rounded-2xl border bg-card p-5"><h2 className="mb-3 font-bold">Instrucciones de entrega</h2><textarea value={instructions} onChange={(event) => setInstructions(event.target.value)} rows={4} className="w-full resize-y rounded-xl border bg-background px-3 py-3 text-sm" placeholder="Ejemplo: llamar al llegar." /></section>
+          {quoteLoading && <p className="rounded-xl bg-muted p-3 text-sm text-muted-foreground">Calculando ruta y tarifa…</p>}
           {quoteError && <p className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">{quoteError}</p>}
           {error && <p className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
-          <button type="submit" disabled={placing || quoteLoading || !quote || !paymentMethod || !selectedLocationId} className="w-full rounded-2xl bg-primary py-4 font-bold text-primary-foreground disabled:opacity-60">{placing ? paymentMethod === 'transfer' ? 'Creando pedido y subiendo comprobante…' : 'Creando pedido…' : `Confirmar pedido — ${formatCurrency(total)}`}</button>
+          <button type="submit" disabled={placing || loading || quoteLoading || !quote || !financialConfig || !paymentMethod || !selectedLocationId} className="w-full rounded-2xl bg-primary py-4 font-bold text-primary-foreground disabled:opacity-60">{placing ? 'Confirmando y registrando la liquidación…' : `Confirmar pedido — ${formatCOP(total)}`}</button>
         </form>
 
         <aside className="h-fit rounded-2xl border bg-card p-5 lg:sticky lg:top-20 lg:col-span-2">
-          <h2 className="font-bold">Resumen del pedido</h2><p className="mb-4 text-sm text-muted-foreground">{businessName}</p>
-          <div className="space-y-4">{items.map((item) => <article key={item.id} className="border-b pb-4 last:border-0"><div className="flex justify-between gap-3"><span className="font-medium">{item.quantity}x {item.product.name}</span><span className="font-semibold">{formatCurrency(item.unitPrice * item.quantity)}</span></div>{customizationSummary(item.customization).map((row) => <p key={row} className="mt-1 text-xs text-muted-foreground">{row}</p>)}</article>)}</div>
-          <div className="mt-4 space-y-2 border-t pt-4 text-sm"><div className="flex justify-between"><span>Productos</span><span>{formatCurrency(subtotal)}</span></div><div className="flex justify-between font-semibold"><span>Domicilio</span><span>{quote ? formatCurrency(deliveryFee) : 'Por calcular'}</span></div><div className="flex justify-between"><span>Pago</span><span>{paymentMethod === 'cash' ? 'Efectivo' : paymentMethod === 'transfer' ? 'Transferencia' : 'Sin seleccionar'}</span></div></div>
-          {quote && <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-muted/50 p-3 text-xs"><div className="flex items-center gap-2"><Route className="h-4 w-4 text-primary" />{quote.distanceKm.toFixed(2)} km</div><div className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-primary" />aprox. {quote.durationMinutes} min</div><p className="col-span-2 text-[10px] text-muted-foreground">Ruta: {quote.routeSource === 'google_routes' ? 'Google Routes' : quote.routeSource === 'osrm' ? 'ruta vial de respaldo' : 'distancia geográfica de respaldo'}</p></div>}
-          <div className="mt-4 flex justify-between border-t pt-4 text-lg font-bold"><span>Total</span><span>{formatCurrency(total)}</span></div>
+          <div className="flex items-center gap-2"><ReceiptText className="h-5 w-5 text-primary" /><h2 className="font-bold">Resumen del pedido</h2></div><p className="mb-4 text-sm text-muted-foreground">{businessName}</p>
+          <div className="space-y-4">{items.map((item) => <article key={item.id} className="border-b pb-4 last:border-0"><div className="flex justify-between gap-3"><span className="font-medium">{item.quantity}x {item.product.name}</span><span className="font-semibold">{formatCOP(item.unitPrice * item.quantity)}</span></div>{customizationSummary(item.customization).map((row) => <p key={row} className="mt-1 text-xs text-muted-foreground">{row}</p>)}</article>)}</div>
+          <div className="mt-4 space-y-2 border-t pt-4 text-sm"><div className="flex justify-between"><span>Productos</span><span>{formatCOP(subtotal)}</span></div><div className="flex justify-between"><span>Domicilio</span><span>{quote ? formatCOP(deliveryFee) : 'Por calcular'}</span></div><div className="flex justify-between"><span>Tarifa de servicio DomiU</span><span>{financialConfig ? formatCOP(serviceFee) : 'Por calcular'}</span></div><div className="flex justify-between"><span>Pago</span><span>{paymentMethod === 'cash' ? 'Efectivo' : paymentMethod === 'transfer' ? 'Transferencia' : 'Sin seleccionar'}</span></div></div>
+          <div className="mt-4 flex items-start gap-2 rounded-xl bg-primary/5 p-3 text-xs text-muted-foreground"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><p>La tarifa de servicio se informa antes de confirmar y permite operar soporte, tecnología y seguimiento. El servidor recalcula y guarda todos los valores.</p></div>
+          {quote && <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-muted/50 p-3 text-xs"><div className="flex items-center gap-2"><Route className="h-4 w-4 text-primary" />{quote.distanceKm.toFixed(2)} km</div><div className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-primary" />aprox. {quote.durationMinutes} min</div></div>}
+          <div className="mt-4 flex justify-between border-t pt-4 text-lg font-bold"><span>Total</span><span>{formatCOP(total)}</span></div>
         </aside>
       </div>
     </main>
