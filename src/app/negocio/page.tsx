@@ -1,137 +1,158 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import {
+  BarChart3,
+  CheckCircle2,
+  Clock3,
+  Loader2,
+  MapPinned,
+  Package,
+  Power,
+  ReceiptText,
+  ShoppingCart,
+  Store,
+  TrendingUp,
+  Wallet,
+  XCircle,
+} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { businessService, type BusinessDashboardStats } from '@/services/business';
+import { dashboardFinanceService, type BusinessFinancialSummary } from '@/services/dashboard-finance';
+import { financeService } from '@/services/finance';
+import { formatCOP } from '@/lib/formatters/currency';
 import { SkeletonStats } from '@/components/ui/skeleton';
-import { DollarSign, ShoppingCart, Package, TrendingUp, Star, Clock, Users, CheckCircle, XCircle, BarChart3, Wallet, Store, Award } from 'lucide-react';
-
-const formatCurrency = (n: number) => '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+import { BusinessLiveOperationsMap } from '@/components/business/BusinessLiveOperationsMap';
 
 export default function NegocioDashboard() {
   const { profile } = useAuth();
-  const [stats, setStats] = useState<BusinessDashboardStats | null>(null);
+  const [businessId, setBusinessId] = useState<string | null>(null);
+  const [legacyStats, setLegacyStats] = useState<BusinessDashboardStats | null>(null);
+  const [finance, setFinance] = useState<BusinessFinancialSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [changingShift, setChangingShift] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    if (!profile?.id) return;
+    setLoading(true);
+    try {
+      const id = await businessService.getBusinessId(profile.id);
+      if (!id) throw new Error('No encontramos un comercio asociado a esta cuenta.');
+      setBusinessId(id);
+      const [stats, financialSummary] = await Promise.all([
+        businessService.getDashboardStats(id),
+        dashboardFinanceService.getBusinessSummary(id),
+      ]);
+      setLegacyStats(stats);
+      setFinance(financialSummary);
+      setError('');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo cargar el panel');
+    } finally {
+      setLoading(false);
+    }
+  }, [profile?.id]);
 
   useEffect(() => {
-    if (!profile?.id) return;
-    (async () => {
-      try {
-        const bizId = await businessService.getBusinessId(profile.id!);
-        if (bizId) setStats(await businessService.getDashboardStats(bizId));
-      } catch { /* ok */ }
-      setLoading(false);
-    })();
-  }, [profile?.id]);
+    void load();
+  }, [load]);
+
+  const toggleOperation = async () => {
+    if (!businessId || changingShift) return;
+    setChangingShift(true);
+    setError('');
+    try {
+      if (finance?.currentShift) await financeService.closeBusinessShift(businessId, 'Cierre desde el panel del comercio');
+      else await financeService.openBusinessShift(businessId, 'Apertura desde el panel del comercio');
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo cambiar el estado operativo');
+    } finally {
+      setChangingShift(false);
+    }
+  };
+
+  const shiftDuration = useMemo(() => {
+    if (!finance?.currentShift) return 'Sin jornada activa';
+    const seconds = Math.max(0, Math.floor((Date.now() - new Date(finance.currentShift.opened_at).getTime()) / 1000));
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return `${hours} h ${minutes} min en operación`;
+  }, [finance?.currentShift]);
 
   if (loading) return <SkeletonStats />;
 
-  const kpis = [
-    { icon: <DollarSign className="h-5 w-5" />, label: 'Ventas Hoy', value: formatCurrency(stats?.todayRevenue ?? 0), gradient: 'success' as const, subtitle: 'Ingresos del día' },
-    { icon: <TrendingUp className="h-5 w-5" />, label: 'Ventas Semana', value: formatCurrency(stats?.weekRevenue ?? 0), gradient: 'primary' as const, subtitle: 'Últimos 7 días' },
-    { icon: <BarChart3 className="h-5 w-5" />, label: 'Ventas Mes', value: formatCurrency(stats?.monthRevenue ?? 0), gradient: 'info' as const, subtitle: 'Últimos 30 días' },
-    { icon: <ShoppingCart className="h-5 w-5" />, label: 'Pedidos Activos', value: String(stats?.activeOrders ?? 0), gradient: 'warning' as const, subtitle: 'En proceso' },
-    { icon: <CheckCircle className="h-5 w-5" />, label: 'Entregados', value: String(stats?.deliveredOrders ?? 0), gradient: 'success' as const, subtitle: 'Total entregados' },
-    { icon: <XCircle className="h-5 w-5" />, label: 'Cancelaciones', value: String(stats?.cancelledOrders ?? 0), gradient: 'destructive' as const, subtitle: 'Total cancelados' },
-    { icon: <Wallet className="h-5 w-5" />, label: 'Ticket Promedio', value: formatCurrency(stats?.avgTicket ?? 0), gradient: 'primary' as const, subtitle: 'Por pedido' },
-    { icon: <Clock className="h-5 w-5" />, label: 'Prep. Promedio', value: `${stats?.avgPrepTime ?? 0} min`, gradient: 'warning' as const, subtitle: 'Tiempo medio' },
-    { icon: <Users className="h-5 w-5" />, label: 'Clientes Nuevos', value: String(stats?.newCustomers ?? 0), gradient: 'info' as const, subtitle: 'Último mes' },
-    { icon: <Award className="h-5 w-5" />, label: 'Clientes Frecuentes', value: String(stats?.frequentCustomers ?? 0), gradient: 'success' as const, subtitle: '3+ pedidos' },
-    { icon: <Star className="h-5 w-5" />, label: 'Calificación', value: (stats?.rating ?? 0).toFixed(1), gradient: 'warning' as const, subtitle: `${stats?.totalRatings ?? 0} reseñas` },
-    { icon: <DollarSign className="h-5 w-5" />, label: 'Comisión Pagada', value: formatCurrency(stats?.commissionPaid ?? 0), gradient: 'destructive' as const, subtitle: 'Total comisiones' },
-    { icon: <Store className="h-5 w-5" />, label: 'Ganancia Neta', value: formatCurrency(stats?.netProfit ?? 0), gradient: 'success' as const, subtitle: 'Ingresos - comisiones' },
+  const isOpen = Boolean(finance?.currentShift);
+  const balance = finance?.balance.net_balance ?? 0;
+  const balanceLabel = balance > 0
+    ? `DomiU debe pagar al comercio ${formatCOP(balance)}`
+    : balance < 0
+      ? `El comercio debe a DomiU ${formatCOP(Math.abs(balance))}`
+      : 'Liquidación al día';
+
+  const cards = [
+    { label: 'Ventas de productos hoy', value: formatCOP(finance?.todaySales ?? 0), icon: TrendingUp, help: 'Solo productos, sin domicilio ni tarifa DomiU' },
+    { label: 'Ventas de productos mes', value: formatCOP(finance?.monthSales ?? 0), icon: BarChart3, help: 'Valor neto del comercio' },
+    { label: 'Pedidos activos', value: String(finance?.activeOrders ?? 0), icon: ShoppingCart, help: 'En preparación o entrega' },
+    { label: 'Entregados', value: String(finance?.deliveredOrders ?? 0), icon: CheckCircle2, help: 'Histórico confirmado' },
+    { label: 'Ticket medio productos', value: formatCOP(finance?.averageProductTicket ?? 0), icon: ReceiptText, help: 'Promedio sin domicilio' },
+    { label: 'Saldo por liquidar', value: formatCOP(Math.abs(balance)), icon: Wallet, help: balanceLabel },
+    { label: 'Productos cargados', value: String(legacyStats?.totalProducts ?? 0), icon: Package, help: 'Catálogo del comercio' },
+    { label: 'Cancelaciones', value: String(finance?.cancelledOrders ?? 0), icon: XCircle, help: 'Pedidos cancelados o reembolsados' },
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Panel de Negocio</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Bienvenido, {profile?.first_name ?? 'Negocio'} — Resumen de tu rendimiento</p>
-        </div>
-        <div className="flex items-center gap-2 rounded-xl bg-gradient-to-br from-success/5 to-success/[0.02] border border-success/20 px-4 py-2">
-          <div className="flex h-2.5 w-2.5 items-center justify-center">
-            <span className="absolute h-2.5 w-2.5 animate-ping rounded-full bg-success/40" />
-            <span className="relative h-2 w-2 rounded-full bg-success" />
+    <div className="space-y-6 pb-8">
+      <section className="overflow-hidden rounded-3xl border border-border/70 bg-gradient-to-br from-[#17191F] via-[#24282E] to-[#101216] p-6 text-white shadow-xl">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FFD400]">Centro operativo del comercio</p>
+            <h1 className="mt-2 text-3xl font-black tracking-tight">Panel de {profile?.first_name || 'Negocio'}</h1>
+            <p className="mt-2 max-w-2xl text-sm text-white/65">Ventas, jornada, liquidación y seguimiento de domicilios desde una sola pantalla.</p>
           </div>
-          <span className="text-xs font-medium text-success">Abierto</span>
+          <button type="button" onClick={() => void toggleOperation()} disabled={changingShift} className={`flex min-w-64 items-center justify-center gap-3 rounded-2xl px-5 py-4 text-sm font-black shadow-lg transition active:scale-[0.99] disabled:opacity-60 ${isOpen ? 'bg-white text-[#17191F]' : 'bg-[#FFD400] text-[#17191F]'}`}>
+            {changingShift ? <Loader2 className="h-5 w-5 animate-spin" /> : <Power className="h-5 w-5" />}
+            {isOpen ? 'Cerrar operación' : 'Abrir operación'}
+          </button>
         </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-        {kpis.map((kpi) => (
-          <div key={kpi.label} className="group relative overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-card transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
-            <div className="absolute -right-4 -top-4 h-16 w-16 rounded-full bg-gradient-to-br from-foreground/[0.02] to-foreground/[0.01]" />
-            <div className="flex items-center gap-3">
-              <div className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-${kpi.gradient}/10 to-${kpi.gradient}/5`}>
-                {kpi.icon}
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground truncate">{kpi.label}</p>
-                <p className="text-lg font-bold text-foreground truncate">{typeof kpi.value === 'number' ? kpi.value : kpi.value}</p>
-              </div>
-            </div>
-            {kpi.subtitle && <p className="mt-2 text-[10px] text-muted-foreground/60">{kpi.subtitle}</p>}
-          </div>
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><div className="flex items-center gap-2"><span className={`h-3 w-3 rounded-full ${isOpen ? 'animate-pulse bg-emerald-400' : 'bg-slate-500'}`} /><span className="text-xs font-bold uppercase tracking-wide text-white/60">Estado</span></div><p className="mt-2 text-xl font-black">{isOpen ? 'Abierto y recibiendo pedidos' : 'Cerrado'}</p></div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><div className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-[#FFD400]" /><span className="text-xs font-bold uppercase tracking-wide text-white/60">Jornada</span></div><p className="mt-2 text-xl font-black">{shiftDuration}</p></div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><div className="flex items-center gap-2"><Wallet className="h-4 w-4 text-[#FFD400]" /><span className="text-xs font-bold uppercase tracking-wide text-white/60">Liquidación</span></div><p className="mt-2 text-sm font-black leading-snug">{balanceLabel}</p></div>
+        </div>
+      </section>
+
+      {error && <p className="rounded-2xl border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive">{error}</p>}
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {cards.map(({ label, value, icon: Icon, help }) => (
+          <article key={label} className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+            <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold text-muted-foreground">{label}</p><p className="mt-2 text-2xl font-black tracking-tight">{value}</p></div><span className="rounded-xl bg-primary/10 p-2.5 text-primary"><Icon className="h-5 w-5" /></span></div>
+            <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">{help}</p>
+          </article>
         ))}
-      </div>
+      </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-card shadow-card overflow-hidden">
-          <div className="border-b border-border/50 bg-gradient-to-r from-transparent via-primary/[0.02] to-transparent px-5 py-3.5 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Package className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-semibold text-foreground">Productos Más Vendidos</h3>
-            </div>
-            <span className="text-xs text-muted-foreground">{stats?.totalProducts ?? 0} productos</span>
-          </div>
-          <div className="p-5">
-            {!stats?.topProducts?.length ? (
-              <p className="text-sm text-muted-foreground text-center py-4">Sin productos vendidos aún</p>
-            ) : (
-              <div className="space-y-2">
-                {stats.topProducts.slice(0, 7).map((p, i) => (
-                  <div key={p.id} className="flex items-center justify-between rounded-xl border border-border/50 px-3 py-2.5 transition-colors hover:bg-muted/20">
-                    <div className="flex items-center gap-2.5">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-primary/10 to-primary/5 text-[10px] font-bold text-primary">{i + 1}</span>
-                      <span className="text-sm font-medium text-foreground">{p.name}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground">{p.total} vendidos</span>
-                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                        <div className="h-full rounded-full bg-gradient-to-r from-primary to-primary/60" style={{ width: `${Math.min(100, (p.total / Math.max(...stats.topProducts.map(x => x.total))) * 100)}%` }} />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+      {businessId && <BusinessLiveOperationsMap businessId={businessId} />}
 
-        <div className="rounded-2xl border border-border bg-card shadow-card overflow-hidden">
-          <div className="border-b border-border/50 bg-gradient-to-r from-transparent via-primary/[0.02] to-transparent px-5 py-3.5">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-semibold text-foreground">Resumen General</h3>
-            </div>
+      <section className="grid gap-5 lg:grid-cols-2">
+        <article className="rounded-3xl border bg-card p-5 shadow-sm">
+          <div className="flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-[0.15em] text-primary">Catálogo</p><h2 className="mt-1 text-xl font-black">Productos más vendidos</h2></div><Link href="/negocio/productos" className="rounded-xl border px-3 py-2 text-xs font-bold">Administrar</Link></div>
+          {!legacyStats?.topProducts?.length ? <div className="mt-5 rounded-2xl border border-dashed p-8 text-center"><Store className="mx-auto h-8 w-8 text-muted-foreground" /><p className="mt-2 text-sm text-muted-foreground">Aún no hay ventas registradas.</p></div> : <div className="mt-4 space-y-2">{legacyStats.topProducts.slice(0, 6).map((product, index) => <div key={product.id} className="flex items-center justify-between rounded-2xl border p-3"><div className="flex min-w-0 items-center gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-xs font-black text-primary">{index + 1}</span><span className="truncate text-sm font-bold">{product.name}</span></div><span className="text-xs font-black text-muted-foreground">{product.total} vendidos</span></div>)}</div>}
+        </article>
+
+        <article className="rounded-3xl border bg-card p-5 shadow-sm">
+          <p className="text-xs font-black uppercase tracking-[0.15em] text-primary">Control contable</p><h2 className="mt-1 text-xl font-black">Cómo se calcula tu ingreso</h2>
+          <div className="mt-5 space-y-3">
+            <div className="rounded-2xl bg-muted/50 p-4"><p className="text-xs font-bold text-muted-foreground">Ingreso del comercio</p><p className="mt-1 text-lg font-black">Productos vendidos − descuentos del comercio</p></div>
+            <div className="rounded-2xl bg-muted/50 p-4"><p className="text-xs font-bold text-muted-foreground">No se incluye</p><p className="mt-1 text-sm font-semibold">El domicilio y la tarifa de servicio pertenecen a la operación logística de DomiU.</p></div>
+            <Link href="/negocio/reportes" className="flex items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-black text-primary-foreground"><MapPinned className="h-4 w-4" />Ver reportes y jornadas</Link>
           </div>
-          <div className="p-5 space-y-3">
-            {[
-              { label: 'Total Productos', value: String(stats?.totalProducts ?? 0) },
-              { label: 'Total Pedidos', value: String(stats?.totalOrders ?? 0) },
-              { label: 'Calificación Promedio', value: `${(stats?.rating ?? 0).toFixed(1)} ⭐` },
-              { label: 'Comisión Total', value: formatCurrency(stats?.commissionPaid ?? 0) },
-              { label: 'Ganancia Neta', value: formatCurrency(stats?.netProfit ?? 0) },
-            ].map((item) => (
-              <div key={item.label} className="flex items-center justify-between rounded-xl border border-border/50 px-4 py-3">
-                <span className="text-sm text-muted-foreground">{item.label}</span>
-                <span className="text-sm font-semibold text-foreground">{item.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+        </article>
+      </section>
     </div>
   );
 }
