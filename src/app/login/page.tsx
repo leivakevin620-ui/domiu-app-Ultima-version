@@ -6,12 +6,15 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoginCredentials, getDashboardPathForRole } from '@/types/auth';
 import { logger } from '@/lib/logger';
-import { DomiULogo } from '@/components/brand/DomiULogo';
-import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { DomiULogo, DomiUMark } from '@/components/brand/DomiULogo';
+import { ArrowRight, Eye, EyeOff, Lock, Mail, MapPin, Store, Bike } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
   const { login, isLoading, isAuthenticated, profile, error: authError } = useAuth();
+  const [formData, setFormData] = useState<LoginCredentials>({ email: '', password: '' });
+  const [showPassword, setShowPassword] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isAuthenticated && profile?.role) {
@@ -21,165 +24,78 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, profile, router]);
 
-  const [formData, setFormData] = useState<LoginCredentials>({ email: '', password: '' });
-  const [showPassword, setShowPassword] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = event.target;
+    setFormData((previous) => ({ ...previous, [name]: value }));
     if (formError) setFormError(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setFormError(null);
-    if (!formData.email) {
-      setFormError('Ingresa tu email');
-      return;
-    }
-    if (!formData.password) {
-      setFormError('Ingresa tu contraseña');
-      return;
-    }
-
-    logger.debug('[LoginPage] handleSubmit', { email: formData.email });
+    if (!formData.email) return setFormError('Ingresa tu correo electrónico');
+    if (!formData.password) return setFormError('Ingresa tu contraseña');
     try {
       const sessionProfile = await login(formData);
-      const path = getDashboardPathForRole(sessionProfile.role);
-      logger.debug('[LoginPage] login OK', { role: sessionProfile.role, redirectTo: path, currentPathname: window.location.pathname });
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      router.replace(path);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.debug('[LoginPage] login FAIL', { message: msg });
-      setFormError(msg);
+      router.replace(getDashboardPathForRole(sessionProfile.role));
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : String(cause));
     }
   };
 
   const displayError = formError || authError;
 
   return (
-    <div className="flex min-h-[100dvh] bg-background">
-      <div className="relative hidden overflow-hidden border-r border-primary/10 bg-[#1A1D21] p-12 lg:flex lg:w-1/2 lg:items-center lg:justify-center">
-        <div className="absolute -left-24 -top-24 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute -bottom-32 -right-20 h-96 w-96 rounded-full bg-primary/[0.06] blur-3xl" />
-        <div className="relative max-w-lg">
-          <DomiULogo className="mb-10" markClassName="h-16 w-16" variant="dark" showTagline />
-          <p className="mb-3 text-xs font-bold uppercase tracking-[0.28em] text-primary">Bienvenido a DomiU Magdalena</p>
-          <h1 className="mb-4 font-heading text-4xl font-black tracking-tight text-white">Pide, gestiona o entrega desde un solo ecosistema.</h1>
-          <p className="mb-10 text-lg leading-relaxed text-[#8A9099]">Conectamos clientes, negocios y repartidores con pedidos organizados, rutas visibles y una operación local más rápida.</p>
-          <div className="space-y-3">
-            <div className="domiu-brand-surface flex items-start gap-4 rounded-xl p-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-lg">🍕</div>
-              <div><p className="text-sm font-bold text-white">Comercio local en un solo lugar</p><p className="text-xs text-[#8A9099]">Restaurantes, farmacias, supermercados y negocios de Santa Marta.</p></div>
-            </div>
-            <div className="domiu-brand-surface flex items-start gap-4 rounded-xl p-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-lg">⚡</div>
-              <div><p className="text-sm font-bold text-white">Entrega con seguimiento</p><p className="text-xs text-[#8A9099]">Consulta el estado, la ruta y la ubicación de tu pedido.</p></div>
-            </div>
-            <div className="domiu-brand-surface flex items-start gap-4 rounded-xl p-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-lg">🔒</div>
-              <div><p className="text-sm font-bold text-white">Operación segura por perfiles</p><p className="text-xs text-[#8A9099]">Cada usuario accede únicamente a las funciones que le corresponden.</p></div>
+    <main className="min-h-[100dvh] bg-[#F7F8FA] text-[#17191F] [--background:#F7F8FA] [--foreground:#17191F] [--primary:#FFD400] [--primary-foreground:#17191F] [--muted:#EEF0F3] [--muted-foreground:#68707D] [--border:#DDE1E7]">
+      <header className="flex h-20 items-center justify-center border-b border-[#E5E8ED] bg-white px-5 shadow-sm">
+        <Link href="/" aria-label="Volver al inicio"><DomiULogo showTagline /></Link>
+      </header>
+
+      <div className="grid min-h-[calc(100dvh-5rem)] lg:grid-cols-2">
+        <section className="relative hidden overflow-hidden bg-gradient-to-br from-[#FFF5B8] via-[#FFD400] to-[#ECAF00] p-12 lg:flex lg:items-center lg:justify-center">
+          <div className="absolute -left-28 -top-28 h-96 w-96 rounded-full border-[48px] border-white/20" />
+          <div className="absolute -bottom-36 -right-28 h-[32rem] w-[32rem] rounded-full border-[72px] border-black/5" />
+          <div className="relative max-w-lg">
+            <DomiUMark className="h-28 w-40" />
+            <p className="mt-8 text-xs font-black uppercase tracking-[0.2em] text-[#6A5500]">DomiU Magdalena</p>
+            <h1 className="mt-3 text-5xl font-black leading-[1.02] tracking-[-0.045em]">Tu ciudad y sus comercios en un solo lugar.</h1>
+            <p className="mt-5 max-w-md text-base font-semibold leading-relaxed text-[#554B2D]">Compra local, sigue tu pedido y recibe una entrega organizada desde la misma plataforma.</p>
+            <div className="mt-8 grid grid-cols-3 gap-3">
+              {[{ icon: Store, label: 'Comercios' }, { icon: Bike, label: 'Reparto' }, { icon: MapPin, label: 'Ubicación' }].map(({ icon: Icon, label }) => (
+                <div key={label} className="rounded-2xl border border-white/50 bg-white/60 p-4 text-center backdrop-blur-sm">
+                  <Icon className="mx-auto h-5 w-5 text-[#725B00]" /><p className="mt-2 text-xs font-black">{label}</p>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-      </div>
+        </section>
 
-      <div className="flex flex-1 items-center justify-center px-6 py-12 lg:px-12">
-        <div className="w-full max-w-sm">
-          <div className="mb-9 lg:hidden">
-            <DomiULogo markClassName="h-12 w-12" variant="dark" showTagline />
-          </div>
+        <section className="flex items-center justify-center px-5 py-10 sm:px-10">
+          <div className="w-full max-w-md rounded-[2rem] border border-[#E3E6EB] bg-white p-7 shadow-[0_24px_70px_-40px_rgba(16,24,40,.35)] sm:p-9">
+            <div className="mb-7 lg:hidden"><DomiUMark className="h-20 w-28" /></div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#927200]">Acceso seguro</p>
+            <h2 className="mt-2 text-3xl font-black">Iniciar sesión</h2>
+            <p className="mt-2 text-sm font-medium text-[#68707D]">¿No tienes cuenta? <Link href="/register" className="font-black text-[#806500] hover:underline">Regístrate gratis</Link></p>
 
-          <div className="mb-8">
-            <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-primary">Acceso seguro</p>
-            <h2 className="font-heading text-3xl font-black text-foreground">Iniciar sesión</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              ¿No tienes cuenta?{' '}
-              <Link href="/register" className="font-bold text-primary hover:underline">Regístrate gratis</Link>
-            </p>
-          </div>
+            {displayError && <p className="mt-6 rounded-xl border border-[#F7B4AE] bg-[#FFF1F0] p-3 text-sm font-semibold text-[#B42318]">{displayError}</p>}
 
-          {displayError && (
-            <div className="mb-6 rounded-xl border border-destructive/25 bg-destructive/10 px-4 py-3">
-              <p className="text-sm font-medium text-destructive">{displayError}</p>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-semibold text-foreground">Correo electrónico</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="tu@email.com"
-                  className="h-12 w-full rounded-xl border border-border bg-[#24282E] pl-10 pr-3 text-sm text-foreground placeholder:text-muted-foreground transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="password" className="mb-1.5 block text-sm font-semibold text-foreground">Contraseña</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  required
-                  value={formData.password}
-                  onChange={handleChange}
-                  placeholder="••••••••"
-                  className="h-12 w-full rounded-xl border border-border bg-[#24282E] pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-primary" aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}>
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2">
-                <input type="checkbox" defaultChecked className="h-4 w-4 rounded border-border accent-[#FFC400]" />
-                <span className="text-xs text-muted-foreground">Recordarme</span>
+            <form onSubmit={handleSubmit} className="mt-7 space-y-5">
+              <label className="block">
+                <span className="mb-2 block text-sm font-black">Correo electrónico</span>
+                <span className="relative block"><Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#89909A]" /><input name="email" type="email" autoComplete="email" required value={formData.email} onChange={handleChange} placeholder="tu@email.com" className="h-12 w-full rounded-xl border border-[#DDE1E7] bg-[#F8F9FA] pl-12 pr-4 text-sm font-semibold outline-none focus:border-[#FFD400] focus:bg-white focus:ring-2 focus:ring-[#FFD400]/20" /></span>
               </label>
-              <Link href="/forgot-password" className="text-xs font-bold text-primary hover:underline">¿Olvidaste tu contraseña?</Link>
-            </div>
+              <label className="block">
+                <span className="mb-2 block text-sm font-black">Contraseña</span>
+                <span className="relative block"><Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#89909A]" /><input name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={formData.password} onChange={handleChange} placeholder="••••••••" className="h-12 w-full rounded-xl border border-[#DDE1E7] bg-[#F8F9FA] pl-12 pr-12 text-sm font-semibold outline-none focus:border-[#FFD400] focus:bg-white focus:ring-2 focus:ring-[#FFD400]/20" /><button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#7C838D]" aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}>{showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button></span>
+              </label>
+              <div className="flex items-center justify-between gap-4 text-xs"><label className="flex items-center gap-2 font-semibold text-[#68707D]"><input type="checkbox" defaultChecked className="accent-[#D8AB00]" /> Recordarme</label><Link href="/forgot-password" className="font-black text-[#806500] hover:underline">¿Olvidaste tu contraseña?</Link></div>
+              <button type="submit" disabled={isLoading} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FFD400] text-sm font-black shadow-lg shadow-[#FFD400]/25 disabled:opacity-50">{isLoading ? 'Iniciando sesión…' : <>Iniciar sesión <ArrowRight className="h-4 w-4" /></>}</button>
+            </form>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="domiu-brand-glow flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-black text-primary-foreground transition-all hover:brightness-105 disabled:opacity-50"
-            >
-              {isLoading ? (
-                <span className="flex items-center gap-2">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                  Iniciando sesión...
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">Iniciar sesión <ArrowRight className="h-4 w-4" /></span>
-              )}
-            </button>
-          </form>
-
-          <div className="mt-8 text-center">
-            <p className="text-xs text-muted-foreground">
-              Al iniciar sesión aceptas nuestros{' '}
-              <Link href="/terminos" className="text-primary hover:underline">Términos</Link> y{' '}
-              <Link href="/privacidad" className="text-primary hover:underline">Política de Privacidad</Link>
-            </p>
+            <p className="mt-7 text-center text-xs font-medium text-[#7A818C]">Al continuar aceptas nuestros <Link href="/terminos" className="font-bold text-[#806500]">Términos</Link> y <Link href="/privacidad" className="font-bold text-[#806500]">Política de privacidad</Link>.</p>
           </div>
-        </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
