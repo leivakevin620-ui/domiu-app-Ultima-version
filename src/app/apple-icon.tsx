@@ -1,5 +1,4 @@
 import { ImageResponse } from 'next/og';
-import { DOMIU_OFFICIAL_LOGO_DATA_URI } from '@/lib/brand-assets';
 
 export const size = { width: 180, height: 180 };
 export const contentType = 'image/png';
@@ -12,21 +11,16 @@ export default function AppleIcon() {
           width: '100%',
           height: '100%',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          overflow: 'hidden',
-          background: 'linear-gradient(145deg, #FFFDF0 0%, #FFE55C 100%)',
+          background: 'linear-gradient(145deg, #FFF000 0%, #FFD900 55%, #FF9D00 100%)',
           borderRadius: 38,
-          padding: 12,
+          color: '#111317',
         }}
       >
-        <img
-          src={DOMIU_OFFICIAL_LOGO_DATA_URI}
-          width="156"
-          height="156"
-          alt="DomiU Magdalena"
-          style={{ width: 156, height: 156, objectFit: 'contain' }}
-        />
+        <div style={{ fontSize: 72, fontWeight: 900, fontStyle: 'italic', letterSpacing: -8 }}>DU</div>
+        <div style={{ marginTop: -8, fontSize: 14, fontWeight: 800, letterSpacing: 4 }}>MAGDALENA</div>
       </div>
     ),
     size,
