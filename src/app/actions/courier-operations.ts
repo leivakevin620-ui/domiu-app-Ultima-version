@@ -57,6 +57,8 @@ export async function setCourierOperationalStatusAction(input: { status: string 
     .maybeSingle();
   if (sessionError) return { success: false as const, error: sessionError.message };
 
+  let auditSessionId = openSession?.id ? String(openSession.id) : courierId;
+
   if (status === 'offline' && openSession) {
     const closedAt = new Date();
     const seconds = Math.max(
@@ -78,15 +80,20 @@ export async function setCourierOperationalStatusAction(input: { status: string 
   }
 
   if (status !== 'offline' && !openSession) {
-    const { error } = await supabase.from('operation_sessions').insert({
-      session_type: 'courier',
-      actor_id: courierId,
-      status: 'open',
-      opened_by: courierId,
-      opening_note: 'Jornada abierta desde el dashboard del repartidor',
-      metadata: { initial_status: status },
-    });
+    const { data: createdSession, error } = await supabase
+      .from('operation_sessions')
+      .insert({
+        session_type: 'courier',
+        actor_id: courierId,
+        status: 'open',
+        opened_by: courierId,
+        opening_note: 'Jornada abierta desde el dashboard del repartidor',
+        metadata: { initial_status: status },
+      })
+      .select('id')
+      .single();
     if (error) return { success: false as const, error: error.message };
+    auditSessionId = String(createdSession.id);
   }
 
   await serverAudit.logAction(
@@ -95,7 +102,7 @@ export async function setCourierOperationalStatusAction(input: { status: string 
     'courier',
     status === 'offline' ? 'close_courier_shift' : 'set_courier_status',
     'operation_sessions',
-    openSession?.id ?? null,
+    auditSessionId,
     { status },
   );
 
