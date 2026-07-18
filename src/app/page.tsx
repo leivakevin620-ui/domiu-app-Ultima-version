@@ -58,10 +58,10 @@ export default function HomePage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-background">
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[#F7F8FA] text-[#17191F]">
         <div className="flex flex-col items-center gap-4">
-          <DomiUMark className="h-16 w-16 animate-pulse" />
-          <p className="animate-pulse text-sm font-semibold text-muted-foreground">Cargando DomiU Magdalena…</p>
+          <DomiUMark className="h-20 w-24 animate-pulse" />
+          <p className="animate-pulse text-sm font-semibold text-[#6B7280]">Cargando DomiU Magdalena…</p>
         </div>
       </div>
     );
@@ -69,24 +69,24 @@ export default function HomePage() {
 
   if (isAuthenticated) {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-background">
-        <p className="text-muted-foreground">Redirigiendo…</p>
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[#F7F8FA] text-[#17191F]">
+        <p className="text-[#6B7280]">Redirigiendo…</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <nav className="fixed left-0 right-0 top-0 z-50 border-b border-primary/10 bg-[#1A1D21]/85 backdrop-blur-2xl">
+    <div className="min-h-screen bg-[#F7F8FA] text-[#17191F] [--background:#F7F8FA] [--foreground:#17191F] [--card:#FFFFFF] [--card-foreground:#17191F] [--primary:#FFD400] [--primary-foreground:#17191F] [--secondary:#F2F4F7] [--secondary-foreground:#17191F] [--muted:#EEF0F3] [--muted-foreground:#68707D] [--border:#E2E6EC]">
+      <nav className="fixed left-0 right-0 top-0 z-50 border-b border-[#E4E7EC] bg-white/95 shadow-sm backdrop-blur-2xl">
         <div className="mx-auto flex h-[4.5rem] max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center" aria-label="DomiU Magdalena">
-            <DomiULogo variant="dark" markClassName="h-11 w-11" />
+            <DomiULogo />
           </Link>
           <div className="flex items-center gap-3">
-            <Link href="/login" className="hidden text-sm font-semibold text-muted-foreground transition-colors hover:text-primary sm:inline-flex">
+            <Link href="/login" className="hidden text-sm font-black text-[#4E5560] transition-colors hover:text-[#9B7900] sm:inline-flex">
               Iniciar sesión
             </Link>
-            <Link href="/register" className="domiu-brand-glow inline-flex h-10 items-center justify-center rounded-xl bg-primary px-5 text-sm font-black text-primary-foreground transition-all hover:brightness-105">
+            <Link href="/register" className="inline-flex h-10 items-center justify-center rounded-xl bg-[#FFD400] px-5 text-sm font-black text-[#17191F] shadow-lg shadow-[#FFD400]/20 transition hover:brightness-105">
               Registrarse
             </Link>
           </div>
