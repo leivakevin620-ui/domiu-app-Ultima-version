@@ -3,12 +3,33 @@ import type { UserRole } from '@/types/auth';
 export type DomiRole = 'admin' | 'merchant' | 'courier' | 'customer';
 export type DomiRiskLevel = 'low' | 'medium' | 'high';
 
+export interface DomiCartItemInput {
+  productId?: string;
+  quantity?: number;
+}
+
+export interface DomiCartSnapshotInput {
+  businessId?: string | null;
+  items?: DomiCartItemInput[];
+}
+
+export interface DomiCartItemContext {
+  productId: string;
+  quantity: number;
+}
+
+export interface DomiCartContext {
+  businessId: string | null;
+  items: DomiCartItemContext[];
+}
+
 export interface DomiClientContextInput {
   path?: string;
   module?: string;
   screen?: string;
   locale?: string;
   timezone?: string;
+  cart?: DomiCartSnapshotInput | null;
 }
 
 export interface DomiClientContext {
@@ -17,6 +38,7 @@ export interface DomiClientContext {
   screen: string | null;
   locale: string;
   timezone: string;
+  cart: DomiCartContext | null;
 }
 
 export interface DomiMemoryCandidate {
@@ -77,6 +99,29 @@ function safePath(role: DomiRole, value: unknown) {
   return path === prefix || path.startsWith(`${prefix}/`) ? path : null;
 }
 
+function validUuid(value: unknown): value is string {
+  return typeof value === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim());
+}
+
+function sanitizeCart(role: DomiRole, input?: DomiCartSnapshotInput | null): DomiCartContext | null {
+  if (role !== 'customer' || !input || !Array.isArray(input.items)) return null;
+
+  const quantities = new Map<string, number>();
+  for (const item of input.items.slice(0, 25)) {
+    if (!validUuid(item?.productId)) continue;
+    const quantity = Number(item.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1) continue;
+    const productId = item.productId.trim();
+    quantities.set(productId, Math.min(99, (quantities.get(productId) || 0) + quantity));
+  }
+
+  return {
+    businessId: validUuid(input.businessId) ? input.businessId.trim() : null,
+    items: [...quantities.entries()].map(([productId, quantity]) => ({ productId, quantity })),
+  };
+}
+
 export function sanitizeDomiClientContext(role: DomiRole, input?: DomiClientContextInput | null): DomiClientContext {
   const locale = cleanLabel(input?.locale, 24);
   const timezone = cleanLabel(input?.timezone, 64);
@@ -86,6 +131,7 @@ export function sanitizeDomiClientContext(role: DomiRole, input?: DomiClientCont
     screen: cleanLabel(input?.screen, 80),
     locale: locale && /^[a-z]{2,3}(?:-[A-Z]{2})?$/.test(locale) ? locale : 'es-CO',
     timezone: timezone && /^[A-Za-z_]+(?:\/[A-Za-z_+-]+)+$/.test(timezone) ? timezone : 'America/Bogota',
+    cart: sanitizeCart(role, input?.cart),
   };
 }
 
@@ -137,8 +183,9 @@ export function detectDomiIntent(message: string) {
   const normalized = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   if (/ganancia|liquidacion|saldo|comision/.test(normalized)) return 'finance_question';
   if (/jornada|turno|abrir operacion|cerrar operacion/.test(normalized)) return 'operation_question';
+  if (/carrito|cesta/.test(normalized)) return 'cart_question';
   if (/pedido|domicilio|entrega|estado/.test(normalized)) return 'order_question';
-  if (/producto|inventario|catalogo|menu/.test(normalized)) return 'catalog_question';
+  if (/producto|inventario|catalogo|menu|buscar|restaurante|farmacia/.test(normalized)) return 'catalog_question';
   if (/recuerda|guardar|memoria|prefiero|me gusta/.test(normalized)) return 'memory_request';
   if (/ayuda|soporte|problema|error|reclamo/.test(normalized)) return 'support_question';
   return 'general_question';
