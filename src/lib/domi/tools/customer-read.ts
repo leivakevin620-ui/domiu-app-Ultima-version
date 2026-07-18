@@ -246,11 +246,13 @@ async function cartSummary(
 
   const productMap = new Map(productRows.map((row) => [text(row.id), row]));
   const businessMap = new Map(((businessResult.data ?? []) as Array<Record<string, unknown>>).map((row) => [text(row.id), row]));
+  const expectedBusinessId = cart.businessId;
 
   let subtotal = 0;
   let itemCount = 0;
   let businessName = '';
   let businessSlug = '';
+  let integrityMismatchCount = 0;
   const unavailable: string[] = [];
   const items = cart.items.map((cartItem) => {
     const product = productMap.get(cartItem.productId);
@@ -261,10 +263,15 @@ async function cartSummary(
       return { productId: cartItem.productId, name: 'Producto no disponible', quantity, unitPrice: 0, total: 0, available: false };
     }
 
-    const business = businessMap.get(text(product.business_id));
+    const actualBusinessId = text(product.business_id);
+    const matchesExpectedBusiness = !expectedBusinessId || actualBusinessId === expectedBusinessId;
+    if (!matchesExpectedBusiness) integrityMismatchCount += 1;
+
+    const business = businessMap.get(actualBusinessId);
     const metadata = objectValue(business?.metadata);
     const validBusiness = Boolean(
       business
+      && matchesExpectedBusiness
       && business.is_active
       && business.is_verified
       && !business.deleted_at
@@ -275,7 +282,7 @@ async function cartSummary(
     const total = available ? unitPrice * quantity : 0;
     subtotal += total;
     if (!available) unavailable.push(text(product.name, 'Producto no disponible'));
-    if (business && !businessName) {
+    if (business && matchesExpectedBusiness && !businessName) {
       businessName = text(business.name, 'Negocio');
       businessSlug = text(business.slug);
     }
@@ -286,6 +293,8 @@ async function cartSummary(
       unitPrice,
       total,
       available,
+      businessId: actualBusinessId,
+      integrityValid: matchesExpectedBusiness,
     };
   });
 
@@ -296,18 +305,22 @@ async function cartSummary(
   const availabilityNote = unavailable.length > 0
     ? ` Revisa ${unavailable.length} producto${unavailable.length === 1 ? '' : 's'} no disponible${unavailable.length === 1 ? '' : 's'} antes de continuar.`
     : '';
+  const integrityNote = integrityMismatchCount > 0
+    ? ' Detecté productos asociados a otro negocio y los excluí del subtotal por seguridad.'
+    : '';
 
   return {
     name: plan.name,
     success: true,
-    message: `Tu carrito de ${businessName || 'DomiU'} tiene ${itemCount} unidad${itemCount === 1 ? '' : 'es'}: ${summary} Subtotal verificado con precios actuales: ${formatCop(subtotal)}.${availabilityNote}`,
+    message: `Tu carrito de ${businessName || 'DomiU'} tiene ${itemCount} unidad${itemCount === 1 ? '' : 'es'}: ${summary} Subtotal verificado con precios actuales: ${formatCop(subtotal)}.${availabilityNote}${integrityNote}`,
     data: {
-      businessId: cart.businessId,
+      businessId: expectedBusinessId,
       businessName: businessName || null,
       items,
       itemCount,
       subtotal,
       unavailableCount: unavailable.length,
+      integrityMismatchCount,
       priceSource: 'server_catalog',
     },
     recordCount: items.length,
