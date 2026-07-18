@@ -68,7 +68,8 @@ function safeNavigation(value: unknown): DomiNavigationLink[] {
       if (!item || typeof item !== 'object') return null;
       const candidate = item as { label?: unknown; href?: unknown };
       if (typeof candidate.label !== 'string' || typeof candidate.href !== 'string') return null;
-      if (!candidate.href.startsWith('/cliente')) return null;
+      const isCustomerRoute = candidate.href === '/cliente' || candidate.href.startsWith('/cliente/');
+      if (!isCustomerRoute) return null;
       return { label: candidate.label.slice(0, 60), href: candidate.href.slice(0, 240) };
     })
     .filter((item): item is DomiNavigationLink => Boolean(item))
