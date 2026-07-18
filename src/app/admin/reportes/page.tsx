@@ -1,21 +1,31 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { ChartCard, RevenueLineChart, OrdersBarChart, RegistrationAreaChart } from '@/components/admin/dashboard-charts';
+import Link from 'next/link';
+import {
+  ChartCard,
+  RevenueLineChart,
+  OrdersBarChart,
+  RegistrationAreaChart,
+} from '@/components/admin/dashboard-charts';
 import { adminService } from '@/services/admin';
 import type { SalesReport, TopBusiness, TopCourier } from '@/services/admin';
 import { Card } from '@/components/ui/card';
-import { Download, DollarSign, ShoppingCart, TrendingUp } from 'lucide-react';
+import { CalendarDays, Download, DollarSign, ShoppingCart, TrendingUp } from 'lucide-react';
 
-const formatCurrency = (n: number) => '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0 });
+const formatCurrency = (n: number) =>
+  '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0 });
 
 async function exportCSV(filename: string, headers: string[], rows: string[][]) {
-  const csv = [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
+  const csv = [headers.join(','), ...rows.map((row) => row.map((cell) => `"${cell}"`).join(','))].join(
+    '\n',
+  );
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  a.click();
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
   URL.revokeObjectURL(url);
 }
 
@@ -29,51 +39,76 @@ export default function AdminReports() {
   const [hourlyOrders, setHourlyOrders] = useState<{ hour: number; count: number }[]>([]);
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       try {
-        const [sales, biz, couriers, dist, regs, hourly] = await Promise.all([
-          adminService.getSalesReport(14),
-          adminService.getTopBusinesses(5),
-          adminService.getTopCouriers(5),
-          adminService.getStatusDistribution(),
-          adminService.getUserRegistrationStats(),
-          adminService.getHourlyOrders(),
-        ]);
+        const [sales, businesses, couriers, distribution, registrations, hourly] =
+          await Promise.all([
+            adminService.getSalesReport(14),
+            adminService.getTopBusinesses(5),
+            adminService.getTopCouriers(5),
+            adminService.getStatusDistribution(),
+            adminService.getUserRegistrationStats(),
+            adminService.getHourlyOrders(),
+          ]);
         setSalesData(sales);
-        setTopBusinesses(biz);
+        setTopBusinesses(businesses);
         setTopCouriers(couriers);
-        setStatusDist(dist);
-        setUserRegs(regs);
+        setStatusDist(distribution);
+        setUserRegs(registrations);
         setHourlyOrders(hourly);
-      } catch {}
+      } catch {
+        // El panel conserva los estados vacíos y permite abrir el reporte diario.
+      }
       setLoading(false);
     })();
   }, []);
 
-  if (loading) return (
-    <div className="animate-fade-in">
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">Reportes</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Cargando reportes...</p>
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="animate-fade-in">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Reportes</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Cargando reportes...</p>
+      </div>
+    );
+  }
 
-  const totalRevenue = salesData.reduce((s, d) => s + d.revenue, 0);
-  const totalOrders = salesData.reduce((s, d) => s + d.orders, 0);
-  const statusTotal = statusDist.reduce((a, b) => a + b.count, 0);
+  const totalRevenue = salesData.reduce((sum, day) => sum + day.revenue, 0);
+  const totalOrders = salesData.reduce((sum, day) => sum + day.orders, 0);
+  const statusTotal = statusDist.reduce((sum, status) => sum + status.count, 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Reportes</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Estadísticas y análisis de la plataforma</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Estadísticas y análisis de la plataforma
+          </p>
         </div>
-        <button
-          onClick={() => exportCSV('ventas.csv', ['Fecha', 'Pedidos', 'Ingresos'], salesData.map(d => [d.date, String(d.orders), formatCurrency(d.revenue)]))}
-          className="flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
-        >
-          <Download className="h-3.5 w-3.5" /> Exportar CSV
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/admin/reportes/diario"
+            className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-xs font-black text-primary-foreground"
+          >
+            <CalendarDays className="h-3.5 w-3.5" /> Reporte diario completo
+          </Link>
+          <button
+            onClick={() =>
+              exportCSV(
+                'ventas.csv',
+                ['Fecha', 'Pedidos', 'Ingresos'],
+                salesData.map((day) => [
+                  day.date,
+                  String(day.orders),
+                  formatCurrency(day.revenue),
+                ]),
+              )
+            }
+            className="flex items-center gap-1.5 rounded-xl border border-border px-3 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+          >
+            <Download className="h-3.5 w-3.5" /> Exportar CSV
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -109,7 +144,7 @@ export default function AdminReports() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <ChartCard title="Ventas (últimos 14 días)">
-          <RevenueLineChart data={salesData.map(r => ({ ...r, date: r.date }))} />
+          <RevenueLineChart data={salesData.map((row) => ({ ...row, date: row.date }))} />
         </ChartCard>
 
         <ChartCard title="Distribución de Estados">
@@ -117,15 +152,23 @@ export default function AdminReports() {
             <p className="text-sm text-muted-foreground">Sin datos</p>
           ) : (
             <div className="space-y-3">
-              {statusDist.map(s => {
-                const pct = statusTotal > 0 ? Math.round((s.count / statusTotal) * 100) : 0;
+              {statusDist.map((status) => {
+                const percentage =
+                  statusTotal > 0 ? Math.round((status.count / statusTotal) * 100) : 0;
                 return (
-                  <div key={s.status} className="flex items-center gap-3">
-                    <span className="w-24 text-xs text-muted-foreground capitalize truncate">{s.status.replace('_', ' ')}</span>
-                    <div className="flex-1 h-5 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full rounded-full bg-gradient-to-r from-primary to-primary/70 transition-all" style={{ width: `${pct}%` }} />
+                  <div key={status.status} className="flex items-center gap-3">
+                    <span className="w-24 truncate text-xs capitalize text-muted-foreground">
+                      {status.status.replace('_', ' ')}
+                    </span>
+                    <div className="h-5 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-primary to-primary/70 transition-all"
+                        style={{ width: `${percentage}%` }}
+                      />
                     </div>
-                    <span className="w-20 text-right text-xs text-foreground font-medium">{s.count} ({pct}%)</span>
+                    <span className="w-20 text-right text-xs font-medium text-foreground">
+                      {status.count} ({percentage}%)
+                    </span>
                   </div>
                 );
               })}
@@ -134,20 +177,29 @@ export default function AdminReports() {
         </ChartCard>
 
         <ChartCard title="Top Negocios">
-          {topBusinesses.length === 0 ? <p className="text-sm text-muted-foreground">Sin datos</p> : (
+          {topBusinesses.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sin datos</p>
+          ) : (
             <div className="space-y-3">
-              {topBusinesses.map((b, i) => (
-                <div key={b.id} className="flex items-center justify-between rounded-xl border border-border/50 px-4 py-3 hover:bg-muted/30 transition-colors">
+              {topBusinesses.map((business, index) => (
+                <div
+                  key={business.id}
+                  className="flex items-center justify-between rounded-xl border border-border/50 px-4 py-3 transition-colors hover:bg-muted/30"
+                >
                   <div className="flex items-center gap-3">
                     <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-primary/10 to-primary/5 text-xs font-bold text-primary">
-                      {i + 1}
+                      {index + 1}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-foreground">{b.name}</p>
-                      <p className="text-xs text-muted-foreground">{b.order_count} pedidos · ★ {b.avg_rating.toFixed(1)}</p>
+                      <p className="text-sm font-medium text-foreground">{business.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {business.order_count} pedidos · ★ {business.avg_rating.toFixed(1)}
+                      </p>
                     </div>
                   </div>
-                  <span className="text-sm font-semibold">{formatCurrency(b.total_revenue)}</span>
+                  <span className="text-sm font-semibold">
+                    {formatCurrency(business.total_revenue)}
+                  </span>
                 </div>
               ))}
             </div>
@@ -155,20 +207,27 @@ export default function AdminReports() {
         </ChartCard>
 
         <ChartCard title="Top Repartidores">
-          {topCouriers.length === 0 ? <p className="text-sm text-muted-foreground">Sin datos</p> : (
+          {topCouriers.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sin datos</p>
+          ) : (
             <div className="space-y-3">
-              {topCouriers.map((c, i) => (
-                <div key={c.id} className="flex items-center justify-between rounded-xl border border-border/50 px-4 py-3 hover:bg-muted/30 transition-colors">
+              {topCouriers.map((courier, index) => (
+                <div
+                  key={courier.id}
+                  className="flex items-center justify-between rounded-xl border border-border/50 px-4 py-3 transition-colors hover:bg-muted/30"
+                >
                   <div className="flex items-center gap-3">
                     <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-info/10 to-info/5 text-xs font-bold text-info">
-                      {i + 1}
+                      {index + 1}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-foreground">{c.name}</p>
-                      <p className="text-xs text-muted-foreground">{c.deliveries} entregas · ★ {c.rating.toFixed(1)}</p>
+                      <p className="text-sm font-medium text-foreground">{courier.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {courier.deliveries} entregas · ★ {courier.rating.toFixed(1)}
+                      </p>
                     </div>
                   </div>
-                  <span className="text-sm font-semibold">{formatCurrency(c.earnings)}</span>
+                  <span className="text-sm font-semibold">{formatCurrency(courier.earnings)}</span>
                 </div>
               ))}
             </div>
