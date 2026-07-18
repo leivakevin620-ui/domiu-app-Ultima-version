@@ -6,6 +6,7 @@ import type { DomiServerContext } from '@/lib/domi/server-context';
 
 const RATE_LIMIT_MAX = 12;
 const RATE_LIMIT_WINDOW_MS = 60_000;
+const MEMORY_CONFIRMATION_TTL_MS = 30 * 60_000;
 
 export async function enforceDomiRateLimit(supabase: SupabaseClient, userId: string) {
   const since = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
@@ -55,7 +56,7 @@ export async function getPendingMemoryCandidate(
 ) {
   const { data } = await supabase
     .from('domi_messages')
-    .select('id,metadata')
+    .select('id,metadata,created_at')
     .eq('user_id', userId)
     .eq('conversation_id', conversationId)
     .eq('role', 'assistant')
@@ -64,9 +65,10 @@ export async function getPendingMemoryCandidate(
     .limit(1)
     .maybeSingle();
 
-  const metadata = (data?.metadata || {}) as Record<string, unknown>;
+  if (!data?.created_at || Date.now() - Date.parse(String(data.created_at)) > MEMORY_CONFIRMATION_TTL_MS) return null;
+  const metadata = (data.metadata || {}) as Record<string, unknown>;
   const rawCandidate = metadata.memoryCandidate;
-  if (!data?.id || !rawCandidate || typeof rawCandidate !== 'object') return null;
+  if (!data.id || !rawCandidate || typeof rawCandidate !== 'object') return null;
   const candidate = rawCandidate as Partial<DomiMemoryCandidate>;
   if (candidate.type !== 'preference' || typeof candidate.text !== 'string') return null;
   return {
