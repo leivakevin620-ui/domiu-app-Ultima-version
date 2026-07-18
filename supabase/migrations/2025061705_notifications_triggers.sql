@@ -7,6 +7,12 @@ ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'new_registration';
 ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'incident';
 ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'report';
 
+-- PostgreSQL exige confirmar los nuevos valores del enum antes de utilizarlos.
+-- Supabase ejecuta las migraciones en transacción, por eso se abre un nuevo
+-- bloque transaccional antes de insertar plantillas o compilar funciones.
+COMMIT;
+BEGIN;
+
 INSERT INTO notification_templates (type, title_template, message_template, action_text) VALUES
 ('new_order', 'Nuevo Pedido', 'Has recibido un nuevo pedido #{{order_number}}', 'Ver Pedido'),
 ('new_order_available', 'Nuevo Pedido Disponible', 'Hay un nuevo pedido disponible en {{business_name}}', 'Ver Pedido'),
