@@ -1,15 +1,16 @@
 'use client';
 
 import Link from 'next/link';
+import { DomiULogo } from '@/components/brand/DomiULogo';
 
 const FOOTER_SECTIONS = [
   {
     title: 'Descubre',
     links: [
       { label: 'Restaurantes', href: '/cliente' },
-      { label: 'Categorías', href: '/cliente' },
-      { label: 'Ofertas', href: '/cliente' },
-      { label: 'Ciudades', href: '/cliente' },
+      { label: 'Categorías', href: '/cliente/categories' },
+      { label: 'Ofertas', href: '/cliente/search' },
+      { label: 'Mis pedidos', href: '/cliente/pedidos' },
     ],
   },
   {
@@ -17,51 +18,47 @@ const FOOTER_SECTIONS = [
     links: [
       { label: 'Términos', href: '/terminos' },
       { label: 'Privacidad', href: '/privacidad' },
-      { label: 'Cookies', href: '/cookies' },
-      { label: 'Trabaja con nosotros', href: '/trabajo' },
+      { label: 'Cookies', href: '/privacidad' },
+      { label: 'Trabaja con nosotros', href: '/register' },
     ],
   },
   {
     title: 'Contacto',
     links: [
       { label: 'Santa Marta, Magdalena', href: '#' },
-      { label: 'hola@domiu.app', href: 'mailto:hola@domiu.app' },
-      { label: '+57 300 123 4567', href: 'tel:+573001234567' },
+      { label: 'domiumagdalena@gmail.com', href: 'mailto:domiumagdalena@gmail.com' },
+      { label: '+57 311 374 8405', href: 'tel:+573113748405' },
     ],
   },
 ];
 
 const SOCIAL = [
-  { label: 'Instagram', href: '#' },
+  { label: 'Instagram', href: 'https://instagram.com/domiumagdalena' },
   { label: 'Facebook', href: '#' },
-  { label: 'Twitter', href: '#' },
   { label: 'TikTok', href: '#' },
 ];
 
 export function FooterPremium() {
   return (
-    <footer className="border-t border-border/10 bg-gradient-to-b from-background to-primary/[0.02]">
+    <footer className="border-t border-primary/10 bg-[#1A1D21]">
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
           <div className="lg:col-span-2">
-            <Link href="/" className="mb-4 flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20">
-                D
-              </div>
-              <span className="text-lg font-bold text-foreground">DomiU</span>
+            <Link href="/" className="mb-5 inline-flex" aria-label="DomiU Magdalena">
+              <DomiULogo variant="dark" markClassName="h-12 w-12" showTagline />
             </Link>
-            <p className="mb-6 max-w-xs text-sm text-muted-foreground leading-relaxed">
-              La plataforma de delivery más rápida de Santa Marta. Conectamos restaurantes, clientes y repartidores.
+            <p className="mb-6 max-w-sm text-sm leading-relaxed text-muted-foreground">
+              La infraestructura digital para organizar compras, comercios y entregas locales en Magdalena.
             </p>
             <div className="flex items-center gap-3">
-              {SOCIAL.map((s) => (
+              {SOCIAL.map((social) => (
                 <Link
-                  key={s.label}
-                  href={s.href}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/20 bg-background/50 text-xs font-medium text-muted-foreground transition-all hover:border-primary/20 hover:text-primary hover:bg-primary/5"
-                  aria-label={s.label}
+                  key={social.label}
+                  href={social.href}
+                  className="flex h-9 min-w-9 items-center justify-center rounded-xl border border-border bg-[#24282E] px-3 text-xs font-bold text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+                  aria-label={social.label}
                 >
-                  {s.label.charAt(0)}
+                  {social.label.charAt(0)}
                 </Link>
               ))}
             </div>
@@ -69,14 +66,11 @@ export function FooterPremium() {
 
           {FOOTER_SECTIONS.map((section) => (
             <div key={section.title}>
-              <h4 className="mb-4 text-xs font-semibold uppercase tracking-[0.15em] text-foreground">{section.title}</h4>
+              <h4 className="mb-4 text-xs font-bold uppercase tracking-[0.15em] text-primary">{section.title}</h4>
               <ul className="space-y-3">
                 {section.links.map((link) => (
                   <li key={link.label}>
-                    <Link
-                      href={link.href}
-                      className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-                    >
+                    <Link href={link.href} className="text-sm text-muted-foreground transition-colors hover:text-primary">
                       {link.label}
                     </Link>
                   </li>
@@ -86,15 +80,14 @@ export function FooterPremium() {
           ))}
         </div>
 
-        <div className="mt-14 border-t border-border/10 pt-8">
+        <div className="mt-14 border-t border-primary/10 pt-8">
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <p className="text-sm text-muted-foreground">
-              &copy; {new Date().getFullYear()} DomiU. Todos los derechos reservados.
+              &copy; {new Date().getFullYear()} DomiU Magdalena. Pide fácil, recibe rápido.
             </p>
             <div className="flex items-center gap-4">
-              <Link href="/terminos" className="text-xs text-muted-foreground hover:text-foreground transition-colors">Términos</Link>
-              <Link href="/privacidad" className="text-xs text-muted-foreground hover:text-foreground transition-colors">Privacidad</Link>
-              <Link href="/cookies" className="text-xs text-muted-foreground hover:text-foreground transition-colors">Cookies</Link>
+              <Link href="/terminos" className="text-xs text-muted-foreground transition-colors hover:text-primary">Términos</Link>
+              <Link href="/privacidad" className="text-xs text-muted-foreground transition-colors hover:text-primary">Privacidad</Link>
             </div>
           </div>
         </div>
