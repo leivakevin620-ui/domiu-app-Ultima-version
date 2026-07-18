@@ -1,14 +1,14 @@
 {
-  "name": "DomiU - Delivery Inteligente",
+  "name": "DomiU Magdalena - Pide fácil, recibe rápido",
   "short_name": "DomiU",
-  "description": "La plataforma de delivery inteligente",
+  "description": "La plataforma local que conecta clientes, negocios y repartidores en Magdalena.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0F172A",
-  "theme_color": "#0F172A",
+  "background_color": "#1A1D21",
+  "theme_color": "#FFC400",
   "orientation": "portrait-primary",
   "icons": [
-    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" },
     { "src": "/icon.png", "sizes": "32x32", "type": "image/png" },
     { "src": "/apple-icon.png", "sizes": "180x180", "type": "image/png" }
   ]
