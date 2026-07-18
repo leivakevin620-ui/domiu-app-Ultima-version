@@ -45,14 +45,29 @@ export function AdminSidebar() {
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
   React.useEffect(() => {
-    const openMenu = () => setMobileOpen(true);
+    const openMenu = () => {
+      window.dispatchEvent(new Event('domiu:close-assistant'));
+      setMobileOpen(true);
+    };
+    const closeMenu = () => setMobileOpen(false);
     window.addEventListener('domiu:open-admin-menu', openMenu);
-    return () => window.removeEventListener('domiu:open-admin-menu', openMenu);
+    window.addEventListener('domiu:close-admin-menu', closeMenu);
+    return () => {
+      window.removeEventListener('domiu:open-admin-menu', openMenu);
+      window.removeEventListener('domiu:close-admin-menu', closeMenu);
+    };
   }, []);
 
   React.useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
+
+  React.useEffect(() => {
+    window.dispatchEvent(new CustomEvent('domiu:admin-menu-state', { detail: { open: mobileOpen } }));
+    return () => {
+      if (mobileOpen) window.dispatchEvent(new CustomEvent('domiu:admin-menu-state', { detail: { open: false } }));
+    };
+  }, [mobileOpen]);
 
   React.useEffect(() => {
     if (!mobileOpen) return;
@@ -97,7 +112,7 @@ export function AdminSidebar() {
 
   const sidebar = (
     <aside className={cn(
-      'flex h-full w-[min(88vw,20rem)] flex-col border-r border-primary/10 bg-gradient-to-b from-[#1A1D21] via-[#1A1D21] to-[#20242A] shadow-2xl transition-all duration-300 lg:shadow-none',
+      'isolate flex h-full w-[min(88vw,20rem)] flex-col border-r border-primary/10 bg-gradient-to-b from-[#1A1D21] via-[#1A1D21] to-[#20242A] shadow-2xl transition-all duration-300 lg:shadow-none',
       compact ? 'lg:w-20' : 'lg:w-64',
     )}>
       <div className={cn('flex h-20 shrink-0 items-center border-b border-primary/10', compact ? 'justify-center px-0' : 'justify-between px-4')}>
@@ -141,8 +156,8 @@ export function AdminSidebar() {
   );
 
   return <>
-    {mobileOpen && <button type="button" className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Cerrar menú lateral" />}
-    <div className={cn('fixed inset-y-0 left-0 z-50 transition-transform duration-300 ease-out lg:hidden', mobileOpen ? 'translate-x-0' : '-translate-x-full')}>{sidebar}</div>
+    {mobileOpen && <button type="button" className="fixed inset-0 z-[1900] bg-black/75 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Cerrar menú lateral" />}
+    <div className={cn('fixed inset-y-0 left-0 z-[2000] transition-transform duration-300 ease-out lg:hidden', mobileOpen ? 'translate-x-0' : '-translate-x-full')}>{sidebar}</div>
     <div className="fixed inset-y-0 left-0 z-40 hidden lg:block">{sidebar}</div>
   </>;
 }
