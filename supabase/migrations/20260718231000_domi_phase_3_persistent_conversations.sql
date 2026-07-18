@@ -48,7 +48,7 @@ create index if not exists domi_conversations_tenant_idx
 create or replace function public.prepare_domi_conversation()
 returns trigger
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 begin
@@ -73,7 +73,7 @@ for each row execute function public.prepare_domi_conversation();
 create or replace function public.touch_domi_conversation_from_message()
 returns trigger
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 declare
@@ -82,21 +82,21 @@ declare
   last_assistant text;
   generated_summary text;
 begin
-  select left(regexp_replace(content, '\\s+', ' ', 'g'), 220)
+  select left(regexp_replace(content, '\s+', ' ', 'g'), 220)
   into first_user
   from public.domi_messages
   where conversation_id = new.conversation_id and role = 'user'
   order by created_at asc, id asc
   limit 1;
 
-  select left(regexp_replace(content, '\\s+', ' ', 'g'), 220)
+  select left(regexp_replace(content, '\s+', ' ', 'g'), 220)
   into last_user
   from public.domi_messages
   where conversation_id = new.conversation_id and role = 'user'
   order by created_at desc, id desc
   limit 1;
 
-  select left(regexp_replace(content, '\\s+', ' ', 'g'), 220)
+  select left(regexp_replace(content, '\s+', ' ', 'g'), 220)
   into last_assistant
   from public.domi_messages
   where conversation_id = new.conversation_id and role = 'assistant'
@@ -114,7 +114,7 @@ begin
       updated_at = greatest(updated_at, new.created_at),
       summary = coalesce(generated_summary, summary),
       active_goal = case
-        when new.role = 'user' then left(regexp_replace(new.content, '\\s+', ' ', 'g'), 180)
+        when new.role = 'user' then left(regexp_replace(new.content, '\s+', ' ', 'g'), 180)
         else active_goal
       end,
       current_context = case
@@ -141,11 +141,11 @@ with summaries as (
   select
     c.id,
     left(concat_ws(' · ',
-      case when first_message.content is not null then 'Tema: ' || left(regexp_replace(first_message.content, '\\s+', ' ', 'g'), 220) end,
-      case when last_user.content is not null and last_user.content is distinct from first_message.content then 'Última solicitud: ' || left(regexp_replace(last_user.content, '\\s+', ' ', 'g'), 220) end,
-      case when last_assistant.content is not null then 'Última respuesta: ' || left(regexp_replace(last_assistant.content, '\\s+', ' ', 'g'), 220) end
+      case when first_message.content is not null then 'Tema: ' || left(regexp_replace(first_message.content, '\s+', ' ', 'g'), 220) end,
+      case when last_user.content is not null and last_user.content is distinct from first_message.content then 'Última solicitud: ' || left(regexp_replace(last_user.content, '\s+', ' ', 'g'), 220) end,
+      case when last_assistant.content is not null then 'Última respuesta: ' || left(regexp_replace(last_assistant.content, '\s+', ' ', 'g'), 220) end
     ), 520) as generated_summary,
-    left(regexp_replace(coalesce(last_user.content, ''), '\\s+', ' ', 'g'), 180) as generated_goal
+    left(regexp_replace(coalesce(last_user.content, ''), '\s+', ' ', 'g'), 180) as generated_goal
   from public.domi_conversations c
   left join lateral (
     select content from public.domi_messages
