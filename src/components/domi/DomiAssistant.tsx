@@ -137,14 +137,14 @@ export function DomiAssistant() {
     setMessages((current) => [...current, { role: 'user', content: text }]);
     setSending(true);
     try {
-      const requestId = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+      const requestId = window.crypto?.randomUUID?.();
       const response = await fetch('/api/domi/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
           conversationId,
-          requestId,
+          ...(requestId ? { requestId } : {}),
           context: browserContext(),
         }),
       });
