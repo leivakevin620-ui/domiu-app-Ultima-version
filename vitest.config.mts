@@ -9,15 +9,26 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/test/**/*.test.{ts,tsx}', 'src/lib/payments/__tests__/*.test.ts', 'src/lib/orders/__tests__/*.test.ts'],
+    include: [
+      'src/test/**/*.test.{ts,tsx}',
+      'src/lib/payments/__tests__/*.test.ts',
+      'src/lib/orders/__tests__/*.test.ts',
+      'src/lib/domi/**/*.test.ts',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
       reportsDirectory: './coverage',
-      include: ['src/test/**/*.{ts,tsx}', 'src/lib/payments/__tests__/*.test.ts', 'src/lib/orders/__tests__/*.test.ts'],
+      include: [
+        'src/test/**/*.{ts,tsx}',
+        'src/lib/payments/__tests__/*.test.ts',
+        'src/lib/orders/__tests__/*.test.ts',
+        'src/lib/domi/**/*.{ts,tsx}',
+      ],
       exclude: [
         'src/**/*.d.ts',
         'src/test/setup.ts',
+        'src/lib/domi/**/*.test.ts',
       ],
     },
   },
