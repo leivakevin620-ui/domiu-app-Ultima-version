@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getDashboardPathForRole } from '@/types/auth';
 import { logger } from '@/lib/logger';
 import { marketplaceService, MarketplaceBusiness, MarketplaceCategory } from '@/services/marketplace';
+import { DomiULogo, DomiUMark } from '@/components/brand/DomiULogo';
 import { Hero } from '@/components/landing/Hero';
 import { Benefits } from '@/components/landing/Benefits';
 import { HowItWorks } from '@/components/landing/HowItWorks';
@@ -49,20 +50,18 @@ export default function HomePage() {
         setFeatured(feat);
         setRecommended(rec);
       } catch {
-        // silently fail - static content still shows
+        // El contenido estático continúa disponible cuando el marketplace tarda.
       }
     };
-    load();
+    void load();
   }, []);
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-xl font-bold text-primary-foreground animate-pulse">
-            D
-          </div>
-          <p className="text-sm text-muted-foreground animate-pulse">Cargando...</p>
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <DomiUMark className="h-16 w-16 animate-pulse" />
+          <p className="animate-pulse text-sm font-semibold text-muted-foreground">Cargando DomiU Magdalena…</p>
         </div>
       </div>
     );
@@ -70,33 +69,24 @@ export default function HomePage() {
 
   if (isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <p className="text-muted-foreground">Redirigiendo...</p>
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background">
+        <p className="text-muted-foreground">Redirigiendo…</p>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <nav className="fixed left-0 right-0 top-0 z-50 border-b border-border/10 bg-background/70 backdrop-blur-2xl supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20">
-              D
-            </div>
-            <span className="text-lg font-bold text-foreground">DomiU</span>
+      <nav className="fixed left-0 right-0 top-0 z-50 border-b border-primary/10 bg-[#1A1D21]/85 backdrop-blur-2xl">
+        <div className="mx-auto flex h-[4.5rem] max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link href="/" className="flex items-center" aria-label="DomiU Magdalena">
+            <DomiULogo variant="dark" markClassName="h-11 w-11" />
           </Link>
           <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="hidden sm:inline-flex text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
+            <Link href="/login" className="hidden text-sm font-semibold text-muted-foreground transition-colors hover:text-primary sm:inline-flex">
               Iniciar sesión
             </Link>
-            <Link
-              href="/register"
-              className="inline-flex h-10 items-center justify-center rounded-2xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/30"
-            >
+            <Link href="/register" className="domiu-brand-glow inline-flex h-10 items-center justify-center rounded-xl bg-primary px-5 text-sm font-black text-primary-foreground transition-all hover:brightness-105">
               Registrarse
             </Link>
           </div>
