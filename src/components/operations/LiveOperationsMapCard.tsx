@@ -12,7 +12,6 @@ import {
 } from '@/components/tracking/maps/OpenStreetLiveMap';
 
 type Mode = 'admin' | 'business';
-
 type Coordinates = { lat: number; lng: number };
 
 type OrderRow = {
@@ -38,7 +37,7 @@ export function LiveOperationsMapCard({ mode }: { mode: Mode }) {
   const { profile } = useAuth();
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [courierLocations, setCourierLocations] = useState<
-    Array<{ courierId: string; orderId: string | null; position: Coordinates; updatedAt: string }>
+    Array<{ courierId: string; orderId: string; position: Coordinates; updatedAt: string }>
   >([]);
   const [businessNames, setBusinessNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -89,7 +88,7 @@ export function LiveOperationsMapCard({ mode }: { mode: Mode }) {
           orderIds.length
             ? supabase
                 .from('driver_locations')
-                .select('courier_id,order_id,latitude,longitude,updated_at,created_at')
+                .select('order_id,latitude,longitude,updated_at,created_at')
                 .in('order_id', orderIds)
                 .order('updated_at', { ascending: false })
             : Promise.resolve({ data: [], error: null }),
@@ -104,20 +103,21 @@ export function LiveOperationsMapCard({ mode }: { mode: Mode }) {
           ),
         );
 
+        const orderById = new Map(activeOrders.map((order) => [order.id, order]));
         const seen = new Set<string>();
         const normalizedLocations: Array<{
           courierId: string;
-          orderId: string | null;
+          orderId: string;
           position: Coordinates;
           updatedAt: string;
         }> = [];
         for (const row of locationResult.data ?? []) {
-          const courierId = String(row.courier_id || '');
-          const orderId = row.order_id ? String(row.order_id) : null;
+          const orderId = String(row.order_id || '');
+          const order = orderById.get(orderId);
+          const courierId = String(order?.courier_id || '');
           const position = point(row.latitude, row.longitude);
-          const key = orderId || courierId;
-          if (!key || !position || seen.has(key)) continue;
-          seen.add(key);
+          if (!orderId || !courierId || !position || seen.has(orderId)) continue;
+          seen.add(orderId);
           normalizedLocations.push({
             courierId,
             orderId,
@@ -173,11 +173,9 @@ export function LiveOperationsMapCard({ mode }: { mode: Mode }) {
       }
     }
     for (const location of courierLocations) {
-      const order = location.orderId
-        ? orders.find((candidate) => candidate.id === location.orderId)
-        : null;
+      const order = orders.find((candidate) => candidate.id === location.orderId);
       mapPoints.push({
-        id: `courier-${location.courierId || location.orderId}`,
+        id: `courier-${location.courierId}-${location.orderId}`,
         ...location.position,
         label: order ? `Repartidor · ${order.order_number}` : 'Repartidor en línea',
         kind: 'courier',
