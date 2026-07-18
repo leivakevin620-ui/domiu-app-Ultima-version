@@ -10,29 +10,35 @@ import { ProductPlaceholder } from '@/components/ui/placeholders';
 import { ProductCustomizationDialog } from '@/components/delivery/product-customization-dialog';
 import { marketplaceService, type MarketplaceBusiness, type MarketplaceProduct } from '@/services/marketplace';
 import { useCart, type CartCustomization } from '@/contexts/CartContext';
+import { formatCOP } from '@/lib/formatters/currency';
 import { ArrowLeft, Check, Clock, MapPin, Plus, ShoppingBag, Star, Store, X } from 'lucide-react';
 import Link from 'next/link';
 
 const CATEGORY_ICONS: Record<string, string> = {
   'Alitas ahumadas': '🍗',
+  Alitas: '🍗',
   Sándwiches: '🥪',
+  Sandwiches: '🥪',
+  Hamburguesas: '🍔',
   Tenders: '🍗',
   Adicionales: '🍟',
   Bebidas: '🥤',
   Cervezas: '🍺',
+  Pizzas: '🍕',
+  Pastas: '🍝',
+  Panadería: '🥐',
+  Despensa: '🛒',
+  'Lácteos y huevos': '🥛',
+  'Frutas y verduras': '🥬',
+  'Dolor y bienestar': '💊',
+  'Primeros auxilios': '🩹',
+  Licores: '🍾',
+  Vinos: '🍷',
   Otros: '🍽️',
 };
 
 function sectionId(category: string) {
   return `categoria-${category.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-')}`;
-}
-
-function formatPrice(price: number) {
-  return new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    maximumFractionDigits: 0,
-  }).format(price);
 }
 
 export default function BusinessPage() {
@@ -87,6 +93,7 @@ export default function BusinessPage() {
   const sameBusiness = businessId === business.id;
   const cartTotal = sameBusiness ? items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0) : 0;
   const isPreview = business.catalog_status !== 'live';
+  const isLiquorStore = business.business_type === 'liquor_store';
 
   const handleAdd = (product: MarketplaceProduct) => {
     setDetailProduct(null);
@@ -135,7 +142,7 @@ export default function BusinessPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="truncate text-xl font-black sm:text-2xl">{business.name}</h1>
                 <span className={`rounded-full px-2 py-1 text-[10px] font-semibold sm:text-xs ${isPreview ? 'bg-[#17191F] text-white' : business.is_open ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
-                  {isPreview ? 'Próximamente' : business.is_open ? 'Abierto' : 'Cerrado'}
+                  {isPreview ? 'Catálogo de referencia' : business.is_open ? 'Abierto' : 'Cerrado'}
                 </span>
               </div>
               <p className="mt-1 line-clamp-2 text-xs text-muted-foreground sm:text-sm">{business.description}</p>
@@ -149,7 +156,12 @@ export default function BusinessPage() {
 
           {isPreview && (
             <div className="mt-4 rounded-2xl border border-[#F1D45A] bg-[#FFF8D0] p-4 text-sm font-semibold leading-relaxed text-[#665100]">
-              Este comercio es real y su ficha fue investigada. DomiU todavía está validando el convenio, el menú, los precios, el inventario y las imágenes oficiales; por eso los pedidos permanecen deshabilitados.
+              El catálogo ya contiene productos, precios e imágenes digitales de referencia. Los pedidos permanecerán deshabilitados hasta que el propietario confirme marcas, inventario, precios e imágenes oficiales.
+            </div>
+          )}
+          {isLiquorStore && (
+            <div className="mt-3 rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm font-semibold text-violet-950">
+              Venta exclusiva para mayores de 18 años. La entrega requerirá verificación de identidad.
             </div>
           )}
         </section>
@@ -157,8 +169,8 @@ export default function BusinessPage() {
         {products.length === 0 ? (
           <div className="px-3 sm:px-0">
             <EmptyState
-              title={isPreview ? 'Catálogo en validación' : 'Sin productos disponibles'}
-              description={isPreview ? 'No publicaremos productos, precios ni fotografías sin confirmación del comercio.' : 'Este negocio aún no tiene menú.'}
+              title={isPreview ? 'Catálogo en preparación' : 'Sin productos disponibles'}
+              description={isPreview ? 'DomiU está estructurando este catálogo antes de habilitar pedidos.' : 'Este negocio aún no tiene menú.'}
             />
           </div>
         ) : (
@@ -192,11 +204,13 @@ export default function BusinessPage() {
                     {categoryProducts.map((product) => {
                       const inCart = sameBusiness && items.some((item) => item.product.id === product.id);
                       const available = business.is_open && product.is_available;
+                      const referenceImage = product.metadata?.image_status === 'reference';
                       return (
-                        <article key={product.id} onClick={() => setDetailProduct(product)} className={`group flex cursor-pointer gap-3 rounded-2xl border bg-card p-3 shadow-sm transition active:scale-[0.99] sm:hover:border-primary/40 sm:hover:shadow-md ${!available ? 'opacity-60' : ''}`}>
+                        <article key={product.id} onClick={() => setDetailProduct(product)} className={`group flex cursor-pointer gap-3 rounded-2xl border bg-card p-3 shadow-sm transition active:scale-[0.99] sm:hover:border-primary/40 sm:hover:shadow-md ${!available ? 'opacity-75' : ''}`}>
                           <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-muted sm:h-28 sm:w-28">
                             {product.image_url ? <Image src={product.image_url} alt={product.name} fill sizes="112px" className="object-cover" /> : <ProductPlaceholder />}
-                            {!available && <div className="absolute inset-0 flex items-center justify-center bg-black/55 px-2 text-center text-[10px] font-bold text-white">No disponible</div>}
+                            {referenceImage && <span className="absolute bottom-1 left-1 rounded-md bg-black/75 px-1.5 py-1 text-[8px] font-bold text-white">Imagen digital</span>}
+                            {!available && <div className="absolute right-1 top-1 rounded-md bg-black/70 px-1.5 py-1 text-[8px] font-bold text-white">No habilitado</div>}
                           </div>
 
                           <div className="flex min-w-0 flex-1 flex-col">
@@ -204,7 +218,7 @@ export default function BusinessPage() {
                             <h3 className="mt-0.5 line-clamp-2 text-sm font-black leading-tight sm:text-base">{product.name}</h3>
                             {product.description && <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground sm:text-xs">{product.description}</p>}
                             <div className="mt-auto flex items-end justify-between gap-2 pt-2">
-                              <span className="text-base font-black sm:text-lg">{formatPrice(product.price)}</span>
+                              <div><span className="block text-base font-black sm:text-lg">{formatCOP(product.price)}</span>{isPreview && <span className="text-[9px] font-semibold text-muted-foreground">Precio de referencia</span>}</div>
                               {available && (
                                 <button type="button" onClick={(event) => { event.stopPropagation(); handleAdd(product); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-sm ${inCart ? 'bg-success text-white' : 'bg-primary text-primary-foreground'}`} aria-label={`Agregar ${product.name}`}>
                                   {inCart ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -223,19 +237,21 @@ export default function BusinessPage() {
         )}
       </PageContainer>
 
-      {sameBusiness && itemCount > 0 && !isPreview && <Link href="/cliente/cart" className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-3 right-3 z-40 flex items-center justify-between rounded-2xl bg-primary p-4 font-bold text-primary-foreground shadow-xl lg:bottom-4 lg:left-auto lg:right-4 lg:w-96"><span>Ver carrito ({itemCount})</span><span>{formatPrice(cartTotal)}</span></Link>}
+      {sameBusiness && itemCount > 0 && !isPreview && <Link href="/cliente/cart" className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-3 right-3 z-40 flex items-center justify-between rounded-2xl bg-primary p-4 font-bold text-primary-foreground shadow-xl lg:bottom-4 lg:left-auto lg:right-4 lg:w-96"><span>Ver carrito ({itemCount})</span><span>{formatCOP(cartTotal)}</span></Link>}
 
       {detailProduct && (
         <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 p-0 backdrop-blur-sm sm:items-center sm:p-5" onClick={() => setDetailProduct(null)}>
           <section className="max-h-[88dvh] w-full overflow-y-auto rounded-t-3xl bg-card shadow-2xl sm:max-w-lg sm:rounded-3xl" onClick={(event) => event.stopPropagation()}>
             <div className="relative h-56 w-full overflow-hidden bg-muted sm:h-72">
               {detailProduct.image_url ? <Image src={detailProduct.image_url} alt={detailProduct.name} fill sizes="(max-width: 640px) 100vw, 512px" className="object-cover" priority /> : <ProductPlaceholder />}
+              {detailProduct.metadata?.image_status === 'reference' && <span className="absolute bottom-3 left-3 rounded-lg bg-black/75 px-2 py-1 text-[10px] font-bold text-white">Imagen digital de referencia</span>}
               <button type="button" onClick={() => setDetailProduct(null)} className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-black/65 text-white backdrop-blur"><X className="h-5 w-5" /></button>
             </div>
             <div className="space-y-4 p-5">
               <div><p className="text-xs font-bold uppercase tracking-wider text-primary">{detailProduct.category_name || 'Producto'}</p><h2 className="mt-1 text-2xl font-black">{detailProduct.name}</h2></div>
               <p className="text-sm leading-relaxed text-muted-foreground">{detailProduct.description || 'Producto disponible para pedir en DomiU.'}</p>
-              <div className="flex items-center justify-between border-t pt-4"><span className="text-2xl font-black">{formatPrice(detailProduct.price)}</span><span className={`rounded-full px-3 py-1 text-xs font-bold ${business.is_open && detailProduct.is_available ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>{business.is_open && detailProduct.is_available ? 'Disponible' : 'No disponible'}</span></div>
+              {isPreview && <p className="rounded-xl bg-[#FFF8D0] p-3 text-xs font-semibold text-[#665100]">El precio, el inventario y la presentación deben ser confirmados por el comercio antes de habilitar pedidos.</p>}
+              <div className="flex items-center justify-between border-t pt-4"><span className="text-2xl font-black">{formatCOP(detailProduct.price)}</span><span className={`rounded-full px-3 py-1 text-xs font-bold ${business.is_open && detailProduct.is_available ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>{business.is_open && detailProduct.is_available ? 'Disponible' : 'No habilitado'}</span></div>
               {business.is_open && detailProduct.is_available && <button type="button" onClick={() => handleAdd(detailProduct)} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 text-sm font-black text-primary-foreground"><Plus className="h-5 w-5" />{detailProduct.metadata?.product_type === 'wings' ? 'Elegir opciones' : 'Agregar al carrito'}</button>}
             </div>
           </section>
