@@ -5,6 +5,8 @@ import { requireAuth } from '@/lib/auth/server-auth';
 import { getServiceClient } from '@/lib/db/supabase';
 import { serverAudit } from '@/lib/audit/server-audit';
 import { getVerifiedDeliveryQuote } from '@/lib/delivery/route-pricing';
+import { calculateOrderFinancials } from '@/lib/orders/order-earnings';
+import { loadActiveFinancialSettings } from '@/lib/orders/financial-settings';
 
 const paymentMethodSchema = z.enum(['cash', 'transfer']);
 
@@ -12,12 +14,13 @@ const quoteSchema = z.object({
   businessId: z.string().uuid(),
   businessAddressId: z.string().uuid(),
   deliveryAddressId: z.string().uuid(),
+  subtotal: z.number().int().min(0),
 });
 
 const itemSchema = z.object({
   productId: z.string().uuid(),
   quantity: z.number().int().min(1).max(50),
-  unitPrice: z.number().min(0),
+  unitPrice: z.number().int().min(0),
   customization: z.record(z.string(), z.unknown()).optional(),
   specialInstructions: z.string().max(500).optional(),
 });
@@ -26,8 +29,8 @@ const createSchema = quoteSchema.extend({
   paymentMethod: paymentMethodSchema,
   paymentReference: z.string().trim().max(120).optional(),
   items: z.array(itemSchema).min(1).max(100),
-  subtotal: z.number().min(0),
-  taxAmount: z.number().min(0).default(0),
+  taxAmount: z.number().int().min(0).default(0),
+  discountAmount: z.number().int().min(0).default(0),
   instructions: z.string().max(1000).default(''),
 });
 
@@ -55,27 +58,38 @@ export async function quoteCustomerDeliveryAction(input: z.infer<typeof quoteSch
   }
 
   try {
-    const quote = await getVerifiedDeliveryQuote(
-      parsed.data.businessId,
-      parsed.data.businessAddressId,
-      parsed.data.deliveryAddressId,
-      auth.session.user.id,
+    const [quote, settings] = await Promise.all([
+      getVerifiedDeliveryQuote(
+        parsed.data.businessId,
+        parsed.data.businessAddressId,
+        parsed.data.deliveryAddressId,
+        auth.session.user.id,
+      ),
+      loadActiveFinancialSettings(),
+    ]);
+    const financials = calculateOrderFinancials(
+      {
+        subtotal: parsed.data.subtotal,
+        deliveryFee: quote.deliveryFee,
+        orderType: 'product_order',
+      },
+      settings,
     );
+
     return {
       success: true as const,
       distanceKm: quote.distanceKm,
       durationMinutes: quote.durationMinutes,
       deliveryFee: quote.deliveryFee,
+      serviceFee: financials.serviceFee,
+      customerTotal: financials.customerTotal,
       routeSource: quote.source,
       pickupAddress: quote.pickupAddress,
     };
   } catch (cause) {
     return {
       success: false as const,
-      error:
-        cause instanceof Error
-          ? cause.message
-          : 'No se pudo calcular la ruta del domicilio',
+      error: cause instanceof Error ? cause.message : 'No se pudo calcular la ruta del domicilio',
     };
   }
 }
@@ -92,10 +106,7 @@ export async function createCustomerOrderAction(input: z.infer<typeof createSche
   const auth = await requireAuth();
   if (auth.error) return { success: false as const, error: auth.error.message };
   if (auth.session.profile.role !== 'customer') {
-    return {
-      success: false as const,
-      error: 'Solo una cuenta de cliente puede crear este pedido',
-    };
+    return { success: false as const, error: 'Solo una cuenta de cliente puede crear este pedido' };
   }
 
   const supabase = getServiceClient();
@@ -112,16 +123,23 @@ export async function createCustomerOrderAction(input: z.infer<typeof createSche
   try {
     const { data: business } = await supabase
       .from('businesses')
-      .select('id,is_active,is_verified')
+      .select('id,is_active,is_verified,is_open,metadata')
       .eq('id', data.businessId)
       .is('deleted_at', null)
       .maybeSingle();
 
+    const metadata =
+      business?.metadata && typeof business.metadata === 'object'
+        ? (business.metadata as Record<string, unknown>)
+        : {};
     if (!business?.is_active || !business.is_verified) {
-      return {
-        success: false as const,
-        error: 'El negocio no está disponible para recibir pedidos',
-      };
+      return { success: false as const, error: 'El negocio no está habilitado para recibir pedidos' };
+    }
+    if (metadata.catalog_status && metadata.catalog_status !== 'live') {
+      return { success: false as const, error: 'El catálogo del negocio todavía está en validación' };
+    }
+    if (!business.is_open) {
+      return { success: false as const, error: 'El negocio está cerrado en este momento' };
     }
 
     const quote = await getVerifiedDeliveryQuote(
@@ -141,10 +159,7 @@ export async function createCustomerOrderAction(input: z.infer<typeof createSche
 
     if (productsError) return { success: false as const, error: productsError.message };
     if (!products || products.length !== new Set(productIds).size) {
-      return {
-        success: false as const,
-        error: 'Uno o más productos ya no están disponibles',
-      };
+      return { success: false as const, error: 'Uno o más productos ya no están disponibles' };
     }
 
     const productMap = new Map(products.map((product) => [product.id, product]));
@@ -158,18 +173,31 @@ export async function createCustomerOrderAction(input: z.infer<typeof createSche
         );
       }
 
-      const basePrice = Number(product.discount_price ?? product.price ?? item.unitPrice);
-      const selectedPrice = Math.max(basePrice, Number(item.unitPrice));
-      verifiedSubtotal += selectedPrice * item.quantity;
+      const basePrice = Math.round(Number(product.discount_price ?? product.price ?? 0));
+      const selectedPrice = Math.max(basePrice, item.unitPrice);
+      const itemTotal = selectedPrice * item.quantity;
+      verifiedSubtotal += itemTotal;
       return {
         product_id: item.productId,
         quantity: item.quantity,
         unit_price: selectedPrice,
-        item_total: selectedPrice * item.quantity,
+        item_total: itemTotal,
         variant_selections: item.customization ?? null,
         special_instructions: item.specialInstructions?.trim() || null,
       };
     });
+
+    const settings = await loadActiveFinancialSettings();
+    const financials = calculateOrderFinancials(
+      {
+        subtotal: verifiedSubtotal,
+        deliveryFee: quote.deliveryFee,
+        taxAmount: data.taxAmount,
+        discountAmount: data.discountAmount,
+        orderType: 'product_order',
+      },
+      settings,
+    );
 
     const orderNumber = `DOM-${Date.now().toString(36).toUpperCase()}-${Math.random()
       .toString(36)
@@ -182,6 +210,7 @@ export async function createCustomerOrderAction(input: z.infer<typeof createSche
       .from('orders')
       .insert({
         order_number: orderNumber,
+        order_type: 'product_order',
         customer_id: customerId,
         business_id: data.businessId,
         pickup_address_id: quote.pickupAddressId,
@@ -191,10 +220,17 @@ export async function createCustomerOrderAction(input: z.infer<typeof createSche
         payment_status: initialPaymentStatus,
         payment_reference:
           data.paymentMethod === 'transfer' ? data.paymentReference?.trim() || null : null,
-        subtotal: verifiedSubtotal,
-        delivery_fee: quote.deliveryFee,
-        tax_amount: data.taxAmount,
-        total_amount: verifiedSubtotal + quote.deliveryFee + data.taxAmount,
+        subtotal: financials.subtotal,
+        delivery_fee: financials.deliveryFee,
+        service_fee: financials.serviceFee,
+        tax_amount: financials.taxAmount,
+        discount_amount: financials.discountAmount,
+        total_amount: financials.customerTotal,
+        business_earnings: financials.businessEarnings,
+        courier_earnings: financials.courierEarnings,
+        platform_delivery_commission: financials.platformDeliveryCommission,
+        platform_service_fee: financials.platformServiceFee,
+        platform_earnings: financials.platformEarnings,
         pickup_address: quote.pickupAddress,
         pickup_lat: quote.pickup.lat,
         pickup_lng: quote.pickup.lng,
@@ -209,32 +245,38 @@ export async function createCustomerOrderAction(input: z.infer<typeof createSche
         route_polyline: quote.polyline,
         route_source: quote.source,
         special_instructions: data.instructions.trim() || null,
+        financial_snapshot: {
+          currency: 'COP',
+          ...financials,
+          calculated_at: new Date().toISOString(),
+        },
+        financial_calculated_at: new Date().toISOString(),
+        payment_holder: data.paymentMethod === 'cash' ? 'courier' : 'business',
         metadata: {
-          created_from: 'customer_checkout_v3',
+          created_from: 'customer_checkout_v4_financial',
           delivery_location_status: 'exact',
           delivery_pricing_source: quote.source,
           delivery_duration_minutes: quote.durationMinutes,
           route_verified_on_server: true,
           payment_method_selected_by_customer: data.paymentMethod,
           payment_reference_provided: Boolean(data.paymentReference?.trim()),
+          service_fee_disclosed_before_confirmation: true,
+          customer_subtotal_received: data.subtotal,
+          verified_subtotal: verifiedSubtotal,
         },
       })
       .select(
-        'id,order_number,delivery_fee,delivery_distance_km,route_duration_minutes,total_amount,estimated_delivery_time,payment_method,payment_status',
+        'id,order_number,delivery_fee,service_fee,delivery_distance_km,route_duration_minutes,total_amount,estimated_delivery_time,payment_method,payment_status,courier_earnings,platform_earnings,business_earnings',
       )
       .single();
 
     if (orderError || !order) {
-      return {
-        success: false as const,
-        error: orderError?.message || 'No se pudo crear el pedido',
-      };
+      return { success: false as const, error: orderError?.message || 'No se pudo crear el pedido' };
     }
 
     const { error: itemsError } = await supabase.from('order_items').insert(
       verifiedItems.map((item) => ({ ...item, order_id: order.id })),
     );
-
     if (itemsError) {
       await supabase.from('orders').delete().eq('id', order.id);
       return { success: false as const, error: itemsError.message };
@@ -243,7 +285,11 @@ export async function createCustomerOrderAction(input: z.infer<typeof createSche
     await supabase.from('order_tracking').insert({
       order_id: order.id,
       status: 'pending',
-      notes: `Pedido creado con ruta verificada y pago ${data.paymentMethod === 'cash' ? 'en efectivo' : 'por transferencia pendiente de validación'}`,
+      notes: `Pedido creado con ruta verificada, desglose financiero exacto y pago ${
+        data.paymentMethod === 'cash'
+          ? 'en efectivo'
+          : 'por transferencia pendiente de validación'
+      }`,
     });
 
     await serverAudit.logAction(
@@ -257,8 +303,13 @@ export async function createCustomerOrderAction(input: z.infer<typeof createSche
         order_number: order.order_number,
         pickup_address_id: quote.pickupAddressId,
         delivery_address_id: quote.deliveryAddressId,
-        delivery_fee: order.delivery_fee,
-        delivery_distance_km: order.delivery_distance_km,
+        delivery_fee: Number(order.delivery_fee),
+        service_fee: Number(order.service_fee),
+        customer_total: Number(order.total_amount),
+        courier_earnings: Number(order.courier_earnings),
+        platform_earnings: Number(order.platform_earnings),
+        business_earnings: Number(order.business_earnings),
+        delivery_distance_km: Number(order.delivery_distance_km),
         route_source: quote.source,
         payment_method: order.payment_method,
         payment_status: order.payment_status,
@@ -270,6 +321,7 @@ export async function createCustomerOrderAction(input: z.infer<typeof createSche
       orderId: order.id,
       orderNumber: order.order_number,
       deliveryFee: Number(order.delivery_fee),
+      serviceFee: Number(order.service_fee),
       distanceKm: Number(order.delivery_distance_km),
       durationMinutes: Number(order.route_duration_minutes ?? quote.durationMinutes),
       totalAmount: Number(order.total_amount),
