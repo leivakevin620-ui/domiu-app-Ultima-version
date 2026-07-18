@@ -103,6 +103,9 @@ export async function writeDomiAudit(args: {
   conversationId?: string | null;
   reason?: string | null;
   durationMs?: number;
+  toolName?: string | null;
+  toolRecordCount?: number | null;
+  toolSuccess?: boolean | null;
 }) {
   const { context } = args;
   await args.supabase.from('audit_log').insert({
@@ -121,6 +124,9 @@ export async function writeDomiAudit(args: {
       messageLength: args.messageLength,
       reason: args.reason || null,
       durationMs: args.durationMs ?? null,
+      toolName: args.toolName || null,
+      toolRecordCount: args.toolRecordCount ?? null,
+      toolSuccess: args.toolSuccess ?? null,
     },
     ip_address: context.ipAddress,
     user_agent: context.userAgent,
@@ -131,6 +137,7 @@ export async function writeDomiAudit(args: {
       timezone: context.client.timezone,
       module: context.client.module,
       screen: context.client.screen,
+      cartItemKinds: context.client.cart?.items.length ?? 0,
     },
   });
 }
