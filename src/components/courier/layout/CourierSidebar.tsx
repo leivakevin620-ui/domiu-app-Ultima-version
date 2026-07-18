@@ -9,7 +9,7 @@ import { useCourier } from '@/contexts/CourierContext';
 import { DomiULogo } from '@/components/brand/DomiULogo';
 import {
   LayoutDashboard, User, ClipboardList, Map, TrendingUp, MessageCircle,
-  Bell, Settings, LifeBuoy, LogOut, Menu, X, Bike,
+  Bell, Settings, LifeBuoy, LogOut, Menu, X, Bike, FileSpreadsheet,
 } from 'lucide-react';
 
 const navItems = [
@@ -18,6 +18,7 @@ const navItems = [
   { label: 'Pedidos', href: '/repartidor/pedidos', icon: ClipboardList },
   { label: 'Mapa y rutas', href: '/repartidor/mapa', icon: Map },
   { label: 'Ganancias', href: '/repartidor/ganancias', icon: TrendingUp },
+  { label: 'Liquidaciones', href: '/repartidor/liquidaciones', icon: FileSpreadsheet },
   { label: 'Chat', href: '/repartidor/chat', icon: MessageCircle },
   { label: 'Notificaciones', href: '/repartidor/notificaciones', icon: Bell },
   { label: 'Configuración', href: '/repartidor/configuracion', icon: Settings },
@@ -126,7 +127,7 @@ export function CourierSidebar() {
             <Bike className="h-3.5 w-3.5 text-primary" />
             <span className="text-xs font-bold text-primary">DomiU Repartidor</span>
           </div>
-          <p className="mt-0.5 text-[10px] text-[#8A9099]">Ruta, pedidos y ganancias</p>
+          <p className="mt-0.5 text-[10px] text-[#8A9099]">Ruta, pedidos y liquidaciones</p>
         </div>
         <button
           onClick={handleLogout}
