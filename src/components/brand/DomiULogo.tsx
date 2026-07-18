@@ -27,7 +27,7 @@ export function DomiUMark({ className, title = 'DomiU Magdalena' }: DomiUMarkPro
     <span
       role="img"
       aria-label={title}
-      className={cn('relative block h-10 w-14 shrink-0', className)}
+      className={cn('relative block h-10 w-14 shrink-0 overflow-visible', className)}
     >
       <img
         src={DOMIU_OFFICIAL_MARK_DATA_URI}
@@ -42,7 +42,11 @@ export function DomiUMark({ className, title = 'DomiU Magdalena' }: DomiUMarkPro
 
 /**
  * Lockup oficial completo de DomiU Magdalena.
- * Conserva símbolo, palabra, subtítulo, eslogan, transparencia y proporciones originales.
+ *
+ * El archivo entregado por la marca está guardado sobre un lienzo cuadrado que
+ * contiene espacio transparente debajo del arte. El SVG conserva cada píxel
+ * visible del logo y elimina únicamente ese espacio vacío del área de maquetación.
+ * Así el encabezado nunca estira, aplasta ni corta el símbolo o la palabra DomiU.
  */
 export function DomiULogo({
   className,
@@ -57,19 +61,30 @@ export function DomiULogo({
 
   return (
     <span
+      role="img"
+      aria-label="DomiU Magdalena — Pide fácil, recibe rápido"
       className={cn('inline-flex shrink-0 items-center justify-center', className)}
       data-variant={variant}
     >
-      <img
-        src={DOMIU_OFFICIAL_LOGO_DATA_URI}
-        alt="DomiU Magdalena — Pide fácil, recibe rápido"
-        draggable={false}
-        decoding="async"
+      <svg
+        viewBox="0 0 128 82"
+        preserveAspectRatio="xMidYMid meet"
+        aria-hidden="true"
+        focusable="false"
         className={cn(
-          'h-auto select-none object-contain',
+          'block max-h-full shrink-0 overflow-visible select-none',
           showTagline ? 'w-28 sm:w-32' : 'w-24 sm:w-28',
         )}
-      />
+      >
+        <image
+          href={DOMIU_OFFICIAL_LOGO_DATA_URI}
+          x="0"
+          y="0"
+          width="128"
+          height="128"
+          preserveAspectRatio="xMidYMin meet"
+        />
+      </svg>
     </span>
   );
 }

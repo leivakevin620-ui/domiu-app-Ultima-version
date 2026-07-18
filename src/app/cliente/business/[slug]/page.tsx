@@ -10,12 +10,12 @@ import { ProductPlaceholder } from '@/components/ui/placeholders';
 import { ProductCustomizationDialog } from '@/components/delivery/product-customization-dialog';
 import { marketplaceService, type MarketplaceBusiness, type MarketplaceProduct } from '@/services/marketplace';
 import { useCart, type CartCustomization } from '@/contexts/CartContext';
-import { ArrowLeft, Check, Clock, MapPin, Plus, ShoppingBag, Star, X } from 'lucide-react';
+import { ArrowLeft, Check, Clock, MapPin, Plus, ShoppingBag, Star, Store, X } from 'lucide-react';
 import Link from 'next/link';
 
 const CATEGORY_ICONS: Record<string, string> = {
   'Alitas ahumadas': '🍗',
-  'Sándwiches': '🥪',
+  Sándwiches: '🥪',
   Tenders: '🍗',
   Adicionales: '🍟',
   Bebidas: '🥤',
@@ -82,10 +82,11 @@ export default function BusinessPage() {
   }, [activeCategory, categories]);
 
   if (loading) return <SkeletonCard />;
-  if (!business) return <PageContainer><EmptyState title="Negocio no encontrado" description="El restaurante no existe o está inactivo." /></PageContainer>;
+  if (!business) return <PageContainer><EmptyState title="Negocio no encontrado" description="El comercio no existe o está inactivo." /></PageContainer>;
 
   const sameBusiness = businessId === business.id;
   const cartTotal = sameBusiness ? items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0) : 0;
+  const isPreview = business.catalog_status !== 'live';
 
   const handleAdd = (product: MarketplaceProduct) => {
     setDetailProduct(null);
@@ -111,26 +112,55 @@ export default function BusinessPage() {
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-3 sm:px-4">
           <button onClick={() => router.back()} className="rounded-xl p-2 hover:bg-muted" aria-label="Volver"><ArrowLeft className="h-5 w-5" /></button>
           <span className="truncate text-sm font-semibold">{business.name}</span>
-          <Link href="/cliente/cart" className="relative ml-auto rounded-xl p-2 hover:bg-muted"><ShoppingBag className="h-5 w-5" />{sameBusiness && itemCount > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">{itemCount}</span>}</Link>
+          {!isPreview && <Link href="/cliente/cart" className="relative ml-auto rounded-xl p-2 hover:bg-muted"><ShoppingBag className="h-5 w-5" />{sameBusiness && itemCount > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">{itemCount}</span>}</Link>}
         </div>
       </header>
 
-      <div className="h-36 bg-muted bg-cover bg-center sm:h-52" style={business.banner_url ? { backgroundImage: `url(${business.banner_url})` } : undefined} />
+      {business.banner_url ? (
+        <div className="h-36 bg-muted bg-cover bg-center sm:h-52" style={{ backgroundImage: `url(${business.banner_url})` }} />
+      ) : (
+        <div className="relative flex h-36 items-center justify-center overflow-hidden bg-gradient-to-br from-[#FFF9DC] via-[#FFF0A3] to-[#FFD400] sm:h-52">
+          <div className="absolute -left-16 -top-20 h-56 w-56 rounded-full border-[34px] border-white/35" />
+          <Store className="h-12 w-12 text-[#6E5700]" />
+        </div>
+      )}
 
       <PageContainer className="relative -mt-7 px-0 sm:-mt-10 sm:px-4">
         <section className="mx-3 mb-4 rounded-2xl border bg-card p-4 shadow-lg sm:mx-0 sm:mb-5 sm:rounded-3xl sm:p-5">
           <div className="flex gap-3 sm:gap-4">
-            <div className="h-16 w-16 shrink-0 rounded-2xl bg-muted bg-cover bg-center sm:h-20 sm:w-20" style={business.logo_url ? { backgroundImage: `url(${business.logo_url})` } : undefined} />
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border bg-white p-1 shadow-sm sm:h-20 sm:w-20">
+              {business.logo_url ? <img src={business.logo_url} alt={`Logo de ${business.name}`} className="h-full w-full object-contain" /> : <Store className="h-7 w-7 text-[#B38C00]" />}
+            </div>
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2"><h1 className="truncate text-xl font-black sm:text-2xl">{business.name}</h1><span className={`rounded-full px-2 py-1 text-[10px] font-semibold sm:text-xs ${business.is_open ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>{business.is_open ? 'Abierto' : 'Cerrado'}</span></div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-xl font-black sm:text-2xl">{business.name}</h1>
+                <span className={`rounded-full px-2 py-1 text-[10px] font-semibold sm:text-xs ${isPreview ? 'bg-[#17191F] text-white' : business.is_open ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
+                  {isPreview ? 'Próximamente' : business.is_open ? 'Abierto' : 'Cerrado'}
+                </span>
+              </div>
               <p className="mt-1 line-clamp-2 text-xs text-muted-foreground sm:text-sm">{business.description}</p>
-              <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground"><span className="flex items-center gap-1"><Star className="h-3.5 w-3.5" />{business.rating}</span><span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{business.delivery_time}</span><span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{business.distance ?? 'Santa Marta'}</span></div>
+              <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                {!isPreview && <span className="flex items-center gap-1"><Star className="h-3.5 w-3.5" />{business.rating}</span>}
+                {!isPreview && <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{business.delivery_time}</span>}
+                <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{business.distance ?? 'Santa Marta'}</span>
+              </div>
             </div>
           </div>
+
+          {isPreview && (
+            <div className="mt-4 rounded-2xl border border-[#F1D45A] bg-[#FFF8D0] p-4 text-sm font-semibold leading-relaxed text-[#665100]">
+              Este comercio es real y su ficha fue investigada. DomiU todavía está validando el convenio, el menú, los precios, el inventario y las imágenes oficiales; por eso los pedidos permanecen deshabilitados.
+            </div>
+          )}
         </section>
 
         {products.length === 0 ? (
-          <div className="px-3 sm:px-0"><EmptyState title="Sin productos disponibles" description="Este negocio aún no tiene menú." /></div>
+          <div className="px-3 sm:px-0">
+            <EmptyState
+              title={isPreview ? 'Catálogo en validación' : 'Sin productos disponibles'}
+              description={isPreview ? 'No publicaremos productos, precios ni fotografías sin confirmación del comercio.' : 'Este negocio aún no tiene menú.'}
+            />
+          </div>
         ) : (
           <>
             <nav className="sticky top-14 z-30 mb-5 border-y bg-background/96 py-3 backdrop-blur-xl sm:rounded-2xl sm:border">
@@ -193,7 +223,7 @@ export default function BusinessPage() {
         )}
       </PageContainer>
 
-      {sameBusiness && itemCount > 0 && <Link href="/cliente/cart" className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-3 right-3 z-40 flex items-center justify-between rounded-2xl bg-primary p-4 font-bold text-primary-foreground shadow-xl lg:bottom-4 lg:left-auto lg:right-4 lg:w-96"><span>Ver carrito ({itemCount})</span><span>{formatPrice(cartTotal)}</span></Link>}
+      {sameBusiness && itemCount > 0 && !isPreview && <Link href="/cliente/cart" className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-3 right-3 z-40 flex items-center justify-between rounded-2xl bg-primary p-4 font-bold text-primary-foreground shadow-xl lg:bottom-4 lg:left-auto lg:right-4 lg:w-96"><span>Ver carrito ({itemCount})</span><span>{formatPrice(cartTotal)}</span></Link>}
 
       {detailProduct && (
         <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 p-0 backdrop-blur-sm sm:items-center sm:p-5" onClick={() => setDetailProduct(null)}>

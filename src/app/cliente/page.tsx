@@ -63,33 +63,45 @@ function deliveryLabel(value: string | undefined) {
 
 function BusinessCard({ business }: { business: MarketplaceBusiness }) {
   const cover = business.banner_url || business.logo_url;
+  const isPreview = business.catalog_status !== 'live';
 
   return (
     <Link
       href={`/cliente/business/${business.slug}`}
       className="group min-w-0 overflow-hidden rounded-3xl border border-[#E4E7EC] bg-white shadow-[0_10px_32px_-24px_rgba(16,24,40,.38)] transition duration-200 hover:-translate-y-1 hover:border-[#F2C900] hover:shadow-[0_20px_45px_-25px_rgba(16,24,40,.42)]"
     >
-      <div className="relative aspect-[16/9] overflow-hidden bg-gradient-to-br from-[#FFF8D4] to-[#F1F3F6]">
+      <div className="relative aspect-[16/9] overflow-hidden bg-gradient-to-br from-[#FFF8D4] via-white to-[#F1F3F6]">
         {cover ? (
           <img
             src={cover}
             alt={business.name}
             loading="lazy"
             decoding="async"
-            className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.035]"
+            className="h-full w-full object-contain p-5 transition duration-500 group-hover:scale-[1.035]"
           />
         ) : (
-          <div className="flex h-full items-center justify-center">
-            <Store className="h-12 w-12 text-[#C5A000]" />
+          <div className="flex h-full flex-col items-center justify-center gap-2">
+            <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-sm">
+              <Store className="h-8 w-8 text-[#C5A000]" />
+            </span>
+            <span className="text-[11px] font-black text-[#707782]">Imagen del comercio en validación</span>
           </div>
         )}
 
         <div className="absolute left-3 top-3 flex items-center gap-2">
-          <span className={business.is_open ? 'rounded-full bg-white/95 px-3 py-1 text-[11px] font-black text-[#087443] shadow-sm' : 'rounded-full bg-white/95 px-3 py-1 text-[11px] font-black text-[#667085] shadow-sm'}>
-            {business.is_open ? 'Abierto' : 'Cerrado'}
+          <span
+            className={
+              isPreview
+                ? 'rounded-full bg-[#17191F] px-3 py-1 text-[11px] font-black text-white shadow-sm'
+                : business.is_open
+                  ? 'rounded-full bg-white/95 px-3 py-1 text-[11px] font-black text-[#087443] shadow-sm'
+                  : 'rounded-full bg-white/95 px-3 py-1 text-[11px] font-black text-[#667085] shadow-sm'
+            }
+          >
+            {isPreview ? 'Próximamente' : business.is_open ? 'Abierto' : 'Cerrado'}
           </span>
-          {business.is_featured && (
-            <span className="rounded-full bg-[#FFD400] px-3 py-1 text-[11px] font-black text-[#17191F] shadow-sm">Destacado</span>
+          {business.is_featured && !isPreview && (
+            <span className="rounded-full bg-[#FFD400] px-3 py-1 text-[11px] font-black text-[#17191F] shadow-sm">Verificado</span>
           )}
         </div>
       </div>
@@ -98,7 +110,7 @@ function BusinessCard({ business }: { business: MarketplaceBusiness }) {
         <div className="flex items-start gap-3">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-[#ECEEF2] bg-white shadow-sm">
             {business.logo_url ? (
-              <img src={business.logo_url} alt="" loading="lazy" decoding="async" className="h-full w-full object-contain p-1" />
+              <img src={business.logo_url} alt={`Logo de ${business.name}`} loading="lazy" decoding="async" className="h-full w-full object-contain p-1" />
             ) : (
               <Store className="h-6 w-6 text-[#B38C00]" />
             )}
@@ -114,20 +126,26 @@ function BusinessCard({ business }: { business: MarketplaceBusiness }) {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-bold text-[#555D68]">
-          <span className="inline-flex items-center gap-1">
-            <Star className="h-4 w-4 fill-[#FFB800] text-[#FFB800]" />
-            {Number(business.rating || 0).toFixed(1)}
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Clock3 className="h-4 w-4 text-[#707782]" />
-            {business.delivery_time || '30-45 min'}
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Bike className="h-4 w-4 text-[#707782]" />
-            {deliveryLabel(business.delivery_fee)}
-          </span>
-        </div>
+        {isPreview ? (
+          <div className="mt-4 rounded-xl bg-[#FFF8D0] px-3 py-2 text-xs font-bold leading-relaxed text-[#705900]">
+            Ficha real investigada. Catálogo, precios y pedidos pendientes de convenio y validación.
+          </div>
+        ) : (
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-bold text-[#555D68]">
+            <span className="inline-flex items-center gap-1">
+              <Star className="h-4 w-4 fill-[#FFB800] text-[#FFB800]" />
+              {Number(business.rating || 0).toFixed(1)}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Clock3 className="h-4 w-4 text-[#707782]" />
+              {business.delivery_time || '30-45 min'}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Bike className="h-4 w-4 text-[#707782]" />
+              {deliveryLabel(business.delivery_fee)}
+            </span>
+          </div>
+        )}
       </div>
     </Link>
   );
@@ -162,8 +180,10 @@ export default function ClienteHome() {
     });
   }, [businesses, query, selectedCategory]);
 
-  const featured = businesses.filter((business) => business.is_featured).slice(0, 10);
+  const featured = businesses.filter((business) => business.is_featured && business.catalog_status === 'live').slice(0, 10);
   const categoryCount = categories.reduce((sum, category) => sum + category.business_count, 0);
+  const liveCount = businesses.filter((business) => business.catalog_status === 'live').length;
+  const previewCount = businesses.length - liveCount;
 
   return (
     <div className="pb-12">
@@ -233,7 +253,7 @@ export default function ClienteHome() {
               <p className="text-xs font-black uppercase tracking-[0.16em] text-[#A17D00]">Explora por categoría</p>
               <h2 className="mt-1 text-2xl font-black tracking-tight text-[#1B1E24]">¿Qué necesitas hoy?</h2>
             </div>
-            <span className="hidden text-sm font-bold text-[#747B86] sm:block">{categoryCount || businesses.length} comercios disponibles</span>
+            <span className="hidden text-sm font-bold text-[#747B86] sm:block">{categoryCount || businesses.length} comercios identificados</span>
           </div>
 
           <div className="mt-5 flex gap-3 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -256,8 +276,8 @@ export default function ClienteHome() {
           <section>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#A17D00]">Recomendados</p>
-                <h2 className="mt-1 text-2xl font-black text-[#1B1E24]">Los más destacados</h2>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#A17D00]">Verificados</p>
+                <h2 className="mt-1 text-2xl font-black text-[#1B1E24]">Comercios habilitados para pedir</h2>
               </div>
             </div>
             <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -270,9 +290,9 @@ export default function ClienteHome() {
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.16em] text-[#A17D00]">Marketplace DomiU</p>
-              <h2 className="mt-1 text-2xl font-black text-[#1B1E24]">Todos los comercios</h2>
+              <h2 className="mt-1 text-2xl font-black text-[#1B1E24]">Comercios de Santa Marta</h2>
               <p className="mt-1 text-sm font-medium text-[#717985]">
-                {filteredBusinesses.length} resultado{filteredBusinesses.length === 1 ? '' : 's'} disponibles.
+                {liveCount} habilitado{liveCount === 1 ? '' : 's'} para pedir · {previewCount} catálogo{previewCount === 1 ? '' : 's'} en validación.
               </p>
             </div>
             {(query || selectedCategory !== 'all') && (
