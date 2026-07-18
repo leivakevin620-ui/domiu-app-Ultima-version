@@ -1,0 +1,54 @@
+name: Domi CI
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'src/app/api/domi/**'
+      - 'src/components/domi/**'
+      - 'src/lib/domi/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/domi-ci.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'src/app/api/domi/**'
+      - 'src/components/domi/**'
+      - 'src/lib/domi/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/domi-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: domi-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar pruebas
+        run: npm test
+
+      - name: Validar TypeScript
+        run: npx tsc --noEmit
+
+      - name: Compilar aplicación
+        run: npm run build
