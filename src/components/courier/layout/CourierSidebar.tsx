@@ -3,10 +3,10 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCourier } from '@/contexts/CourierContext';
-import { useRouter } from 'next/navigation';
+import { DomiULogo } from '@/components/brand/DomiULogo';
 import {
   LayoutDashboard, User, ClipboardList, Map, TrendingUp, MessageCircle,
   Bell, Settings, LifeBuoy, LogOut, Menu, X, Bike,
@@ -26,9 +26,9 @@ const navItems = [
 
 const STATUS_LABELS: Record<string, { label: string; dot: string }> = {
   available: { label: 'Disponible', dot: 'bg-success' },
-  busy: { label: 'Ocupado', dot: 'bg-warning' },
+  busy: { label: 'Ocupado', dot: 'bg-primary' },
   offline: { label: 'Desconectado', dot: 'bg-muted-foreground' },
-  on_break: { label: 'En pausa', dot: 'bg-info' },
+  on_break: { label: 'En pausa', dot: 'bg-warning' },
 };
 
 export function CourierSidebar() {
@@ -53,45 +53,39 @@ export function CourierSidebar() {
   };
 
   const sidebar = (
-    <aside className="flex h-full flex-col bg-[#0F172A] text-white">
-      <div className="flex h-16 items-center justify-between border-b border-[#334155] px-4">
-        <Link href="/repartidor" className="flex items-center gap-2.5" onClick={() => setMobileOpen(false)}>
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-warning to-orange-500 shadow-lg shadow-warning/20">
-            <Bike className="h-5 w-5 text-white" />
-          </div>
-          <div>
-            <span className="block text-sm font-bold text-white">DomiU</span>
-            <span className="block text-[10px] font-medium text-[#94A3B8]">Courier</span>
-          </div>
+    <aside className="flex h-full flex-col bg-[#1A1D21] text-white">
+      <div className="flex h-20 items-center justify-between border-b border-primary/10 px-4">
+        <Link href="/repartidor" className="flex min-w-0 items-center" onClick={() => setMobileOpen(false)} aria-label="DomiU Magdalena Repartidor">
+          <DomiULogo variant="dark" markClassName="h-10 w-10" />
         </Link>
         <button
           onClick={() => setMobileOpen(false)}
-          className="flex lg:hidden h-8 w-8 items-center justify-center rounded-lg text-[#94A3B8] hover:text-white transition-colors"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#8A9099] transition-colors hover:bg-primary/10 hover:text-primary lg:hidden"
           aria-label="Cerrar menú"
         >
           <X className="h-5 w-5" />
         </button>
       </div>
 
-      <div className="border-b border-[#334155] p-4">
+      <div className="border-b border-primary/10 p-4">
         <div className="flex items-center gap-3">
           <div className="relative h-10 w-10 shrink-0">
             {avatarUrl ? (
-              <img src={avatarUrl} alt="" className="h-full w-full rounded-xl object-cover ring-2 ring-[#334155]" />
+              <img src={avatarUrl} alt="" className="h-full w-full rounded-xl object-cover ring-2 ring-[#3A4048]" />
             ) : (
-              <div className="flex h-full w-full items-center justify-center rounded-xl bg-[#1E293B] text-sm font-bold text-white ring-2 ring-[#334155]">
+              <div className="flex h-full w-full items-center justify-center rounded-xl bg-[#2C3138] text-sm font-bold text-white ring-2 ring-[#3A4048]">
                 {initials || 'R'}
               </div>
             )}
-            <span className={cn('absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0F172A]', statusCfg.dot)} />
+            <span className={cn('absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#1A1D21]', statusCfg.dot)} />
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-white">
               {profile?.first_name} {profile?.last_name}
             </p>
-            <div className="flex items-center gap-1.5 mt-0.5">
+            <div className="mt-0.5 flex items-center gap-1.5">
               <span className={cn('h-1.5 w-1.5 rounded-full', statusCfg.dot)} />
-              <span className="text-[11px] text-[#94A3B8]">{statusCfg.label}</span>
+              <span className="text-[11px] text-[#8A9099]">{statusCfg.label}</span>
             </div>
           </div>
         </div>
@@ -108,16 +102,16 @@ export function CourierSidebar() {
                   href={item.href}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
-                    'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                    'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
                     isActive
-                      ? 'bg-[#1E293B] text-white shadow-sm border border-[#334155]'
-                      : 'text-[#94A3B8] hover:bg-[#1E293B]/50 hover:text-white',
+                      ? 'border border-primary/20 bg-primary/10 text-primary shadow-sm'
+                      : 'text-[#8A9099] hover:bg-[#2C3138] hover:text-white',
                   )}
                 >
                   {isActive && (
-                    <span className="absolute left-0 h-5 w-0.5 rounded-full bg-[#3B82F6]" />
+                    <span className="absolute left-0 h-5 w-0.5 rounded-full bg-primary" />
                   )}
-                  <Icon className={cn('h-[18px] w-[18px] shrink-0', isActive && 'text-[#3B82F6]')} />
+                  <Icon className={cn('h-[18px] w-[18px] shrink-0', isActive && 'text-primary')} />
                   <span>{item.label}</span>
                 </Link>
               </li>
@@ -126,17 +120,17 @@ export function CourierSidebar() {
         </ul>
       </nav>
 
-      <div className="border-t border-[#334155] p-3 space-y-2">
-        <div className="rounded-xl bg-[#1E293B] border border-[#334155] p-3">
+      <div className="space-y-2 border-t border-primary/10 p-3">
+        <div className="rounded-xl border border-primary/15 bg-primary/[0.06] p-3">
           <div className="flex items-center gap-2">
-            <Bike className="h-3.5 w-3.5 text-warning" />
-            <span className="text-xs font-medium text-white">Courier Pro</span>
+            <Bike className="h-3.5 w-3.5 text-primary" />
+            <span className="text-xs font-bold text-primary">DomiU Repartidor</span>
           </div>
-          <p className="mt-0.5 text-[10px] text-[#94A3B8]">v1.5</p>
+          <p className="mt-0.5 text-[10px] text-[#8A9099]">Ruta, pedidos y ganancias</p>
         </div>
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[#94A3B8] transition-all duration-200 hover:bg-red-500/10 hover:text-red-400"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[#8A9099] transition-all duration-200 hover:bg-red-500/10 hover:text-red-400"
         >
           <LogOut className="h-[18px] w-[18px]" />
           <span>Cerrar sesión</span>
@@ -149,7 +143,7 @@ export function CourierSidebar() {
     <>
       <button
         onClick={() => setMobileOpen(true)}
-        className="fixed left-3 top-3 z-30 flex lg:hidden h-9 w-9 items-center justify-center rounded-xl bg-[#0F172A]/90 border border-[#334155] shadow-sm backdrop-blur-sm text-white transition-colors"
+        className="fixed left-3 top-3 z-30 flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-[#1A1D21]/95 text-primary shadow-sm backdrop-blur-sm transition-colors lg:hidden"
         aria-label="Abrir menú"
       >
         <Menu className="h-[18px] w-[18px]" />
@@ -157,7 +151,7 @@ export function CourierSidebar() {
 
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/65 backdrop-blur-sm lg:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
@@ -171,9 +165,7 @@ export function CourierSidebar() {
         {sidebar}
       </div>
 
-      <div className="hidden lg:block fixed inset-y-0 left-0 z-40 w-72">
-        {sidebar}
-      </div>
+      <div className="fixed inset-y-0 left-0 z-40 hidden w-72 lg:block">{sidebar}</div>
     </>
   );
 }
