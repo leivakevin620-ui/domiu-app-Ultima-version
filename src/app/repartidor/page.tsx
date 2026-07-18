@@ -1,306 +1,147 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import {
+  Bike,
+  Clock3,
+  FileSpreadsheet,
+  Loader2,
+  MapPinned,
+  Package,
+  Power,
+  ReceiptText,
+  Route,
+  TrendingUp,
+  Wallet,
+} from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { useCourier } from '@/contexts/CourierContext';
-import { getCourierLevel, getNextLevel, COURIER_LEVELS } from '@/services/courier-pro';
+import { dashboardFinanceService, type CourierFinancialSummary } from '@/services/dashboard-finance';
+import { financeService } from '@/services/finance';
+import { formatCOP } from '@/lib/formatters/currency';
 import { SkeletonStats } from '@/components/ui/skeleton';
-import { Bike, Star, TrendingUp, Zap, MapPin, ChevronRight, Package, Coffee, XCircle } from 'lucide-react';
+import { OpenStreetLiveMap, type OpenStreetMapPoint } from '@/components/tracking/maps/OpenStreetLiveMap';
 
-const formatCurrency = (n: number) => '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0 });
+export default function RepartidorDashboard() {
+  const { profile } = useAuth();
+  const { courier, activeDeliveries, availableOrders, refresh } = useCourier();
+  const [finance, setFinance] = useState<CourierFinancialSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [changingShift, setChangingShift] = useState(false);
+  const [error, setError] = useState('');
 
-const STATUS_CYCLE: Record<string, string> = {
-  available: 'busy',
-  busy: 'offline',
-  offline: 'available',
-  on_break: 'available',
-};
-
-const STATUS_CONFIG: Record<string, { label: string; desc: string; color: string; bg: string; icon: React.ReactNode }> = {
-  available: {
-    label: 'Disponible',
-    desc: 'Recibiendo solicitudes de pedidos',
-    color: 'text-success',
-    bg: 'border-success/50 bg-gradient-to-br from-success/10 to-success/5 shadow-lg shadow-success/10',
-    icon: <Bike className="h-8 w-8 text-white" />,
-  },
-  busy: {
-    label: 'Ocupado',
-    desc: 'En un pedido activo',
-    color: 'text-warning',
-    bg: 'border-warning/50 bg-gradient-to-br from-warning/10 to-amber-500/5 shadow-lg shadow-warning/10',
-    icon: <Zap className="h-8 w-8 text-white" />,
-  },
-  offline: {
-    label: 'No disponible',
-    desc: 'Actívate para recibir pedidos',
-    color: 'text-muted-foreground',
-    bg: 'border-muted/50 bg-gradient-to-br from-muted/10 to-muted/5',
-    icon: <XCircle className="h-8 w-8 text-muted-foreground" />,
-  },
-  on_break: {
-    label: 'En pausa',
-    desc: 'Tomando un descanso',
-    color: 'text-info',
-    bg: 'border-info/50 bg-gradient-to-br from-info/10 to-blue-500/5 shadow-lg shadow-info/10',
-    icon: <Coffee className="h-8 w-8 text-white" />,
-  },
-};
-
-function StatusToggle() {
-  const { courierStatus, refresh } = useCourier();
-  const [animating, setAnimating] = React.useState(false);
-  const current = courierStatus && STATUS_CONFIG[courierStatus] ? courierStatus : 'offline';
-  const cfg = STATUS_CONFIG[current];
-
-  const handleToggle = async () => {
-    setAnimating(true);
-    const next = STATUS_CYCLE[current] || 'available';
+  const loadFinance = useCallback(async () => {
+    if (!profile?.id) return;
+    setLoading(true);
     try {
-      const { setCourierOnlineStatusAction } = await import('@/app/actions/courier-profile');
-      const result = await setCourierOnlineStatusAction(next);
-      if (result.success) {
-        await refresh();
-      } else {
-        console.error('Error cambiando estado:', result.error);
-      }
-    } catch (e) {
-      console.error('Error cambiando estado:', e);
-    }
-    setTimeout(() => setAnimating(false), 600);
-  };
-
-  return (
-    <button
-      onClick={handleToggle}
-      disabled={animating}
-      className={`relative w-full overflow-hidden rounded-2xl border-2 p-6 text-center transition-all duration-500 ${cfg.bg} hover:scale-[1.01] active:scale-[0.98]`}
-    >
-      <div className={`absolute inset-0 rounded-2xl transition-opacity duration-700 ${current === 'available' ? 'bg-[radial-gradient(circle_at_50%_0%,hsl(var(--success)/0.15),transparent_70%)]' : ''}`} />
-      <div className="relative">
-        <div className={`mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-full transition-all duration-500 ${
-          current === 'available'
-            ? 'bg-success shadow-lg shadow-success/30 scale-100'
-            : current === 'busy'
-            ? 'bg-warning shadow-lg shadow-warning/30 scale-100'
-            : 'bg-muted scale-90'
-        }`}>
-          <div className={`absolute inset-0 rounded-full transition-all duration-1000 ${
-            current === 'available' ? 'animate-ping bg-success/30' : ''
-          }`} />
-          {cfg.icon}
-        </div>
-        <h2 className={`text-2xl font-bold transition-colors duration-500 ${cfg.color}`}>
-          {cfg.label}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">{cfg.desc}</p>
-      </div>
-    </button>
-  );
-}
-
-function DashboardContent() {
-  const { courier, activeDeliveries, availableOrders, loading, todayEarnings, weekEarnings, monthEarnings, totalEarnings, refresh } = useCourier();
-  const [acceptLoading, setAcceptLoading] = useState<string | null>(null);
-
-  const level = useMemo(() => courier ? getCourierLevel(courier.total_deliveries) : COURIER_LEVELS[0], [courier]);
-  const nextLevel = useMemo(() => courier ? getNextLevel(courier.total_deliveries) : COURIER_LEVELS[1], [courier]);
-  const progress = useMemo(() => {
-    if (!nextLevel || !courier) return 100;
-    const current = level.minDeliveries;
-    const next = nextLevel.minDeliveries;
-    const delta = next - current;
-    const done = courier.total_deliveries - current;
-    return Math.min(100, Math.round((done / delta) * 100));
-  }, [courier, level, nextLevel]);
-
-  const activeOrder = activeDeliveries[0];
-  const displayOrders = availableOrders.slice(0, 5);
-
-  const handleAcceptOrder = async (orderId: string) => {
-    if (acceptLoading) return;
-    setAcceptLoading(orderId);
-    try {
-      const { acceptOrderByCourierAction } = await import('@/app/actions/courier-orders');
-      const result = await acceptOrderByCourierAction(orderId);
-      if (result.success) {
-        await refresh();
-      }
-    } catch (e) {
-      console.error('Error al aceptar:', e);
+      setFinance(await dashboardFinanceService.getCourierSummary(profile.id));
+      setError('');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo cargar el resumen financiero');
     } finally {
-      setAcceptLoading(null);
+      setLoading(false);
+    }
+  }, [profile?.id]);
+
+  useEffect(() => {
+    void loadFinance();
+  }, [loadFinance]);
+
+  const toggleShift = async () => {
+    if (!profile?.id || changingShift) return;
+    setChangingShift(true);
+    setError('');
+    try {
+      if (finance?.currentShift) await financeService.closeCourierShift(profile.id, 'Cierre desde el panel del repartidor');
+      else await financeService.openCourierShift(profile.id, 'Apertura desde el panel del repartidor');
+      await Promise.all([loadFinance(), refresh()]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo cambiar el estado de la jornada');
+    } finally {
+      setChangingShift(false);
     }
   };
+
+  const activeOrder = activeDeliveries[0] ?? null;
+  const mapPoints = useMemo<OpenStreetMapPoint[]>(() => {
+    if (!activeOrder) return [];
+    const points: OpenStreetMapPoint[] = [];
+    if (activeOrder.pickup_lat != null && activeOrder.pickup_lng != null) points.push({ id: 'pickup', lat: activeOrder.pickup_lat, lng: activeOrder.pickup_lng, label: activeOrder.business_name || 'Comercio', kind: 'business', color: '#F59E0B' });
+    if (activeOrder.delivery_lat != null && activeOrder.delivery_lng != null) points.push({ id: 'delivery', lat: activeOrder.delivery_lat, lng: activeOrder.delivery_lng, label: activeOrder.customer_name || 'Cliente', kind: 'customer', color: '#16A34A' });
+    return points;
+  }, [activeOrder]);
+
+  const mapRoute = useMemo(() => {
+    if (!activeOrder) return [];
+    if (['picked_up', 'in_transit'].includes(activeOrder.status) && activeOrder.pickup_lat != null && activeOrder.pickup_lng != null && activeOrder.delivery_lat != null && activeOrder.delivery_lng != null) {
+      return [{ lat: activeOrder.pickup_lat, lng: activeOrder.pickup_lng }, { lat: activeOrder.delivery_lat, lng: activeOrder.delivery_lng }];
+    }
+    return activeOrder.pickup_lat != null && activeOrder.pickup_lng != null && activeOrder.delivery_lat != null && activeOrder.delivery_lng != null
+      ? [{ lat: activeOrder.pickup_lat, lng: activeOrder.pickup_lng }, { lat: activeOrder.delivery_lat, lng: activeOrder.delivery_lng }]
+      : [];
+  }, [activeOrder]);
 
   if (loading) return <SkeletonStats />;
 
+  const isOpen = Boolean(finance?.currentShift);
+  const balance = finance?.balance.net_balance ?? 0;
+  const balanceLabel = balance > 0
+    ? `DomiU te debe ${formatCOP(balance)}`
+    : balance < 0
+      ? `Debes entregar a DomiU ${formatCOP(Math.abs(balance))}`
+      : 'Estás al día con DomiU';
+  const shiftSeconds = finance?.currentShift
+    ? Math.max(0, Math.floor((Date.now() - new Date(finance.currentShift.opened_at).getTime()) / 1000))
+    : 0;
+  const shiftTime = isOpen ? `${Math.floor(shiftSeconds / 3600)} h ${Math.floor((shiftSeconds % 3600) / 60)} min` : 'Sin jornada';
+
+  const cards = [
+    { label: 'Ganancia neta hoy', value: formatCOP(finance?.todayEarnings ?? 0), help: 'Tu parte del domicilio después de la comisión DomiU', icon: TrendingUp },
+    { label: 'Ganancia neta semana', value: formatCOP(finance?.weekEarnings ?? 0), help: 'Últimos 7 días', icon: Wallet },
+    { label: 'Ganancia neta mes', value: formatCOP(finance?.monthEarnings ?? 0), help: 'Últimos 30 días', icon: ReceiptText },
+    { label: 'Domicilios hoy', value: String(finance?.todayDeliveries ?? 0), help: `${finance?.totalDeliveries ?? 0} entregas históricas`, icon: Bike },
+    { label: 'Saldo de liquidación', value: formatCOP(Math.abs(balance)), help: balanceLabel, icon: FileSpreadsheet },
+    { label: 'Pedidos disponibles', value: String(availableOrders.length), help: isOpen ? 'Puedes aceptar solicitudes' : 'Abre tu jornada para trabajar', icon: Package },
+  ];
+
   return (
-    <div className="space-y-5 animate-fade-in pb-4">
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-5">
-          <StatusToggle />
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[
-              { label: 'Hoy', value: formatCurrency(todayEarnings), icon: TrendingUp, gradient: 'from-warning/10 to-orange-500/5' },
-              { label: 'Semana', value: formatCurrency(weekEarnings), icon: TrendingUp, gradient: 'from-info/10 to-blue-500/5' },
-              { label: 'Mes', value: formatCurrency(monthEarnings), icon: TrendingUp, gradient: 'from-success/10 to-emerald-500/5' },
-              { label: 'Total', value: formatCurrency(totalEarnings), icon: TrendingUp, gradient: 'from-primary/10 to-purple-500/5' },
-            ].map((stat) => (
-              <div key={stat.label} className={`rounded-2xl border border-border/50 bg-gradient-to-br ${stat.gradient} p-4 shadow-card hover:shadow-md transition-all duration-200 hover:-translate-y-0.5`}>
-                <div className="flex items-center gap-2">
-                  <stat.icon className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</span>
-                </div>
-                <p className="mt-2 text-lg font-bold text-foreground">{stat.value}</p>
-              </div>
-            ))}
+    <div className="space-y-6 pb-8">
+      <section className="overflow-hidden rounded-3xl border bg-gradient-to-br from-[#17191F] via-[#24282E] to-[#101216] p-6 text-white shadow-xl">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FFD400]">Centro de trabajo del repartidor</p>
+            <h1 className="mt-2 text-3xl font-black">Hola, {profile?.first_name || courier?.name || 'Repartidor'}</h1>
+            <p className="mt-2 text-sm text-white/65">Abre tu jornada, recibe pedidos y revisa exactamente cuánto ganas y quién debe pagar.</p>
           </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[
-              { label: 'Entregas', value: courier?.total_deliveries ?? 0, icon: Package, color: 'text-warning' },
-              { label: 'Rating', value: courier?.rating ?? 0, icon: Star, color: 'text-warning', suffix: '' },
-              { label: 'Activos', value: activeDeliveries.length, icon: Zap, color: 'text-info' },
-              { label: 'Disponibles', value: availableOrders.length, icon: MapPin, color: 'text-success' },
-            ].map((stat) => (
-              <div key={stat.label} className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-4 shadow-card">
-                <div className="flex items-center gap-2">
-                  <stat.icon className={`h-3.5 w-3.5 ${stat.color}`} />
-                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</span>
-                </div>
-                <p className={`mt-2 text-lg font-bold text-foreground ${stat.color}`}>
-                  {typeof stat.value === 'number' && stat.label === 'Rating' ? stat.value.toFixed(1) : stat.value}
-                </p>
-              </div>
-            ))}
-          </div>
+          <button type="button" onClick={() => void toggleShift()} disabled={changingShift} className={`flex min-w-64 items-center justify-center gap-3 rounded-2xl px-5 py-4 text-sm font-black shadow-lg transition disabled:opacity-60 ${isOpen ? 'bg-white text-[#17191F]' : 'bg-[#FFD400] text-[#17191F]'}`}>
+            {changingShift ? <Loader2 className="h-5 w-5 animate-spin" /> : <Power className="h-5 w-5" />}
+            {isOpen ? 'Cerrar jornada' : 'Iniciar jornada'}
+          </button>
         </div>
 
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-yellow-500/5 to-orange-500/5 p-5 shadow-card">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">{level.icon}</span>
-                <div>
-                  <p className="text-sm font-bold text-foreground">Nivel {level.level} — {level.title}</p>
-                  <p className="text-[10px] text-muted-foreground">{courier?.total_deliveries ?? 0} entregas completadas</p>
-                </div>
-              </div>
-              {nextLevel && (
-                <span className="text-[10px] text-muted-foreground">Próximo: {nextLevel.icon} {nextLevel.title}</span>
-              )}
-            </div>
-            {nextLevel && (
-              <div className="mt-3">
-                <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
-                  <span>{level.title}</span>
-                  <span>{nextLevel.title}</span>
-                </div>
-                <div className="h-2 rounded-full bg-muted overflow-hidden">
-                  <div className={`h-full rounded-full bg-gradient-to-r ${level.color} transition-all duration-1000`} style={{ width: `${progress}%` }} />
-                </div>
-                <p className="mt-1 text-[10px] text-muted-foreground">
-                  {nextLevel.minDeliveries - (courier?.total_deliveries ?? 0)} entregas para {nextLevel.title}
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-5 shadow-card">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Bonus por Nivel</h3>
-            </div>
-            <div className="space-y-2">
-              {COURIER_LEVELS.slice(0, 5).map((l) => (
-                <div key={l.level} className={`flex items-center justify-between rounded-xl p-2.5 transition-all ${
-                  l.level <= (courier ? getCourierLevel(courier.total_deliveries).level : 1) ? 'bg-success/5 border border-success/10' : 'opacity-40'
-                }`}>
-                  <div className="flex items-center gap-2">
-                    <span>{l.icon}</span>
-                    <span className="text-xs font-medium text-foreground">{l.title}</span>
-                  </div>
-                  <span className="text-xs font-bold text-success">+{Math.round((l.bonusMultiplier - 1) * 100)}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><div className="flex items-center gap-2"><span className={`h-3 w-3 rounded-full ${isOpen ? 'animate-pulse bg-emerald-400' : 'bg-slate-500'}`} /><span className="text-xs font-bold uppercase tracking-wide text-white/60">Estado</span></div><p className="mt-2 text-xl font-black">{isOpen ? 'En línea' : 'Fuera de línea'}</p></div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><div className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-[#FFD400]" /><span className="text-xs font-bold uppercase tracking-wide text-white/60">Tiempo de jornada</span></div><p className="mt-2 text-xl font-black">{shiftTime}</p></div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><div className="flex items-center gap-2"><Wallet className="h-4 w-4 text-[#FFD400]" /><span className="text-xs font-bold uppercase tracking-wide text-white/60">Saldo</span></div><p className="mt-2 text-sm font-black leading-snug">{balanceLabel}</p></div>
         </div>
-      </div>
+      </section>
 
-      {activeOrder && (
-        <div className="rounded-2xl border-2 border-info/30 bg-gradient-to-br from-info/5 to-blue-500/5 p-5 shadow-card animate-in slide-in-from-bottom-2">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-info" />
-              <h3 className="text-sm font-bold text-foreground">Pedido Activo</h3>
-            </div>
-            <span className="rounded-full bg-info/10 px-3 py-1 text-[10px] font-medium text-info">
-              #{activeOrder.order_number}
-            </span>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Cliente</p>
-              <p className="text-sm font-semibold text-foreground">{activeOrder.customer_name}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Negocio</p>
-              <p className="text-sm font-semibold text-foreground">{activeOrder.business_name}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total</p>
-              <p className="text-sm font-bold text-foreground">{formatCurrency(activeOrder.total_amount)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Dirección</p>
-              <p className="text-xs text-muted-foreground truncate">{activeOrder.delivery_address}</p>
-            </div>
-          </div>
-          <a href="/repartidor/pedidos" className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-info hover:text-info/80 transition-colors">
-            Ver detalle completo <ChevronRight className="h-3 w-3" />
-          </a>
-        </div>
-      )}
+      {error && <p className="rounded-2xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">{error}</p>}
 
-      {displayOrders.length > 0 && (
-        <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-5 shadow-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Pedidos Disponibles</h3>
-            <span className="rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">{displayOrders.length} nuevos</span>
-          </div>
-          <div className="space-y-3">
-            {displayOrders.map((order) => (
-              <div key={order.id} className="flex items-center justify-between rounded-xl border border-border/50 bg-background/50 p-3 transition-all hover:bg-background/80 hover:shadow-sm">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-foreground">{order.business_name}</span>
-                    <span className="text-[10px] text-muted-foreground">#{order.order_number}</span>
-                  </div>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground truncate">{order.delivery_address}</p>
-                  <p className="text-[10px] text-muted-foreground">{order.items.length} productos · {formatCurrency(order.total_amount)}</p>
-                </div>
-                <button
-                  onClick={() => handleAcceptOrder(order.id)}
-                  disabled={acceptLoading === order.id}
-                  className="shrink-0 rounded-xl bg-gradient-to-r from-warning to-orange-500 px-4 py-2 text-[10px] font-bold text-white shadow-lg shadow-warning/20 transition-all hover:shadow-xl hover:shadow-warning/30 hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
-                >
-                  {acceptLoading === order.id ? '...' : 'Aceptar'}
-                </button>
-              </div>
-            ))}
-          </div>
-          {availableOrders.length > 5 && (
-            <a href="/repartidor/pedidos" className="mt-3 flex items-center justify-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Ver {availableOrders.length - 5} más <ChevronRight className="h-3 w-3" />
-            </a>
-          )}
-        </div>
-      )}
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {cards.map(({ label, value, help, icon: Icon }) => <article key={label} className="rounded-2xl border bg-card p-5 shadow-sm"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold text-muted-foreground">{label}</p><p className="mt-2 text-2xl font-black">{value}</p></div><span className="rounded-xl bg-primary/10 p-2.5 text-primary"><Icon className="h-5 w-5" /></span></div><p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">{help}</p></article>)}
+      </section>
+
+      <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-primary">Domicilio actual</p><h2 className="mt-1 text-xl font-black">Ruta operativa</h2></div><Link href="/repartidor/mapa" className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold"><MapPinned className="h-4 w-4" />Abrir mapa completo</Link></div>
+        {activeOrder && mapPoints.length ? <div className="grid lg:grid-cols-[1fr_320px]"><div className="h-[410px]"><OpenStreetLiveMap points={mapPoints} route={mapRoute} className="h-full w-full rounded-none" /></div><div className="border-t p-5 lg:border-l lg:border-t-0"><span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">#{activeOrder.order_number}</span><h3 className="mt-4 text-lg font-black">{activeOrder.business_name}</h3><p className="mt-1 text-sm text-muted-foreground">Entrega para {activeOrder.customer_name}</p><div className="mt-5 space-y-3 rounded-2xl bg-muted/50 p-4 text-sm"><div className="flex items-center justify-between"><span>Estado</span><strong className="capitalize">{activeOrder.status.replace('_', ' ')}</strong></div><div className="flex items-center justify-between"><span>Domicilio</span><strong>{formatCOP(activeOrder.delivery_fee)}</strong></div><div className="flex items-center justify-between"><span>Tu ganancia estimada</span><strong>{formatCOP(activeOrder.delivery_fee * 0.88)}</strong></div></div><Link href="/repartidor/pedidos" className="mt-5 flex items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-black text-primary-foreground"><Route className="h-4 w-4" />Gestionar entrega</Link></div></div> : <div className="flex min-h-72 flex-col items-center justify-center p-8 text-center"><MapPinned className="h-10 w-10 text-muted-foreground" /><h3 className="mt-3 font-black">No tienes un domicilio activo</h3><p className="mt-1 text-sm text-muted-foreground">Cuando aceptes un pedido, la ruta aparecerá aquí.</p></div>}
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-2">
+        <Link href="/repartidor/liquidaciones" className="group rounded-3xl bg-[#17191F] p-6 text-white shadow-xl transition hover:-translate-y-1"><FileSpreadsheet className="h-8 w-8 text-[#FFD400]" /><p className="mt-4 text-xs font-black uppercase tracking-[0.15em] text-[#FFD400]">Documentos</p><h2 className="mt-1 text-xl font-black">Liquidaciones y desprendibles</h2><p className="mt-2 text-sm text-white/65">Descarga PDF o Excel con horas, pedidos, ganancias y saldo.</p></Link>
+        <Link href="/repartidor/ganancias" className="group rounded-3xl border bg-card p-6 shadow-sm transition hover:-translate-y-1"><Wallet className="h-8 w-8 text-primary" /><p className="mt-4 text-xs font-black uppercase tracking-[0.15em] text-primary">Histórico</p><h2 className="mt-1 text-xl font-black">Detalle de ganancias</h2><p className="mt-2 text-sm text-muted-foreground">Consulta cada domicilio y su valor neto.</p></Link>
+      </section>
     </div>
   );
-}
-
-export default function RepartidorPage() {
-  return <DashboardContent />;
 }
