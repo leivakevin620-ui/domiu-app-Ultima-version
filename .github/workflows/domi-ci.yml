@@ -57,5 +57,8 @@ jobs:
       - name: Probar conversaciones persistentes
         run: npx vitest run src/lib/domi/conversations.test.ts --reporter=verbose
 
+      - name: Probar ciclo de sesión y hooks
+        run: npx vitest run src/components/domi/DomiAssistant.test.tsx --reporter=verbose
+
       - name: Compilar y validar TypeScript
         run: npm run build
