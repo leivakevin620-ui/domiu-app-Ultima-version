@@ -76,6 +76,8 @@ const STATUS_LABEL: Record<DomiConversation['status'], string> = {
   archived: 'Archivada',
 };
 
+const GLOBAL_NAVIGATION_ROUTES = new Set(['/notificaciones', '/soporte']);
+
 function conversationContext() {
   const path = window.location.pathname;
   const parts = path.split('/').filter(Boolean);
@@ -104,28 +106,49 @@ function browserContext(cart: {
   };
 }
 
-function safeNavigation(value: unknown): DomiNavigationLink[] {
+function navigationRoot(role: string) {
+  if (role === 'customer') return '/cliente';
+  if (role === 'business' || role === 'merchant') return '/negocio';
+  if (role === 'courier') return '/repartidor';
+  if (role === 'admin' || role === 'super_admin' || role.startsWith('admin_')) return '/admin';
+  return null;
+}
+
+function safeNavigation(value: unknown, role: string): DomiNavigationLink[] {
   if (!Array.isArray(value)) return [];
+  const root = navigationRoot(role);
   const links: DomiNavigationLink[] = [];
+
   for (const item of value) {
     if (!item || typeof item !== 'object') continue;
     const candidate = item as { label?: unknown; href?: unknown };
     if (typeof candidate.label !== 'string' || typeof candidate.href !== 'string') continue;
-    const allowed = candidate.href === '/cliente' || candidate.href.startsWith('/cliente/');
+
+    const href = candidate.href.trim();
+    const allowed =
+      GLOBAL_NAVIGATION_ROUTES.has(href) ||
+      Boolean(root && (href === root || href.startsWith(`${root}/`)));
     if (!allowed) continue;
-    links.push({ label: candidate.label.slice(0, 60), href: candidate.href.slice(0, 240) });
+
+    links.push({
+      label: candidate.label.trim().slice(0, 60),
+      href: href.slice(0, 240),
+    });
     if (links.length >= 4) break;
   }
+
   return links;
 }
 
-function safeMessages(value: unknown): ChatMessage[] {
+function safeMessages(value: unknown, role: string): ChatMessage[] {
   if (!Array.isArray(value)) return [];
   const messages: ChatMessage[] = [];
+
   for (const item of value) {
     if (!item || typeof item !== 'object') continue;
     const candidate = item as Record<string, unknown>;
     if (candidate.role !== 'user' && candidate.role !== 'assistant') continue;
+
     messages.push({
       id: typeof candidate.id === 'string' ? candidate.id : undefined,
       role: candidate.role,
@@ -134,9 +157,10 @@ function safeMessages(value: unknown): ChatMessage[] {
       suggestedActions: Array.isArray(candidate.suggestedActions)
         ? candidate.suggestedActions.slice(0, 3).map(String)
         : [],
-      navigation: safeNavigation(candidate.navigation),
+      navigation: safeNavigation(candidate.navigation, role),
     });
   }
+
   return messages;
 }
 
@@ -160,9 +184,16 @@ function statusIcon(status: DomiConversation['status']) {
   return <MessageCircle className="h-4 w-4" />;
 }
 
+async function readJson(response: Response) {
+  return response.json().catch(() => ({} as Record<string, unknown>));
+}
+
 export function DomiAssistant() {
   const { profile, isLoading } = useAuth();
   const cart = useCart();
+  const role = profile?.role || 'guest';
+  const profileId = profile?.id || null;
+
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const [interfaceBlocked, setInterfaceBlocked] = useState(false);
@@ -183,6 +214,7 @@ export function DomiAssistant() {
     isMobile: false,
     keyboardOpen: false,
   });
+
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -194,6 +226,7 @@ export function DomiAssistant() {
       const height = Math.round(visualViewport?.height ?? window.innerHeight);
       const offsetTop = Math.round(visualViewport?.offsetTop ?? 0);
       const isMobile = window.matchMedia('(max-width: 639px)').matches;
+
       setViewport({
         height,
         offsetTop,
@@ -201,11 +234,13 @@ export function DomiAssistant() {
         keyboardOpen: isMobile && window.innerHeight - height > 120,
       });
     };
+
     updateViewport();
     window.addEventListener('resize', updateViewport);
     window.addEventListener('orientationchange', updateViewport);
     window.visualViewport?.addEventListener('resize', updateViewport);
     window.visualViewport?.addEventListener('scroll', updateViewport);
+
     return () => {
       window.removeEventListener('resize', updateViewport);
       window.removeEventListener('orientationchange', updateViewport);
@@ -221,6 +256,7 @@ export function DomiAssistant() {
       setInterfaceBlocked(blocked);
       if (blocked) setOpen(false);
     };
+
     window.addEventListener('domiu:admin-menu-state', handleAdminMenuState);
     return () => window.removeEventListener('domiu:admin-menu-state', handleAdminMenuState);
   }, []);
@@ -229,6 +265,7 @@ export function DomiAssistant() {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+
     return () => {
       document.body.style.overflow = previousOverflow;
     };
@@ -236,17 +273,29 @@ export function DomiAssistant() {
 
   useEffect(() => {
     if (!open || historyOpen) return;
-    window.setTimeout(() => endRef.current?.scrollIntoView({ block: 'end' }), 60);
+    const timeout = window.setTimeout(() => endRef.current?.scrollIntoView({ block: 'end' }), 60);
+    return () => window.clearTimeout(timeout);
   }, [messages, open, historyOpen, viewport.height]);
+
+  useEffect(() => {
+    setInitialized(false);
+    setConversationId(undefined);
+    setCurrentConversation(undefined);
+    setConversations([]);
+    setMessages([]);
+    setHistoryOpen(false);
+    setHistoryQuery('');
+    setError('');
+  }, [profileId]);
 
   const fetchConversations = useCallback(async () => {
     setHistoryLoading(true);
     try {
       const response = await fetch('/api/domi/conversations?limit=50', { cache: 'no-store' });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'No se pudo cargar el historial');
+      const data = await readJson(response);
+      if (!response.ok) throw new Error(String(data.error || 'No se pudo cargar el historial'));
       const rows = Array.isArray(data.conversations)
-        ? data.conversations as DomiConversation[]
+        ? (data.conversations as DomiConversation[])
         : [];
       setConversations(rows);
       return rows;
@@ -255,46 +304,72 @@ export function DomiAssistant() {
     }
   }, []);
 
-  const loadConversation = useCallback(async (id: string) => {
-    setHistoryLoading(true);
-    setError('');
-    try {
-      const response = await fetch(`/api/domi/conversations/${encodeURIComponent(id)}`, { cache: 'no-store' });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'No se pudo cargar la conversación');
-      setConversationId(String(data.conversation.id));
-      setCurrentConversation(data.conversation as DomiConversation);
-      setMessages(safeMessages(data.messages));
-      setHistoryOpen(false);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'No se pudo cargar la conversación');
-    } finally {
-      setHistoryLoading(false);
-    }
-  }, []);
+  const loadConversation = useCallback(
+    async (id: string) => {
+      setHistoryLoading(true);
+      setError('');
+      try {
+        const response = await fetch(`/api/domi/conversations/${encodeURIComponent(id)}`, {
+          cache: 'no-store',
+        });
+        const data = await readJson(response);
+        if (!response.ok) throw new Error(String(data.error || 'No se pudo cargar la conversación'));
+        const conversation = data.conversation as DomiConversation;
+        setConversationId(String(conversation.id));
+        setCurrentConversation(conversation);
+        setMessages(safeMessages(data.messages, role));
+        setHistoryOpen(false);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'No se pudo cargar la conversación');
+      } finally {
+        setHistoryLoading(false);
+      }
+    },
+    [role],
+  );
 
   useEffect(() => {
-    if (!open || initialized || !profile) return;
+    if (!open || initialized || !profileId) return;
     let cancelled = false;
+
     const initialize = async () => {
       try {
         const rows = await fetchConversations();
         if (cancelled) return;
-        const latest = rows.find((item) => item.status === 'active')
-          || rows.find((item) => item.status === 'paused')
-          || rows.find((item) => item.status === 'completed');
+        const latest =
+          rows.find((item) => item.status === 'active') ||
+          rows.find((item) => item.status === 'paused') ||
+          rows.find((item) => item.status === 'completed');
         if (latest) await loadConversation(latest.id);
       } catch (cause) {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : 'No se pudo recuperar el historial');
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : 'No se pudo recuperar el historial');
+        }
       } finally {
         if (!cancelled) setInitialized(true);
       }
     };
+
     void initialize();
     return () => {
       cancelled = true;
     };
-  }, [fetchConversations, initialized, loadConversation, open, profile]);
+  }, [fetchConversations, initialized, loadConversation, open, profileId]);
+
+  const filteredConversations = useMemo(() => {
+    const query = historyQuery.trim().toLocaleLowerCase('es');
+    if (!query) return conversations;
+    return conversations.filter((item) =>
+      `${item.title} ${item.summary}`.toLocaleLowerCase('es').includes(query),
+    );
+  }, [conversations, historyQuery]);
+
+  const mobileSheetHeight = viewport.keyboardOpen
+    ? Math.max(320, viewport.height)
+    : Math.max(420, Math.min(viewport.height * 0.86, viewport.height));
+  const conversationBlocked = Boolean(
+    currentConversation && currentConversation.status !== 'active',
+  );
 
   if (!mounted || isLoading || !profile) return null;
 
@@ -319,10 +394,11 @@ export function DomiAssistant() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ context: conversationContext() }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'No se pudo iniciar la conversación');
-      setConversationId(String(data.conversation.id));
-      setCurrentConversation(data.conversation as DomiConversation);
+      const data = await readJson(response);
+      if (!response.ok) throw new Error(String(data.error || 'No se pudo iniciar la conversación'));
+      const conversation = data.conversation as DomiConversation;
+      setConversationId(String(conversation.id));
+      setCurrentConversation(conversation);
       setMessages([]);
       setMessage('');
       setHistoryOpen(false);
@@ -341,17 +417,20 @@ export function DomiAssistant() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'No se pudo actualizar la conversación');
+    const data = await readJson(response);
+    if (!response.ok) throw new Error(String(data.error || 'No se pudo actualizar la conversación'));
     const updated = data.conversation as DomiConversation;
-    setCurrentConversation((current) => current?.id === updated.id ? updated : current);
+    setCurrentConversation((current) => (current?.id === updated.id ? updated : current));
     await fetchConversations();
     return updated;
   };
 
   const renameCurrent = async () => {
     if (!currentConversation) return;
-    const title = window.prompt('Nuevo nombre de la conversación', currentConversation.title)?.trim();
+    const title = window.prompt(
+      'Nuevo nombre de la conversación',
+      currentConversation.title,
+    )?.trim();
     if (!title || title === currentConversation.title) return;
     try {
       await patchConversation(currentConversation.id, { title });
@@ -361,7 +440,12 @@ export function DomiAssistant() {
   };
 
   const archiveCurrent = async () => {
-    if (!currentConversation || !window.confirm('¿Archivar esta conversación? Podrás restaurarla desde el historial.')) return;
+    if (
+      !currentConversation ||
+      !window.confirm('¿Archivar esta conversación? Podrás restaurarla desde el historial.')
+    ) {
+      return;
+    }
     try {
       await patchConversation(currentConversation.id, { status: 'archived' });
       setHistoryOpen(true);
@@ -371,11 +455,21 @@ export function DomiAssistant() {
   };
 
   const deleteCurrent = async () => {
-    if (!currentConversation || !window.confirm('¿Eliminar esta conversación y todos sus mensajes? Esta acción no se puede deshacer.')) return;
+    if (
+      !currentConversation ||
+      !window.confirm(
+        '¿Eliminar esta conversación y todos sus mensajes? Esta acción no se puede deshacer.',
+      )
+    ) {
+      return;
+    }
     try {
-      const response = await fetch(`/api/domi/conversations/${encodeURIComponent(currentConversation.id)}`, { method: 'DELETE' });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'No se pudo eliminar la conversación');
+      const response = await fetch(
+        `/api/domi/conversations/${encodeURIComponent(currentConversation.id)}`,
+        { method: 'DELETE' },
+      );
+      const data = await readJson(response);
+      if (!response.ok) throw new Error(String(data.error || 'No se pudo eliminar la conversación'));
       setConversationId(undefined);
       setCurrentConversation(undefined);
       setMessages([]);
@@ -401,11 +495,16 @@ export function DomiAssistant() {
 
   const send = async (override?: string) => {
     const text = (override ?? message).trim();
-    if (!text || sending || (currentConversation && currentConversation.status !== 'active')) return;
+    if (!text || sending || conversationBlocked) return;
+
     setMessage('');
     setError('');
-    setMessages((current) => [...current, { id: `local-${Date.now()}`, role: 'user', content: text }]);
+    setMessages((current) => [
+      ...current,
+      { id: `local-${Date.now()}`, role: 'user', content: text },
+    ]);
     setSending(true);
+
     try {
       const requestId = window.crypto?.randomUUID?.();
       const response = await fetch('/api/domi/chat', {
@@ -418,23 +517,31 @@ export function DomiAssistant() {
           context: browserContext(cart),
         }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Domi no pudo responder');
+      const data = await readJson(response);
+      if (!response.ok) throw new Error(String(data.error || 'Domi no pudo responder'));
       setConversationId(String(data.conversationId));
-      const assistant = data.assistant as {
-        message?: string;
-        suggestedActions?: string[];
-        navigation?: unknown;
-      } | undefined;
-      setMessages((current) => [...current, {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: String(assistant?.message || data.answer),
-        suggestedActions: Array.isArray(assistant?.suggestedActions)
-          ? assistant.suggestedActions.slice(0, 3).map(String)
-          : [],
-        navigation: safeNavigation(assistant?.navigation),
-      }]);
+
+      const assistant = data.assistant as
+        | {
+            message?: string;
+            suggestedActions?: string[];
+            navigation?: unknown;
+          }
+        | undefined;
+
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          content: String(assistant?.message || data.answer || ''),
+          suggestedActions: Array.isArray(assistant?.suggestedActions)
+            ? assistant.suggestedActions.slice(0, 3).map(String)
+            : [],
+          navigation: safeNavigation(assistant?.navigation, role),
+        },
+      ]);
+
       const rows = await fetchConversations();
       const updated = rows.find((item) => item.id === String(data.conversationId));
       if (updated) setCurrentConversation(updated);
@@ -444,17 +551,6 @@ export function DomiAssistant() {
       setSending(false);
     }
   };
-
-  const filteredConversations = useMemo(() => {
-    const query = historyQuery.trim().toLocaleLowerCase('es');
-    if (!query) return conversations;
-    return conversations.filter((item) => `${item.title} ${item.summary}`.toLocaleLowerCase('es').includes(query));
-  }, [conversations, historyQuery]);
-
-  const mobileSheetHeight = viewport.keyboardOpen
-    ? Math.max(320, viewport.height)
-    : Math.max(420, Math.min(viewport.height * 0.86, viewport.height));
-  const conversationBlocked = Boolean(currentConversation && currentConversation.status !== 'active');
 
   const assistant = (
     <>
@@ -469,71 +565,316 @@ export function DomiAssistant() {
           <Sparkles className="h-5 w-5" />
           <span className="absolute inset-0 animate-ping rounded-full bg-[#FFD400]/30" />
         </span>
-        <span className="text-left"><strong className="block text-sm leading-none">Domi</strong><span className="mt-1 block text-[10px] text-white/65">Tu asistente</span></span>
+        <span className="text-left">
+          <strong className="block text-sm leading-none">Domi</strong>
+          <span className="mt-1 block text-[10px] text-white/65">Tu asistente</span>
+        </span>
       </button>
 
       {open && (
         <div
           className="fixed inset-0 z-[1600] flex items-end justify-end overflow-hidden bg-black/45 p-0 backdrop-blur-sm sm:p-5"
-          style={viewport.isMobile ? { top: viewport.offsetTop, bottom: 'auto', height: viewport.height } : undefined}
+          style={
+            viewport.isMobile
+              ? { top: viewport.offsetTop, bottom: 'auto', height: viewport.height }
+              : undefined
+          }
           onClick={() => setOpen(false)}
         >
           <section
             className="flex min-h-0 w-full flex-col overflow-hidden rounded-t-[2rem] border bg-white shadow-2xl overscroll-contain sm:h-[720px] sm:max-h-[90dvh] sm:w-[440px] sm:rounded-[2rem]"
-            style={viewport.isMobile ? { height: mobileSheetHeight, maxHeight: viewport.height } : undefined}
+            style={
+              viewport.isMobile
+                ? { height: mobileSheetHeight, maxHeight: viewport.height }
+                : undefined
+            }
             onClick={(event) => event.stopPropagation()}
           >
             <header className="flex shrink-0 items-center gap-3 border-b bg-[#17191F] px-4 py-3 text-white">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#FFD400] text-[#17191F]"><Bot className="h-6 w-6" /></span>
-              <div className="min-w-0 flex-1"><h2 className="font-black">Domi</h2><p className="truncate text-[11px] text-white/65">{ROLE_LABEL[profile.role] || 'Asistente DomiU'} · historial privado</p></div>
-              <button type="button" onClick={() => setHistoryOpen((value) => !value)} className={`flex h-10 w-10 items-center justify-center rounded-xl ${historyOpen ? 'bg-[#FFD400] text-[#17191F]' : 'hover:bg-white/10'}`} aria-label="Historial"><History className="h-5 w-5" /></button>
-              <button type="button" onClick={() => void createConversation()} disabled={sending} className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-white/10 disabled:opacity-40" aria-label="Nueva conversación"><Plus className="h-5 w-5" /></button>
-              <button type="button" onClick={() => setOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-white/10" aria-label="Cerrar"><X className="h-5 w-5" /></button>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#FFD400] text-[#17191F]">
+                <Bot className="h-6 w-6" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className="font-black">Domi</h2>
+                <p className="truncate text-[11px] text-white/65">
+                  {ROLE_LABEL[profile.role] || 'Asistente DomiU'} · historial privado
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHistoryOpen((value) => !value)}
+                className={`flex h-10 w-10 items-center justify-center rounded-xl ${historyOpen ? 'bg-[#FFD400] text-[#17191F]' : 'hover:bg-white/10'}`}
+                aria-label="Historial"
+              >
+                <History className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => void createConversation()}
+                disabled={sending}
+                className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-white/10 disabled:opacity-40"
+                aria-label="Nueva conversación"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-white/10"
+                aria-label="Cerrar"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </header>
 
             {historyOpen ? (
               <div className="flex min-h-0 flex-1 flex-col bg-[#F6F7F9]">
                 <div className="shrink-0 border-b bg-white p-4">
-                  <div className="flex items-center gap-2 rounded-2xl border bg-[#F8F9FA] px-3"><Search className="h-4 w-4 text-[#8B929C]" /><input value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} placeholder="Buscar en el historial" className="min-h-11 min-w-0 flex-1 bg-transparent text-sm outline-none" /></div>
-                  <div className="mt-3 flex items-center justify-between gap-3"><div><h3 className="text-sm font-black">Tus conversaciones</h3><p className="text-[11px] text-[#7A828D]">Disponibles al volver o cambiar de dispositivo.</p></div><button type="button" onClick={() => void createConversation()} disabled={sending} className="rounded-xl bg-[#FFD400] px-3 py-2 text-xs font-black disabled:opacity-50">Nueva</button></div>
-                </div>
-                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
-                  {historyLoading && <div className="flex items-center justify-center gap-2 py-10 text-sm text-[#69717D]"><Loader2 className="h-4 w-4 animate-spin" />Cargando historial…</div>}
-                  {!historyLoading && filteredConversations.length === 0 && <div className="rounded-2xl border bg-white p-5 text-center text-sm text-[#69717D]">No hay conversaciones que coincidan.</div>}
-                  {!historyLoading && filteredConversations.map((item) => (
-                    <button type="button" key={item.id} onClick={() => void loadConversation(item.id)} className={`w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:border-[#FFD400] ${conversationId === item.id ? 'border-[#FFD400] ring-2 ring-[#FFD400]/20' : ''}`}>
-                      <span className="flex items-start gap-3"><span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#FFF5B8] text-[#755D00]">{statusIcon(item.status)}</span><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><strong className="truncate text-sm">{item.title}</strong><span className="shrink-0 text-[10px] text-[#8B929C]">{relativeDate(item.lastMessageAt)}</span></span><span className="mt-1 line-clamp-2 block text-xs leading-relaxed text-[#69717D]">{item.summary || 'Conversación nueva, todavía sin mensajes.'}</span><span className="mt-2 inline-flex rounded-full bg-[#F0F1F3] px-2 py-1 text-[9px] font-bold uppercase text-[#606873]">{STATUS_LABEL[item.status]}</span></span></span>
+                  <div className="flex items-center gap-2 rounded-2xl border bg-[#F8F9FA] px-3">
+                    <Search className="h-4 w-4 text-[#8B929C]" />
+                    <input
+                      value={historyQuery}
+                      onChange={(event) => setHistoryQuery(event.target.value)}
+                      placeholder="Buscar en el historial"
+                      className="min-h-11 min-w-0 flex-1 bg-transparent text-sm outline-none"
+                    />
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-black">Tus conversaciones</h3>
+                      <p className="text-[11px] text-[#7A828D]">
+                        Disponibles al volver o cambiar de dispositivo.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void createConversation()}
+                      disabled={sending}
+                      className="rounded-xl bg-[#FFD400] px-3 py-2 text-xs font-black disabled:opacity-50"
+                    >
+                      Nueva
                     </button>
-                  ))}
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+                  {historyLoading && (
+                    <div className="flex items-center justify-center gap-2 py-10 text-sm text-[#69717D]">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Cargando historial…
+                    </div>
+                  )}
+                  {!historyLoading && filteredConversations.length === 0 && (
+                    <div className="rounded-2xl border bg-white p-5 text-center text-sm text-[#69717D]">
+                      No hay conversaciones que coincidan.
+                    </div>
+                  )}
+                  {!historyLoading &&
+                    filteredConversations.map((item) => (
+                      <button
+                        type="button"
+                        key={item.id}
+                        onClick={() => void loadConversation(item.id)}
+                        className={`w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:border-[#FFD400] ${conversationId === item.id ? 'border-[#FFD400] ring-2 ring-[#FFD400]/20' : ''}`}
+                      >
+                        <span className="flex items-start gap-3">
+                          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#FFF5B8] text-[#755D00]">
+                            {statusIcon(item.status)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center justify-between gap-2">
+                              <strong className="truncate text-sm">{item.title}</strong>
+                              <span className="shrink-0 text-[10px] text-[#8B929C]">
+                                {relativeDate(item.lastMessageAt)}
+                              </span>
+                            </span>
+                            <span className="mt-1 line-clamp-2 block text-xs leading-relaxed text-[#69717D]">
+                              {item.summary || 'Conversación nueva, todavía sin mensajes.'}
+                            </span>
+                            <span className="mt-2 inline-flex rounded-full bg-[#F0F1F3] px-2 py-1 text-[9px] font-bold uppercase text-[#606873]">
+                              {STATUS_LABEL[item.status]}
+                            </span>
+                          </span>
+                        </span>
+                      </button>
+                    ))}
                 </div>
               </div>
             ) : (
               <>
                 <div className="flex shrink-0 items-center gap-2 border-b bg-white px-4 py-2.5">
-                  <div className="min-w-0 flex-1"><p className="truncate text-xs font-black text-[#30353C]">{currentConversation?.title || 'Nueva conversación'}</p><p className="truncate text-[10px] text-[#8B929C]">{currentConversation ? `${STATUS_LABEL[currentConversation.status]} · ${relativeDate(currentConversation.lastMessageAt)}` : 'Escribe para comenzar un hilo nuevo'}</p></div>
-                  {currentConversation && <button type="button" onClick={() => void renameCurrent()} className="flex h-8 w-8 items-center justify-center rounded-lg text-[#69717D] hover:bg-[#F0F1F3]" aria-label="Renombrar"><Pencil className="h-3.5 w-3.5" /></button>}
-                  {currentConversation && currentConversation.status !== 'archived' && <button type="button" onClick={() => void archiveCurrent()} className="flex h-8 w-8 items-center justify-center rounded-lg text-[#69717D] hover:bg-[#F0F1F3]" aria-label="Archivar"><Archive className="h-3.5 w-3.5" /></button>}
-                  {currentConversation && <button type="button" onClick={() => void deleteCurrent()} className="flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50" aria-label="Eliminar"><Trash2 className="h-3.5 w-3.5" /></button>}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-black text-[#30353C]">
+                      {currentConversation?.title || 'Nueva conversación'}
+                    </p>
+                    <p className="truncate text-[10px] text-[#8B929C]">
+                      {currentConversation
+                        ? `${STATUS_LABEL[currentConversation.status]} · ${relativeDate(currentConversation.lastMessageAt)}`
+                        : 'Escribe para comenzar un hilo nuevo'}
+                    </p>
+                  </div>
+                  {currentConversation && (
+                    <button
+                      type="button"
+                      onClick={() => void renameCurrent()}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-[#69717D] hover:bg-[#F0F1F3]"
+                      aria-label="Renombrar"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {currentConversation && currentConversation.status !== 'archived' && (
+                    <button
+                      type="button"
+                      onClick={() => void archiveCurrent()}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-[#69717D] hover:bg-[#F0F1F3]"
+                      aria-label="Archivar"
+                    >
+                      <Archive className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {currentConversation && (
+                    <button
+                      type="button"
+                      onClick={() => void deleteCurrent()}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50"
+                      aria-label="Eliminar"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
 
                 <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-[#F6F7F9] p-4">
-                  {historyLoading && messages.length === 0 && <div className="flex items-center justify-center gap-2 py-10 text-sm text-[#69717D]"><Loader2 className="h-4 w-4 animate-spin" />Recuperando conversación…</div>}
-                  {!historyLoading && messages.length === 0 && <div className="rounded-2xl border bg-white p-4 shadow-sm"><div className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-[#B38C00]" /><strong className="text-sm">Hola, {profile.first_name || 'bienvenido'}</strong></div><p className="mt-2 text-sm leading-relaxed text-[#69717D]">{currentConversation?.summary ? `Retomamos desde aquí: ${currentConversation.summary}` : profile.role === 'customer' ? 'Puedo buscar productos, verificar tu carrito y consultar tus pedidos. Este hilo quedará guardado.' : 'Puedo orientarte según tu perfil. Este hilo quedará guardado y separado de tu memoria personal.'}</p></div>}
+                  {historyLoading && messages.length === 0 && (
+                    <div className="flex items-center justify-center gap-2 py-10 text-sm text-[#69717D]">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Recuperando conversación…
+                    </div>
+                  )}
+                  {!historyLoading && messages.length === 0 && (
+                    <div className="rounded-2xl border bg-white p-4 shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <MessageCircle className="h-5 w-5 text-[#B38C00]" />
+                        <strong className="text-sm">
+                          Hola, {profile.first_name || 'bienvenido'}
+                        </strong>
+                      </div>
+                      <p className="mt-2 text-sm leading-relaxed text-[#69717D]">
+                        {currentConversation?.summary
+                          ? `Retomamos desde aquí: ${currentConversation.summary}`
+                          : profile.role === 'customer'
+                            ? 'Puedo buscar productos, verificar tu carrito y consultar tus pedidos. Este hilo quedará guardado.'
+                            : 'Puedo orientarte según tu perfil. Este hilo quedará guardado y separado de tu memoria personal.'}
+                      </p>
+                    </div>
+                  )}
+
                   {messages.map((item, index) => (
-                    <div key={item.id || `${item.role}-${index}`} className={item.role === 'user' ? 'ml-8 rounded-2xl rounded-br-md bg-[#FFD400] px-4 py-3 text-sm font-medium text-[#17191F]' : 'mr-6 rounded-2xl rounded-bl-md border bg-white px-4 py-3 text-sm leading-relaxed text-[#30353C] shadow-sm'}>
+                    <div
+                      key={item.id || `${item.role}-${index}`}
+                      className={
+                        item.role === 'user'
+                          ? 'ml-8 rounded-2xl rounded-br-md bg-[#FFD400] px-4 py-3 text-sm font-medium text-[#17191F]'
+                          : 'mr-6 rounded-2xl rounded-bl-md border bg-white px-4 py-3 text-sm leading-relaxed text-[#30353C] shadow-sm'
+                      }
+                    >
                       <p>{item.content}</p>
-                      {item.role === 'assistant' && item.navigation && item.navigation.length > 0 && <div className="mt-3 grid gap-2">{item.navigation.map((link) => <a key={`${link.href}-${link.label}`} href={link.href} className="flex min-h-10 items-center justify-between rounded-xl bg-[#17191F] px-3 py-2 text-xs font-bold text-white"><span>{link.label}</span><span aria-hidden>→</span></a>)}</div>}
-                      {item.role === 'assistant' && item.suggestedActions && item.suggestedActions.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{item.suggestedActions.map((action) => <button key={action} type="button" disabled={sending || conversationBlocked} onClick={() => void send(action)} className="rounded-full border border-[#D7B500]/40 bg-[#FFF9D6] px-3 py-1.5 text-[11px] font-bold text-[#5B4900] disabled:opacity-50">{action}</button>)}</div>}
+                      {item.role === 'assistant' &&
+                        item.navigation &&
+                        item.navigation.length > 0 && (
+                          <div className="mt-3 grid gap-2">
+                            {item.navigation.map((link) => (
+                              <a
+                                key={`${link.href}-${link.label}`}
+                                href={link.href}
+                                className="flex min-h-10 items-center justify-between rounded-xl bg-[#17191F] px-3 py-2 text-xs font-bold text-white"
+                              >
+                                <span>{link.label}</span>
+                                <span aria-hidden>→</span>
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      {item.role === 'assistant' &&
+                        item.suggestedActions &&
+                        item.suggestedActions.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {item.suggestedActions.map((action) => (
+                              <button
+                                key={action}
+                                type="button"
+                                disabled={sending || conversationBlocked}
+                                onClick={() => void send(action)}
+                                className="rounded-full border border-[#D7B500]/40 bg-[#FFF9D6] px-3 py-1.5 text-[11px] font-bold text-[#5B4900] disabled:opacity-50"
+                              >
+                                {action}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                     </div>
                   ))}
-                  {sending && <div className="mr-6 flex items-center gap-2 rounded-2xl border bg-white px-4 py-3 text-sm text-[#69717D]"><Loader2 className="h-4 w-4 animate-spin" />Domi está consultando información autorizada…</div>}
-                  {error && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700">{error}</p>}
+
+                  {sending && (
+                    <div className="mr-6 flex items-center gap-2 rounded-2xl border bg-white px-4 py-3 text-sm text-[#69717D]">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Domi está consultando información autorizada…
+                    </div>
+                  )}
+                  {error && (
+                    <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700">
+                      {error}
+                    </p>
+                  )}
                   <div ref={endRef} className="h-px" />
                 </div>
 
                 <footer className="shrink-0 border-t bg-white p-3 pb-[calc(.75rem+env(safe-area-inset-bottom))]">
-                  {conversationBlocked ? <button type="button" onClick={() => void resumeCurrent()} disabled={sending} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#FFD400] px-4 text-sm font-black disabled:opacity-50"><RotateCcw className="h-4 w-4" />Restaurar y continuar esta conversación</button> : <div className="flex items-end gap-2 rounded-2xl border bg-[#F8F9FA] p-2 focus-within:border-[#FFD400] focus-within:ring-2 focus-within:ring-[#FFD400]/20"><textarea ref={textareaRef} value={message} onFocus={focusComposer} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} rows={1} inputMode="text" placeholder="Escribe tu pregunta…" className="max-h-24 min-h-10 min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-base outline-none" /><button type="button" onClick={() => void send()} disabled={!message.trim() || sending} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#17191F] text-white disabled:opacity-40" aria-label="Enviar"><Send className="h-4 w-4" /></button></div>}
-                  {!viewport.keyboardOpen && <p className="mt-2 text-center text-[9px] text-[#8B929C]">El historial del hilo y la memoria personal se guardan por separado y solo para tu cuenta.</p>}
+                  {conversationBlocked ? (
+                    <button
+                      type="button"
+                      onClick={() => void resumeCurrent()}
+                      disabled={sending}
+                      className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#FFD400] px-4 text-sm font-black disabled:opacity-50"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Restaurar y continuar esta conversación
+                    </button>
+                  ) : (
+                    <div className="flex items-end gap-2 rounded-2xl border bg-[#F8F9FA] p-2 focus-within:border-[#FFD400] focus-within:ring-2 focus-within:ring-[#FFD400]/20">
+                      <textarea
+                        ref={textareaRef}
+                        value={message}
+                        onFocus={focusComposer}
+                        onChange={(event) => setMessage(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && !event.shiftKey) {
+                            event.preventDefault();
+                            void send();
+                          }
+                        }}
+                        rows={1}
+                        inputMode="text"
+                        placeholder="Escribe tu pregunta…"
+                        className="max-h-24 min-h-10 min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-base outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void send()}
+                        disabled={!message.trim() || sending}
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#17191F] text-white disabled:opacity-40"
+                        aria-label="Enviar"
+                      >
+                        <Send className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                  {!viewport.keyboardOpen && (
+                    <p className="mt-2 text-center text-[9px] text-[#8B929C]">
+                      El historial del hilo y la memoria personal se guardan por separado y solo para tu cuenta.
+                    </p>
+                  )}
                 </footer>
               </>
             )}
