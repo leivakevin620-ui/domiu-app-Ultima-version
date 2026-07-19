@@ -47,6 +47,10 @@ function planCustomerTool(
   const normalized = normalizedText(message);
   const has = (permission: string) => hasPermission(context, permission);
 
+  if (/\b(auditoria|auditorias|permiso|permisos|roles?|sesiones?|usuarios? del sistema|metricas administrativas|panel admin|administrador)\b/.test(normalized)) {
+    return null;
+  }
+
   if (has('cart.read') && /\b(carrito|cesta|compra actual|que tengo agregado|qué tengo agregado)\b/.test(normalized)) {
     return {
       name: 'customer.cart_summary',
@@ -99,6 +103,10 @@ export function planDomiMerchantTool(
   if (context.role !== 'merchant') return null;
   const normalized = normalizedText(message);
 
+  if (/\b(como repartidor|para repartir|pedidos libres|sin asignar|ganancias del repartidor|auditoria administrativa|permisos del sistema)\b/.test(normalized)) {
+    return null;
+  }
+
   if (
     hasPermission(context, 'inventory.read')
     && /\b(inventario|existencias|stock|agotad|pocas unidades|bajo inventario|productos bajos)\b/.test(normalized)
@@ -123,7 +131,7 @@ export function planDomiMerchantTool(
 
   if (
     hasPermission(context, 'reports.read')
-    && /\b(ventas|ingresos|reporte|metricas|métricas|mas vendido|más vendido|rendimiento)\b/.test(normalized)
+    && /\b(ventas|vendimos|vendido|facturacion|facturación|facturamos|ingresos|reporte|metricas|métricas|mas vendido|más vendido|rendimiento)\b/.test(normalized)
   ) {
     return {
       name: 'merchant.sales_summary',
@@ -155,6 +163,10 @@ export function planDomiCourierTool(
 ): DomiToolPlan | null {
   if (context.role !== 'courier') return null;
   const normalized = normalizedText(message);
+
+  if (/\b(ventas del negocio|inventario del negocio|auditoria administrativa|permisos del sistema|todos los repartidores)\b/.test(normalized)) {
+    return null;
+  }
 
   if (
     hasPermission(context, 'earnings.read')
@@ -258,7 +270,7 @@ export function planDomiAdminTool(
   if (
     hasPermission(context, 'operation.read')
     && hasPermission(context, 'reports.read')
-    && /\b(metricas|métricas|dashboard|resumen general|estado del sistema|operacion|operación|plataforma|rendimiento)\b/.test(normalized)
+    && /\b(metricas|métricas|dashboard|resumen general|estado general|estado del sistema|operacion|operación|plataforma|rendimiento)\b/.test(normalized)
   ) {
     return {
       name: 'admin.platform_metrics',
