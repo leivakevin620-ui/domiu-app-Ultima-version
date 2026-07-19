@@ -8,8 +8,8 @@ function readProjectFile(path: string) {
 
 describe('DomiAssistant hook lifecycle', () => {
   it('declares every React hook before the authenticated render guard', () => {
-    const source = readProjectFile('src/components/domi/DomiAssistant.tsx');
-    const guard = 'if (!mounted || isLoading || !profile) return null;';
+    const source = readProjectFile('src/components/domi/DomiAssistantStable.tsx');
+    const guard = "if (!mounted || isLoading || !profile || profile.role === 'guest') return null;";
     const guardIndex = source.indexOf(guard);
 
     expect(guardIndex).toBeGreaterThan(-1);
@@ -23,10 +23,15 @@ describe('DomiAssistant hook lifecycle', () => {
     expect(Math.max(...hookIndexes)).toBeLessThan(guardIndex);
   });
 
-  it('keeps Domi mounted inside the global provider tree', () => {
+  it('keeps Domi isolated and mounted through its protected host', () => {
     const providers = readProjectFile('src/components/providers/RootProviders.tsx');
+    const host = readProjectFile('src/components/domi/DomiAssistantHost.tsx');
 
-    expect(providers).toContain("import { DomiAssistant } from '@/components/domi/DomiAssistant';");
-    expect(providers).toContain('<DomiAssistant />');
+    expect(providers).toContain(
+      "import { DomiAssistantHost } from '@/components/domi/DomiAssistantHost';",
+    );
+    expect(providers).toContain('<DomiAssistantHost />');
+    expect(host).toContain('<DomiAssistantStable />');
+    expect(host).toContain('getDerivedStateFromError');
   });
 });

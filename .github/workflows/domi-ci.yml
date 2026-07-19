@@ -6,7 +6,9 @@ on:
     paths:
       - 'src/app/api/domi/**'
       - 'src/components/domi/**'
+      - 'src/components/providers/RootProviders.tsx'
       - 'src/lib/domi/**'
+      - 'src/test/domi-**'
       - 'supabase/migrations/**domi**'
       - 'vitest.config.mts'
       - 'package.json'
@@ -17,7 +19,9 @@ on:
     paths:
       - 'src/app/api/domi/**'
       - 'src/components/domi/**'
+      - 'src/components/providers/RootProviders.tsx'
       - 'src/lib/domi/**'
+      - 'src/test/domi-**'
       - 'supabase/migrations/**domi**'
       - 'vitest.config.mts'
       - 'package.json'
@@ -59,6 +63,12 @@ jobs:
 
       - name: Probar ciclo de sesión y hooks
         run: npx vitest run src/lib/domi/hook-order.test.ts --reporter=verbose
+
+      - name: Probar seguridad de interfaz por perfil
+        run: npx vitest run src/lib/domi/client-ui.test.ts --reporter=verbose
+
+      - name: Probar transición real de sesión
+        run: npx vitest run src/test/domi-assistant-stability.test.tsx --reporter=verbose
 
       - name: Compilar y validar TypeScript
         run: npm run build
