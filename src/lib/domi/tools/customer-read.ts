@@ -11,6 +11,7 @@ export async function executeDomiCustomerTool(
   supabase: SupabaseClient,
   context: DomiServerContext,
   plan: DomiToolPlan,
+  options: { conversationId?: string | null } = {},
 ): Promise<DomiToolResult> {
-  return executeDomiTool(supabase, context, plan);
+  return executeDomiTool(supabase, context, plan, options);
 }
