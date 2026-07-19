@@ -3,6 +3,7 @@
 import React from 'react';
 import { RotateCcw, Sparkles } from 'lucide-react';
 import { DomiAssistantStable } from '@/components/domi/DomiAssistantStable';
+import styles from '@/components/domi/DomiAssistantTheme.module.css';
 
 interface DomiBoundaryState {
   failed: boolean;
@@ -39,15 +40,15 @@ class DomiAssistantBoundary extends React.Component<React.PropsWithChildren, Dom
         <button
           type="button"
           onClick={this.reset}
-          className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-4 z-[1400] flex min-h-14 items-center gap-2 rounded-full border border-[#FFD400]/50 bg-[#17191F] px-4 text-white shadow-2xl lg:bottom-5"
+          className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-4 z-[1400] flex min-h-14 items-center gap-2 rounded-full border border-[#FFC400]/50 bg-[#1A1D21] px-4 text-white shadow-2xl lg:bottom-5"
           aria-label="Reiniciar Domi"
         >
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FFD400] text-[#17191F]">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FFC400] text-[#1A1D21]">
             <RotateCcw className="h-4 w-4" />
           </span>
           <span className="text-left">
-            <strong className="block text-xs">Reiniciar Domi</strong>
-            <span className="block text-[9px] text-white/60">La aplicación sigue protegida</span>
+            <strong className="block text-xs text-white">Reiniciar Domi</strong>
+            <span className="block text-[9px] text-white/80">La aplicación sigue protegida</span>
           </span>
         </button>
       );
@@ -61,7 +62,7 @@ export function DomiAssistantHost() {
   return (
     <DomiAssistantBoundary>
       <DomiAssistantStable />
-      <span className="sr-only">
+      <span className={`${styles.themeMarker} sr-only`} aria-hidden="true">
         <Sparkles aria-hidden="true" /> Asistente Domi activo
       </span>
     </DomiAssistantBoundary>
