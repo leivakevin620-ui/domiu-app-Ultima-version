@@ -49,7 +49,12 @@ export interface DomiMemoryCandidate {
 
 export interface DomiSecurityDecision {
   blocked: boolean;
-  reason?: 'prompt_injection' | 'secret_extraction' | 'privilege_escalation' | 'cross_user_data';
+  reason?:
+    | 'prompt_injection'
+    | 'secret_extraction'
+    | 'privilege_escalation'
+    | 'cross_user_data'
+    | 'financial_action';
   message?: string;
   riskLevel: DomiRiskLevel;
 }
@@ -72,10 +77,48 @@ const ROLE_PATH_PREFIX: Record<DomiRole, string> = {
 };
 
 export const DOMI_ROLE_CAPABILITIES: Record<DomiRole, readonly string[]> = {
-  admin: ['operation.read', 'orders.read', 'business.read', 'courier.read', 'reports.read', 'finance.read', 'audit.read'],
-  merchant: ['business.read', 'orders.read', 'catalog.read', 'inventory.read', 'reports.read', 'reviews.read'],
-  courier: ['assignments.read', 'delivery.read', 'route.read', 'earnings.read', 'support.create'],
-  customer: ['business.search', 'products.search', 'cart.read', 'orders.read', 'coupons.read', 'support.create'],
+  admin: [
+    'operation.read',
+    'orders.read',
+    'business.read',
+    'courier.read',
+    'reports.read',
+    'finance.read',
+    'audit.read',
+    'memory.manage',
+    'support.create',
+  ],
+  merchant: [
+    'business.read',
+    'orders.read',
+    'orders.update',
+    'catalog.read',
+    'inventory.read',
+    'inventory.update',
+    'reports.read',
+    'reviews.read',
+    'memory.manage',
+    'support.create',
+  ],
+  courier: [
+    'assignments.read',
+    'assignments.accept',
+    'delivery.read',
+    'delivery.update',
+    'route.read',
+    'earnings.read',
+    'memory.manage',
+    'support.create',
+  ],
+  customer: [
+    'business.search',
+    'products.search',
+    'cart.read',
+    'orders.read',
+    'coupons.read',
+    'memory.manage',
+    'support.create',
+  ],
 };
 
 export function normalizeDomiRole(role: UserRole | string): DomiRole {
@@ -157,12 +200,13 @@ export function evaluateDomiSecurity(message: string): DomiSecurityDecision {
     };
   }
 
-  if (/(soy|hazme|convierteme|cambia mi rol|dame acceso|otorgame permiso).{0,35}(admin|administrador|super admin|superadministrador)/.test(normalized)) {
+  if (/(soy|hazme|convierteme|cambia mi rol|dame acceso|otorgame permiso).{0,35}(admin|administrador|super admin|superadministrador)/.test(normalized)
+    || /(crea|crear|agrega|agregar|autoriza|autorizar|nuevo).{0,30}(admin|administrador|super admin)/.test(normalized)) {
     return {
       blocked: true,
       reason: 'privilege_escalation',
       riskLevel: 'high',
-      message: 'No puedo cambiar roles o permisos mediante una conversación. El acceso se valida desde el sistema y solo puede modificarlo un administrador autorizado.',
+      message: 'No puedo crear administradores ni cambiar roles o permisos mediante una conversación. Esa decisión solo puede realizarla el administrador principal desde el módulo seguro correspondiente.',
     };
   }
 
@@ -173,6 +217,16 @@ export function evaluateDomiSecurity(message: string): DomiSecurityDecision {
       reason: 'cross_user_data',
       riskLevel: 'high',
       message: 'No puedo mostrar información de otros usuarios. Solo puedo ayudarte con los datos y funciones autorizados para tu perfil.',
+    };
+  }
+
+  if (/(haz|realiza|ejecuta|confirma|procesa|envia|transfiere|devuelve).{0,35}(pago|transferencia|reembolso|devolucion|retiro)/.test(normalized)
+    || /(ingresa|escribe|usa|dime).{0,25}(pin|clave bancaria|codigo bancario|codigo de verificacion|cvv)/.test(normalized)) {
+    return {
+      blocked: true,
+      reason: 'financial_action',
+      riskLevel: 'high',
+      message: 'No puedo realizar pagos, transferencias, retiros o reembolsos, ni solicitar o introducir claves bancarias. Puedo mostrarte el estado registrado y dirigirte al proceso manual autorizado.',
     };
   }
 
@@ -187,7 +241,7 @@ export function detectDomiIntent(message: string) {
   if (/pedido|domicilio|entrega|estado/.test(normalized)) return 'order_question';
   if (/producto|inventario|catalogo|menu|buscar|restaurante|farmacia/.test(normalized)) return 'catalog_question';
   if (/recuerda|guardar|memoria|prefiero|me gusta/.test(normalized)) return 'memory_request';
-  if (/ayuda|soporte|problema|error|reclamo/.test(normalized)) return 'support_question';
+  if (/ayuda|soporte|problema|error|reclamo|asesor/.test(normalized)) return 'support_question';
   return 'general_question';
 }
 
