@@ -20,7 +20,12 @@ export const manualOrderPaymentMethodSchema = z.enum([
 ]);
 
 const optionalText = (max: number) =>
-  z.string().trim().max(max).optional().transform((value) => value || undefined);
+  z
+    .string()
+    .trim()
+    .max(max)
+    .optional()
+    .transform((value) => value || undefined);
 
 export const manualOrderItemSchema = z
   .object({
@@ -37,16 +42,32 @@ export const manualOrderItemSchema = z
   .superRefine((item, context) => {
     if (item.isCustomItem) {
       if (!item.customName) {
-        context.addIssue({ code: 'custom', path: ['customName'], message: 'El artículo personalizado necesita nombre' });
+        context.addIssue({
+          code: 'custom',
+          path: ['customName'],
+          message: 'El artículo personalizado necesita nombre',
+        });
       }
       if (item.customUnitPrice == null) {
-        context.addIssue({ code: 'custom', path: ['customUnitPrice'], message: 'El artículo personalizado necesita precio' });
+        context.addIssue({
+          code: 'custom',
+          path: ['customUnitPrice'],
+          message: 'El artículo personalizado necesita precio',
+        });
       }
       if (item.productId) {
-        context.addIssue({ code: 'custom', path: ['productId'], message: 'Un artículo personalizado no puede usar productId' });
+        context.addIssue({
+          code: 'custom',
+          path: ['productId'],
+          message: 'Un artículo personalizado no puede usar productId',
+        });
       }
     } else if (!item.productId) {
-      context.addIssue({ code: 'custom', path: ['productId'], message: 'Selecciona un producto válido' });
+      context.addIssue({
+        code: 'custom',
+        path: ['productId'],
+        message: 'Selecciona un producto válido',
+      });
     }
   });
 
@@ -61,7 +82,14 @@ export const manualOrderRequestSchema = z
       customerId: z.string().uuid().optional(),
       name: z.string().trim().min(2).max(160),
       phone: z.string().trim().min(7).max(24),
-      email: z.string().trim().email().max(254).optional().or(z.literal('')).transform((value) => value || undefined),
+      email: z
+        .string()
+        .trim()
+        .email()
+        .max(254)
+        .optional()
+        .or(z.literal(''))
+        .transform((value) => value || undefined),
       notes: optionalText(500),
     }),
     delivery: z.object({
@@ -97,37 +125,91 @@ export const manualOrderRequestSchema = z
   })
   .superRefine((input, context) => {
     if (input.customer.kind === 'registered' && !input.customer.customerId) {
-      context.addIssue({ code: 'custom', path: ['customer', 'customerId'], message: 'Selecciona el cliente registrado' });
+      context.addIssue({
+        code: 'custom',
+        path: ['customer', 'customerId'],
+        message: 'Selecciona el cliente registrado',
+      });
     }
     if (input.customer.kind === 'guest' && input.customer.customerId) {
-      context.addIssue({ code: 'custom', path: ['customer', 'customerId'], message: 'Un invitado no debe incluir customerId' });
+      context.addIssue({
+        code: 'custom',
+        path: ['customer', 'customerId'],
+        message: 'Un invitado no debe incluir customerId',
+      });
     }
     if (input.delivery.type === 'delivery' && !input.delivery.address) {
-      context.addIssue({ code: 'custom', path: ['delivery', 'address'], message: 'La dirección es obligatoria para domicilio' });
+      context.addIssue({
+        code: 'custom',
+        path: ['delivery', 'address'],
+        message: 'La dirección es obligatoria para domicilio',
+      });
     }
     if (input.delivery.type === 'pickup' && input.deliveryFee.amount !== 0) {
-      context.addIssue({ code: 'custom', path: ['deliveryFee', 'amount'], message: 'Recoger en el local no puede cobrar domicilio' });
+      context.addIssue({
+        code: 'custom',
+        path: ['deliveryFee', 'amount'],
+        message: 'Recoger en el local no puede cobrar domicilio',
+      });
     }
     if (input.delivery.type === 'pickup' && input.deliveryFee.source !== 'not_applicable') {
-      context.addIssue({ code: 'custom', path: ['deliveryFee', 'source'], message: 'La tarifa no aplica al recoger en el local' });
+      context.addIssue({
+        code: 'custom',
+        path: ['deliveryFee', 'source'],
+        message: 'La tarifa no aplica al recoger en el local',
+      });
+    }
+    if (input.delivery.type === 'pickup' && input.courierId) {
+      context.addIssue({
+        code: 'custom',
+        path: ['courierId'],
+        message: 'Recoger en el local no puede tener repartidor',
+      });
     }
     if (input.deliveryFee.source === 'manual' && !input.deliveryFee.overrideReason) {
-      context.addIssue({ code: 'custom', path: ['deliveryFee', 'overrideReason'], message: 'Explica por qué se modificó la tarifa' });
+      context.addIssue({
+        code: 'custom',
+        path: ['deliveryFee', 'overrideReason'],
+        message: 'Explica por qué se modificó la tarifa',
+      });
     }
-    if (input.deliveryFee.source === 'automatic' && (!input.delivery.distanceKm || input.delivery.distanceKm <= 0)) {
-      context.addIssue({ code: 'custom', path: ['delivery', 'distanceKm'], message: 'La tarifa automática requiere distancia válida' });
+    if (
+      input.deliveryFee.source === 'automatic' &&
+      (!input.delivery.distanceKm || input.delivery.distanceKm <= 0)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['delivery', 'distanceKm'],
+        message: 'La tarifa automática requiere distancia válida',
+      });
     }
     if (input.salesChannel === 'other' && !input.salesChannelDetail) {
-      context.addIssue({ code: 'custom', path: ['salesChannelDetail'], message: 'Describe el canal de origen' });
+      context.addIssue({
+        code: 'custom',
+        path: ['salesChannelDetail'],
+        message: 'Describe el canal de origen',
+      });
     }
     if (input.panel === 'admin' && !input.adminReason) {
-      context.addIssue({ code: 'custom', path: ['adminReason'], message: 'El motivo administrativo de creación es obligatorio' });
+      context.addIssue({
+        code: 'custom',
+        path: ['adminReason'],
+        message: 'El motivo administrativo de creación es obligatorio',
+      });
     }
     if (input.panel === 'business' && input.courierId) {
-      context.addIssue({ code: 'custom', path: ['courierId'], message: 'El comercio no puede asignar repartidor desde este flujo' });
+      context.addIssue({
+        code: 'custom',
+        path: ['courierId'],
+        message: 'El comercio no puede asignar repartidor desde este flujo',
+      });
     }
     if (input.panel === 'business' && input.adminReason) {
-      context.addIssue({ code: 'custom', path: ['adminReason'], message: 'El motivo administrativo solo aplica al panel admin' });
+      context.addIssue({
+        code: 'custom',
+        path: ['adminReason'],
+        message: 'El motivo administrativo solo aplica al panel admin',
+      });
     }
   });
 
@@ -162,10 +244,18 @@ export function normalizeManualOrderPhone(value: string): string {
 
 export function calculateManualOrderTotals(
   items: ResolvedManualOrderItem[],
-  values: Pick<ManualOrderRequest, 'tipAmount' | 'surchargeAmount' | 'paidAmount'> & { deliveryFee: number },
+  values: Pick<ManualOrderRequest, 'tipAmount' | 'surchargeAmount' | 'paidAmount'> & {
+    deliveryFee: number;
+  },
 ): ManualOrderTotals {
-  const subtotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-  const total = Math.max(0, subtotal + values.deliveryFee + values.tipAmount + values.surchargeAmount);
+  const subtotal = items.reduce(
+    (sum, item) => sum + item.unitPrice * item.quantity,
+    0,
+  );
+  const total = Math.max(
+    0,
+    subtotal + values.deliveryFee + values.tipAmount + values.surchargeAmount,
+  );
   if (!Number.isSafeInteger(total) || total > 1_000_000_000) {
     throw new Error('manual_order_total_out_of_range');
   }
@@ -190,15 +280,40 @@ export function getManualOrderErrorMessage(error: unknown): string {
     manual_order_invalid_quantity: 'Una cantidad del pedido no es válida.',
     manual_order_invalid_custom_item: 'Revisa el artículo personalizado.',
     manual_order_product_not_found: 'Uno de los productos ya no existe.',
-    manual_order_cross_business_product: 'No puedes mezclar productos de negocios diferentes.',
+    manual_order_cross_business_product:
+      'No puedes mezclar productos de negocios diferentes.',
     manual_order_product_unavailable: 'Uno de los productos ya no está disponible.',
-    manual_order_insufficient_stock: 'No hay inventario suficiente para completar el pedido.',
-    manual_order_stock_changed: 'El inventario cambió mientras confirmabas. Revisa las cantidades.',
+    manual_order_insufficient_stock:
+      'No hay inventario suficiente para completar el pedido.',
+    manual_order_stock_changed:
+      'El inventario cambió mientras confirmabas. Revisa las cantidades.',
     manual_order_invalid_paid_amount: 'El valor pagado no es válido.',
-    manual_order_total_out_of_range: 'El total del pedido está fuera del rango permitido.',
-    manual_order_paid_amount_exceeds_total: 'El valor pagado no puede superar el total.',
-    manual_order_idempotency_required: 'No se pudo proteger la creación contra duplicados.',
-    manual_order_idempotency_conflict: 'Esta confirmación ya fue usada con datos diferentes. Recarga el formulario.',
+    manual_order_completed_payment_must_match_total:
+      'Para marcar el pago como completado, el valor pagado debe coincidir con el total final.',
+    manual_order_total_out_of_range:
+      'El total del pedido está fuera del rango permitido.',
+    manual_order_paid_amount_exceeds_total:
+      'El valor pagado no puede superar el total.',
+    manual_order_idempotency_required:
+      'No se pudo proteger la creación contra duplicados.',
+    manual_order_idempotency_conflict:
+      'Esta confirmación ya fue usada con datos diferentes. Recarga el formulario.',
+    manual_order_active_branch_required:
+      'Selecciona un local activo para crear el pedido.',
+    manual_order_pickup_cannot_have_courier:
+      'Un pedido para recoger en el local no puede tener repartidor.',
+    manual_order_delivery_address_required:
+      'Completa la dirección de entrega.',
+    manual_order_automatic_fee_requires_distance:
+      'La tarifa automática necesita una distancia válida.',
+    manual_order_outside_coverage:
+      'La dirección está fuera de la cobertura del local seleccionado.',
+    manual_order_delivery_pricing_unavailable:
+      'La configuración de tarifas no está disponible.',
+    manual_order_server_action_required:
+      'La creación del pedido debe realizarse desde el formulario autorizado.',
+    manual_order_privileged_fields_are_server_managed:
+      'Los datos protegidos del pedido solo pueden modificarse desde el servidor.',
   };
   const key = Object.keys(known).find((candidate) => raw.includes(candidate));
   if (key) return known[key];
@@ -216,5 +331,8 @@ export function getManualOrderErrorMessage(error: unknown): string {
     'El motivo administrativo de creación es obligatorio',
   ];
   const safe = safeMessages.find((message) => raw.includes(message));
-  return safe || 'No se pudo crear el pedido manual. Revisa los datos e inténtalo nuevamente.';
+  return (
+    safe ||
+    'No se pudo crear el pedido manual. Revisa los datos e inténtalo nuevamente.'
+  );
 }
