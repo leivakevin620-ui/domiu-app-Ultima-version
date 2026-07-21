@@ -52,9 +52,27 @@ jobs:
     steps:
       - name: Descargar código
         uses: actions/checkout@v4
+        with:
+          show-progress: false
 
-      - name: Bloquear secretos y archivos de entorno
-        run: node scripts/check-repository-secrets.mjs
+      - name: Escanear secretos y archivos de entorno
+        id: secret_scan
+        continue-on-error: true
+        run: node scripts/check-repository-secrets.mjs > security-scan.txt 2>&1
+
+      - name: Publicar diagnóstico de seguridad
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: domi-security-scan
+          path: security-scan.txt
+          retention-days: 1
+
+      - name: Validar escaneo de secretos
+        if: steps.secret_scan.outcome == 'failure'
+        run: |
+          cat security-scan.txt
+          exit 1
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
