@@ -51,7 +51,7 @@ jobs:
       - name: Probar dominio y tarifas
         id: domain_tests
         continue-on-error: true
-        run: npx vitest run src/lib/orders/manual-order-domain.test.ts src/lib/orders/delivery-pricing.test.ts --reporter=verbose > manual-order-tests.txt 2>&1
+        run: npx vitest run src/lib/orders/__tests__/manual-order-domain.test.ts src/lib/orders/__tests__/delivery-pricing.test.ts --reporter=verbose > manual-order-tests.txt 2>&1
 
       - name: Ejecutar lint
         id: lint
