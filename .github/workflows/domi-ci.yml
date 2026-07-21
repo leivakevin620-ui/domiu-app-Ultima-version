@@ -83,8 +83,24 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
-      - name: Auditar dependencias de producción
-        run: npm audit --omit=dev --audit-level=high
+      - name: Generar auditoría de dependencias de producción
+        id: npm_audit
+        continue-on-error: true
+        run: npm audit --omit=dev --json > npm-audit.json
+
+      - name: Publicar auditoría npm
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: domi-npm-audit
+          path: npm-audit.json
+          retention-days: 1
+
+      - name: Validar vulnerabilidades altas
+        if: steps.npm_audit.outcome == 'failure'
+        run: |
+          node -e "const r=require('./npm-audit.json'); console.error(JSON.stringify(r.metadata?.vulnerabilities ?? {}, null, 2));"
+          exit 1
 
       - name: Probar seguridad y contexto
         run: npx vitest run src/lib/domi/security.test.ts --reporter=verbose
