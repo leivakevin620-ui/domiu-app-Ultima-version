@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/auth/server-auth';
 import { getServiceClient } from '@/lib/db/supabase';
+import { rejectUnsafeMutation } from '@/lib/http/request-security';
 import {
   getDomiUserSettings,
   updateDomiUserSettings,
@@ -44,6 +45,9 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
+  const rejected = rejectUnsafeMutation(request);
+  if (rejected) return rejected;
+
   const auth = await requireAuth();
   if (auth.error) {
     return NextResponse.json({ error: auth.error.message }, { status: auth.error.status, headers: headers() });
