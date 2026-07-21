@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth/server-auth';
 import { getServiceClient } from '@/lib/db/supabase';
 import { buildDomiServerContext } from '@/lib/domi/server-context';
 import { getDomiUserSettings } from '@/lib/domi/user-settings';
+import { rejectUnsafeMutation } from '@/lib/http/request-security';
 import {
   generateDomiProactiveEvents,
   listDomiProactiveEvents,
@@ -56,6 +57,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  const rejected = rejectUnsafeMutation(request);
+  if (rejected) return rejected;
+
   const auth = await requireAuth();
   if (auth.error) {
     return NextResponse.json(
