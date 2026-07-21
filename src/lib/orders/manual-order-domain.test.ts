@@ -30,6 +30,7 @@ const baseInput = {
   paymentStatus: 'pending' as const,
   paidAmount: 0,
   initialStatus: 'confirmed' as const,
+  adminReason: 'Pedido recibido por WhatsApp y verificado por administración',
   tipAmount: 0,
   surchargeAmount: 0,
   items: [
@@ -46,6 +47,11 @@ describe('manual order domain', () => {
     const result = manualOrderRequestSchema.safeParse(baseInput);
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.customer.customerId).toBeUndefined();
+  });
+
+  it('requires an administrative creation reason', () => {
+    const result = manualOrderRequestSchema.safeParse({ ...baseInput, adminReason: undefined });
+    expect(result.success).toBe(false);
   });
 
   it('requires a reason when the delivery fee is overridden', () => {
