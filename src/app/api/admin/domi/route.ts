@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/auth/server-auth';
 import { getServiceClient } from '@/lib/db/supabase';
 import { normalizeDomiRole } from '@/lib/domi/security';
+import { rejectUnsafeMutation } from '@/lib/http/request-security';
 
 export const runtime = 'nodejs';
 
@@ -82,10 +83,13 @@ export async function GET() {
 
 function unsafeKnowledge(content: string) {
   const normalized = content.toLocaleLowerCase('es');
-  return /\b(password|contrasena|contraseña|pin|token|cvv|numero de tarjeta|número de tarjeta|clave bancaria|service role)\b/.test(normalized);
+  return /\b(password|contrasena|contraseña|pin|token|cvv|numero de tarjeta|número de tarjeta|clave bancaria|service role|sb_secret|api key)\b/.test(normalized);
 }
 
 export async function POST(request: NextRequest) {
+  const rejected = rejectUnsafeMutation(request);
+  if (rejected) return rejected;
+
   const admin = await requireAdmin();
   if (admin.error || !admin.session) {
     return NextResponse.json({ error: admin.error?.message }, { status: admin.error?.status || 403, headers });
@@ -116,7 +120,7 @@ export async function POST(request: NextRequest) {
   if (parsed.data.action === 'approve' || parsed.data.action === 'reject') {
     const reviewRequest = parsed.data;
     const status = reviewRequest.action === 'approve' ? 'approved' : 'rejected';
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('domi_learning_candidates')
       .update({
         status,
@@ -126,9 +130,14 @@ export async function POST(request: NextRequest) {
         updated_at: now,
       })
       .eq('id', reviewRequest.candidateId)
-      .eq('status', 'pending');
+      .eq('status', 'pending')
+      .select('id')
+      .maybeSingle();
     if (error) {
       return NextResponse.json({ error: 'No se pudo guardar la revisión.' }, { status: 500, headers });
+    }
+    if (!data) {
+      return NextResponse.json({ error: 'El candidato ya fue revisado.' }, { status: 409, headers });
     }
     return NextResponse.json({ ok: true, status }, { headers });
   }
@@ -164,7 +173,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No se pudo publicar el conocimiento aprobado.' }, { status: 500, headers });
   }
 
-  const { error: deployError } = await supabase
+  const { data: deployed, error: deployError } = await supabase
     .from('domi_learning_candidates')
     .update({
       status: 'deployed',
@@ -174,10 +183,12 @@ export async function POST(request: NextRequest) {
       updated_at: now,
     })
     .eq('id', deployRequest.candidateId)
-    .eq('status', 'approved');
-  if (deployError) {
+    .eq('status', 'approved')
+    .select('id')
+    .maybeSingle();
+  if (deployError || !deployed) {
     await supabase.from('domi_knowledge_articles').delete().eq('id', article.id);
-    return NextResponse.json({ error: 'No se pudo finalizar el despliegue supervisado.' }, { status: 500, headers });
+    return NextResponse.json({ error: 'No se pudo finalizar el despliegue supervisado.' }, { status: 409, headers });
   }
 
   return NextResponse.json({ ok: true, status: 'deployed', articleId: String(article.id) }, { headers });
