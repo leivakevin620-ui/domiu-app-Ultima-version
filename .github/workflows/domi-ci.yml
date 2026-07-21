@@ -7,36 +7,62 @@ on:
     paths:
       - 'src/app/api/domi/**'
       - 'src/app/api/admin/domi/**'
+      - 'src/app/api/health/**'
       - 'src/app/admin/domi/**'
       - 'src/components/domi/**'
       - 'src/components/providers/RootProviders.tsx'
       - 'src/contexts/CartContext.tsx'
       - 'src/lib/domi/**'
+      - 'src/lib/auth/**'
+      - 'src/lib/http/**'
+      - 'src/lib/db/supabase.ts'
+      - 'src/lib/env.ts'
+      - 'src/proxy.ts'
       - 'src/test/domi-**'
       - 'scripts/check-repository-secrets.mjs'
       - 'supabase/migrations/**'
       - 'vitest.config.mts'
+      - 'next.config.ts'
+      - 'Dockerfile'
+      - '.dockerignore'
       - 'package.json'
       - 'package-lock.json'
+      - '.env.example'
       - '.gitignore'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'docs/**'
       - '.github/workflows/domi-ci.yml'
   push:
     branches: [master]
     paths:
       - 'src/app/api/domi/**'
       - 'src/app/api/admin/domi/**'
+      - 'src/app/api/health/**'
       - 'src/app/admin/domi/**'
       - 'src/components/domi/**'
       - 'src/components/providers/RootProviders.tsx'
       - 'src/contexts/CartContext.tsx'
       - 'src/lib/domi/**'
+      - 'src/lib/auth/**'
+      - 'src/lib/http/**'
+      - 'src/lib/db/supabase.ts'
+      - 'src/lib/env.ts'
+      - 'src/proxy.ts'
       - 'src/test/domi-**'
       - 'scripts/check-repository-secrets.mjs'
       - 'supabase/migrations/**'
       - 'vitest.config.mts'
+      - 'next.config.ts'
+      - 'Dockerfile'
+      - '.dockerignore'
       - 'package.json'
       - 'package-lock.json'
+      - '.env.example'
       - '.gitignore'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'docs/**'
       - '.github/workflows/domi-ci.yml'
 
 permissions:
@@ -49,7 +75,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - name: Descargar código
         uses: actions/checkout@v4
@@ -78,11 +104,14 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 20.19.0
           cache: npm
 
       - name: Instalar dependencias
         run: npm ci
+
+      - name: Validar lint
+        run: npm run lint
 
       - name: Generar auditorías npm
         id: npm_audit
@@ -138,8 +167,17 @@ jobs:
       - name: Probar agente completo y límites sensibles
         run: npx vitest run src/lib/domi/agent/complete-agent.test.ts --reporter=verbose
 
+      - name: Probar proveedor generativo y fallback
+        run: npx vitest run src/lib/domi/model/grounded-generator.test.ts --reporter=verbose
+
       - name: Probar conversaciones persistentes
         run: npx vitest run src/lib/domi/conversations.test.ts --reporter=verbose
+
+      - name: Probar seguridad CSRF y autenticación
+        run: npx vitest run src/test/domi-request-security.test.ts --reporter=verbose
+
+      - name: Probar headers proxy health y Docker
+        run: npx vitest run src/test/domi-web-security.test.ts --reporter=verbose
 
       - name: Probar ciclo de sesión y hooks
         run: npx vitest run src/lib/domi/hook-order.test.ts --reporter=verbose
@@ -152,3 +190,6 @@ jobs:
 
       - name: Compilar y validar TypeScript
         run: npm run build
+
+      - name: Construir imagen Docker de producción
+        run: docker build --tag domiu-enterprise:${{ github.sha }} .
