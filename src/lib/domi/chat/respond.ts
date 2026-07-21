@@ -9,6 +9,7 @@ import { getDomiUserSettings } from '@/lib/domi/user-settings';
 import { processDomiMemory } from '@/lib/domi/chat/memory';
 import type { PreparedDomiChat } from '@/lib/domi/chat/session';
 import { runDomiConversationOrchestrator } from '@/lib/domi/agent/conversation-orchestrator';
+import { generateGroundedDomiAnswer } from '@/lib/domi/model/grounded-generator';
 import {
   buildDomiAssistantPayload,
   buildDomiKnowledgeAnswer,
@@ -202,14 +203,21 @@ export async function respondToDomiChat(prepared: PreparedDomiChat) {
       .limit(30);
     if (error) throw new Error('knowledge_read_failed');
 
-    const answer = buildDomiKnowledgeAnswer(
+    const approvedKnowledge = (knowledge ?? []).map((item) => ({
+      title: String(item.title),
+      content: String(item.content),
+    }));
+    const deterministicAnswer = buildDomiKnowledgeAnswer(
       prepared.context,
       prepared.message,
-      (knowledge ?? []).map((item) => ({
-        title: String(item.title),
-        content: String(item.content),
-      })),
+      approvedKnowledge,
     );
+    const generated = await generateGroundedDomiAnswer({
+      context: prepared.context,
+      message: prepared.message,
+      deterministicAnswer,
+      knowledge: approvedKnowledge,
+    });
     const suggestedActions = settings.proactiveEnabled
       ? prepared.context.role === 'admin'
         ? ['Revisar pedidos', 'Evaluar Domi']
@@ -220,17 +228,29 @@ export async function respondToDomiChat(prepared: PreparedDomiChat) {
             : ['Recomiéndame algo con $30.000', 'Consultar mis pedidos', 'Ver promociones']
       : [];
     const assistant = buildDomiAssistantPayload({
-      message: answer,
+      message: generated?.answer || deterministicAnswer,
       intent: prepared.intent,
       context: prepared.context,
       suggestedActions,
+      generationModel: generated?.model || null,
+      generationProvider: generated?.provider || null,
     });
     await persist({ prepared, assistant, mode: 'knowledge' });
     return response({
       prepared,
       assistant,
       mode: 'knowledge',
+      headers: generated ? { 'X-Domi-Generation': 'grounded' } : { 'X-Domi-Generation': 'deterministic' },
       extra: {
+        generation: generated ? {
+          provider: generated.provider,
+          model: generated.model,
+          latencyMs: generated.latencyMs,
+          usage: generated.usage,
+        } : {
+          provider: 'deterministic',
+          model: 'domi-secure-knowledge-v2',
+        },
         context: {
           role: prepared.context.role,
           permissions: prepared.context.permissions,
