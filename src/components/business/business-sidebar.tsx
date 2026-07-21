@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { DomiULogo, DomiUMark } from '@/components/brand/DomiULogo';
 import {
-  LayoutDashboard, Package, ClipboardList, Users, BarChart3, Settings,
+  LayoutDashboard, Package, PackagePlus, ClipboardList, Users, BarChart3, Settings,
   Star, LogOut, ChevronLeft, Globe, Menu, X, MapPinned, CreditCard,
 } from 'lucide-react';
 
@@ -15,6 +15,7 @@ const sidebarItems = [
   { label: 'Dashboard', href: '/negocio', icon: LayoutDashboard },
   { label: 'Productos', href: '/negocio/productos', icon: Package },
   { label: 'Pedidos', href: '/negocio/pedidos', icon: ClipboardList },
+  { label: 'Crear pedido manual', href: '/negocio/pedidos/crear', icon: PackagePlus },
   { label: 'Clientes', href: '/negocio/clientes', icon: Users },
   { label: 'Mapa en vivo', href: '/negocio/mapa', icon: Globe },
   { label: 'Locales', href: '/negocio/configuracion/ubicacion', icon: MapPinned },
