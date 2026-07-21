@@ -183,8 +183,24 @@ jobs:
       - name: Probar agente completo y límites sensibles
         run: npx vitest run src/lib/domi/agent/complete-agent.test.ts --reporter=verbose
 
-      - name: Probar proveedor generativo y fallback
-        run: npx vitest run src/lib/domi/model/grounded-generator.test.ts --reporter=verbose
+      - name: Ejecutar prueba generativa
+        id: generator_test
+        continue-on-error: true
+        run: npx vitest run src/lib/domi/model/grounded-generator.test.ts --reporter=verbose > generator-test.txt 2>&1
+
+      - name: Publicar diagnóstico generativo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: domi-generator-test
+          path: generator-test.txt
+          retention-days: 1
+
+      - name: Validar proveedor generativo y fallback
+        if: steps.generator_test.outcome == 'failure'
+        run: |
+          cat generator-test.txt
+          exit 1
 
       - name: Probar conversaciones persistentes
         run: npx vitest run src/lib/domi/conversations.test.ts --reporter=verbose
