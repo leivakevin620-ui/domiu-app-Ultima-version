@@ -83,6 +83,9 @@ BEFORE UPDATE ON order_items
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
 
+-- Sequence must remain idempotent because preview resets may preserve it.
+CREATE SEQUENCE IF NOT EXISTS order_sequence START 1;
+
 -- Function to generate order number
 CREATE OR REPLACE FUNCTION generate_order_number()
 RETURNS VARCHAR AS $$
@@ -93,8 +96,6 @@ BEGIN
   RETURN v_order_number;
 END;
 $$ LANGUAGE plpgsql;
-
-CREATE SEQUENCE order_sequence START 1;
 
 -- Trigger to auto-generate order_number
 CREATE OR REPLACE FUNCTION auto_generate_order_number()

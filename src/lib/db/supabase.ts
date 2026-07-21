@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createBrowserClient } from '@supabase/ssr';
-import { getEnv } from '@/lib/env';
+import { getEnv, getSupabaseServerKey } from '@/lib/env';
 
 type SupabaseClientType = SupabaseClient;
 let browserClient: SupabaseClientType | null = null;
@@ -28,10 +28,11 @@ export function getBrowserClient() {
 export function getServiceClient() {
   if (serviceClient) return serviceClient;
   const env = getEnv();
-  if (!env.NEXT_PUBLIC_SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+  const serverKey = getSupabaseServerKey();
+  if (!env.NEXT_PUBLIC_SUPABASE_URL || !serverKey) {
     return buildMockClient();
   }
-  serviceClient = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+  serviceClient = createClient(env.NEXT_PUBLIC_SUPABASE_URL, serverKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   }) as unknown as SupabaseClientType;
   return serviceClient;

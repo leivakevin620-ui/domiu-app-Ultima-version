@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
 const PUBLIC_ROUTES = ['/', '/login', '/register', '/forgot-password', '/auth/reset-password'];
+const INTERNAL_IDENTITY_HEADERS = ['x-user-id', 'x-user-email'];
 
 function isPublicRoute(pathname: string): boolean {
   return PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(route + '/'));
@@ -18,6 +19,16 @@ function isBrokenRefreshToken(error: { code?: string; message?: string } | null)
   return error.code === 'refresh_token_not_found' || message.includes('invalid refresh token');
 }
 
+function sanitizedHeaders(request: NextRequest) {
+  const headers = new Headers(request.headers);
+  for (const name of INTERNAL_IDENTITY_HEADERS) headers.delete(name);
+  return headers;
+}
+
+function nextWithHeaders(headers: Headers) {
+  return NextResponse.next({ request: { headers } });
+}
+
 function clearSupabaseAuthCookies(request: NextRequest, response: NextResponse): void {
   for (const cookie of request.cookies.getAll()) {
     if (!cookie.name.startsWith('sb-') || !cookie.name.includes('auth-token')) continue;
@@ -26,6 +37,8 @@ function clearSupabaseAuthCookies(request: NextRequest, response: NextResponse):
       maxAge: 0,
       expires: new Date(0),
       sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: true,
     });
   }
 }
@@ -46,6 +59,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  const cleanHeaders = sanitizedHeaders(request);
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -53,12 +67,17 @@ export async function proxy(request: NextRequest) {
     if (!isPublicRoute(pathname) && !pathname.startsWith('/api')) {
       return redirectToLogin(request, 'configuration');
     }
-    return NextResponse.next();
+    return nextWithHeaders(cleanHeaders);
   }
 
-  let response = NextResponse.next({ request });
+  let response = nextWithHeaders(cleanHeaders);
 
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -68,10 +87,15 @@ export async function proxy(request: NextRequest) {
           request.cookies.set(name, value);
         }
 
-        response = NextResponse.next({ request });
+        response = nextWithHeaders(cleanHeaders);
 
         for (const { name, value, options } of cookiesToSet) {
-          response.cookies.set(name, value, options);
+          response.cookies.set(name, value, {
+            ...options,
+            secure: process.env.NODE_ENV === 'production' ? true : options.secure,
+            httpOnly: true,
+            sameSite: options.sameSite || 'lax',
+          });
         }
       },
     },
@@ -97,14 +121,11 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-user-id', user.id);
-  requestHeaders.set('x-user-email', user.email || '');
+  const authenticatedHeaders = new Headers(cleanHeaders);
+  authenticatedHeaders.set('x-user-id', user.id);
+  authenticatedHeaders.set('x-user-email', user.email || '');
 
-  const authenticatedResponse = NextResponse.next({
-    request: { headers: requestHeaders },
-  });
-
+  const authenticatedResponse = nextWithHeaders(authenticatedHeaders);
   for (const cookie of response.cookies.getAll()) {
     authenticatedResponse.cookies.set(cookie);
   }

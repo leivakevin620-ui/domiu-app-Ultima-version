@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/auth/server-auth';
 import { getServiceClient } from '@/lib/db/supabase';
 import { buildDomiServerContext } from '@/lib/domi/server-context';
+import { rejectUnsafeMutation } from '@/lib/http/request-security';
 import {
   deriveConversationTitle,
   normalizeConversationStatus,
@@ -55,7 +56,10 @@ export async function GET(request: NextRequest) {
   const supabase = getServiceClient();
   const searchParams = request.nextUrl.searchParams;
   const search = (searchParams.get('q') || '').trim().slice(0, 80);
-  const limit = Math.min(50, Math.max(1, Number(searchParams.get('limit') || 30)));
+  const requestedLimit = Number(searchParams.get('limit') || 30);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(50, Math.max(1, Math.trunc(requestedLimit)))
+    : 30;
   const rawStatuses = (searchParams.get('status') || '')
     .split(',')
     .map((value) => normalizeConversationStatus(value))
@@ -71,7 +75,11 @@ export async function GET(request: NextRequest) {
   if (rawStatuses.length === 1) query = query.eq('status', rawStatuses[0]);
   if (rawStatuses.length > 1) query = query.in('status', rawStatuses);
   if (search) {
-    const safeSearch = search.replace(/[%_,()]/g, ' ').replace(/\s+/g, ' ').trim();
+    const safeSearch = search
+      .normalize('NFKC')
+      .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
     if (safeSearch) query = query.or(`title.ilike.%${safeSearch}%,summary.ilike.%${safeSearch}%`);
   }
 
@@ -85,6 +93,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const rejected = rejectUnsafeMutation(request);
+  if (rejected) return rejected;
+
   const auth = await requireAuth();
   if (auth.error) {
     return NextResponse.json({ error: auth.error.message }, { status: auth.error.status, headers: headers() });

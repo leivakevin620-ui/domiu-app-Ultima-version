@@ -1,3 +1,4 @@
+# Validación permanente de Domi AI Enterprise
 name: Domi CI
 
 on:
@@ -5,27 +6,63 @@ on:
     branches: [master]
     paths:
       - 'src/app/api/domi/**'
+      - 'src/app/api/admin/domi/**'
+      - 'src/app/api/health/**'
+      - 'src/app/admin/domi/**'
       - 'src/components/domi/**'
       - 'src/components/providers/RootProviders.tsx'
+      - 'src/contexts/CartContext.tsx'
       - 'src/lib/domi/**'
+      - 'src/lib/auth/**'
+      - 'src/lib/http/**'
+      - 'src/lib/db/supabase.ts'
+      - 'src/lib/env.ts'
+      - 'src/proxy.ts'
       - 'src/test/domi-**'
-      - 'supabase/migrations/**domi**'
+      - 'scripts/check-repository-secrets.mjs'
+      - 'supabase/migrations/**'
       - 'vitest.config.mts'
+      - 'next.config.ts'
+      - 'Dockerfile'
+      - '.dockerignore'
       - 'package.json'
       - 'package-lock.json'
+      - '.env.example'
+      - '.gitignore'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'docs/**'
       - '.github/workflows/domi-ci.yml'
   push:
     branches: [master]
     paths:
       - 'src/app/api/domi/**'
+      - 'src/app/api/admin/domi/**'
+      - 'src/app/api/health/**'
+      - 'src/app/admin/domi/**'
       - 'src/components/domi/**'
       - 'src/components/providers/RootProviders.tsx'
+      - 'src/contexts/CartContext.tsx'
       - 'src/lib/domi/**'
+      - 'src/lib/auth/**'
+      - 'src/lib/http/**'
+      - 'src/lib/db/supabase.ts'
+      - 'src/lib/env.ts'
+      - 'src/proxy.ts'
       - 'src/test/domi-**'
-      - 'supabase/migrations/**domi**'
+      - 'scripts/check-repository-secrets.mjs'
+      - 'supabase/migrations/**'
       - 'vitest.config.mts'
+      - 'next.config.ts'
+      - 'Dockerfile'
+      - '.dockerignore'
       - 'package.json'
       - 'package-lock.json'
+      - '.env.example'
+      - '.gitignore'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'docs/**'
       - '.github/workflows/domi-ci.yml'
 
 permissions:
@@ -38,19 +75,89 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - name: Descargar código
         uses: actions/checkout@v4
+        with:
+          show-progress: false
+
+      - name: Escanear secretos y archivos de entorno
+        id: secret_scan
+        continue-on-error: true
+        run: node scripts/check-repository-secrets.mjs > security-scan.txt 2>&1
+
+      - name: Publicar diagnóstico de seguridad
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: domi-security-scan
+          path: security-scan.txt
+          retention-days: 1
+
+      - name: Validar escaneo de secretos
+        if: steps.secret_scan.outcome == 'failure'
+        run: |
+          cat security-scan.txt
+          exit 1
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 20.19.0
           cache: npm
 
       - name: Instalar dependencias
         run: npm ci
+
+      - name: Ejecutar lint
+        id: lint
+        continue-on-error: true
+        run: npm run lint > lint.txt 2>&1
+
+      - name: Publicar diagnóstico de lint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: domi-lint
+          path: lint.txt
+          retention-days: 1
+
+      - name: Validar lint
+        if: steps.lint.outcome == 'failure'
+        run: |
+          cat lint.txt
+          exit 1
+
+      - name: Generar auditorías npm
+        id: npm_audit
+        continue-on-error: true
+        run: |
+          npm audit --omit=dev --json > npm-audit-production.json || true
+          npm audit --json > npm-audit-all.json || true
+
+      - name: Publicar auditorías npm
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: domi-npm-audit
+          path: |
+            npm-audit-production.json
+            npm-audit-all.json
+          retention-days: 1
+
+      - name: Validar vulnerabilidades altas o críticas
+        run: |
+          node - <<'NODE'
+          const production = require('./npm-audit-production.json');
+          const complete = require('./npm-audit-all.json');
+          const prodCounts = production.metadata?.vulnerabilities ?? {};
+          const allCounts = complete.metadata?.vulnerabilities ?? {};
+          console.log('Auditoría de producción:', prodCounts);
+          console.log('Auditoría completa:', allCounts);
+          if ((prodCounts.high ?? 0) > 0 || (prodCounts.critical ?? 0) > 0) process.exit(1);
+          if ((allCounts.high ?? 0) > 0 || (allCounts.critical ?? 0) > 0) process.exit(1);
+          NODE
 
       - name: Probar seguridad y contexto
         run: npx vitest run src/lib/domi/security.test.ts --reporter=verbose
@@ -70,8 +177,39 @@ jobs:
       - name: Probar arquitectura modular y memoria controlable
         run: npx vitest run src/lib/domi/chat/architecture.test.ts --reporter=verbose
 
+      - name: Probar intenciones avanzadas y presupuesto
+        run: npx vitest run src/lib/domi/agent/intent-classifier.test.ts --reporter=verbose
+
+      - name: Probar agente completo y límites sensibles
+        run: npx vitest run src/lib/domi/agent/complete-agent.test.ts --reporter=verbose
+
+      - name: Ejecutar prueba generativa
+        id: generator_test
+        continue-on-error: true
+        run: npx vitest run src/lib/domi/model/grounded-generator.test.ts --reporter=verbose > generator-test.txt 2>&1
+
+      - name: Publicar diagnóstico generativo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: domi-generator-test
+          path: generator-test.txt
+          retention-days: 1
+
+      - name: Validar proveedor generativo y fallback
+        if: steps.generator_test.outcome == 'failure'
+        run: |
+          cat generator-test.txt
+          exit 1
+
       - name: Probar conversaciones persistentes
         run: npx vitest run src/lib/domi/conversations.test.ts --reporter=verbose
+
+      - name: Probar seguridad CSRF y autenticación
+        run: npx vitest run src/test/domi-request-security.test.ts --reporter=verbose
+
+      - name: Probar headers proxy health y Docker
+        run: npx vitest run src/test/domi-web-security.test.ts --reporter=verbose
 
       - name: Probar ciclo de sesión y hooks
         run: npx vitest run src/lib/domi/hook-order.test.ts --reporter=verbose
@@ -84,3 +222,6 @@ jobs:
 
       - name: Compilar y validar TypeScript
         run: npm run build
+
+      - name: Construir imagen Docker de producción
+        run: docker build --tag domiu-enterprise:${{ github.sha }} .

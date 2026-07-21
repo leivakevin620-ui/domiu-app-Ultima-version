@@ -180,25 +180,39 @@ revoke all on function public.detect_geofence_event()
 grant execute on function public.detect_geofence_event()
   to service_role;
 
-revoke all on function public.close_delivery_chat_after_order()
-  from public, anon, authenticated;
-grant execute on function public.close_delivery_chat_after_order()
-  to service_role;
+-- Some legacy helpers are created only in later production histories. Apply
+-- their ACLs when their exact signatures are present so fresh branches work.
+do $$
+begin
+  if to_regprocedure('public.close_delivery_chat_after_order()') is not null then
+    revoke all on function public.close_delivery_chat_after_order()
+      from public, anon, authenticated;
+    grant execute on function public.close_delivery_chat_after_order()
+      to service_role;
+  end if;
 
-revoke all on function public.sync_business_coordinates()
-  from public, anon, authenticated;
-grant execute on function public.sync_business_coordinates()
-  to service_role;
+  if to_regprocedure('public.sync_business_coordinates()') is not null then
+    revoke all on function public.sync_business_coordinates()
+      from public, anon, authenticated;
+    grant execute on function public.sync_business_coordinates()
+      to service_role;
+  end if;
 
-revoke all on function public.calculate_delivery_quote(uuid, uuid)
-  from public, anon, authenticated;
-grant execute on function public.calculate_delivery_quote(uuid, uuid)
-  to service_role;
+  if to_regprocedure('public.calculate_delivery_quote(uuid,uuid)') is not null then
+    revoke all on function public.calculate_delivery_quote(uuid, uuid)
+      from public, anon, authenticated;
+    grant execute on function public.calculate_delivery_quote(uuid, uuid)
+      to service_role;
+  end if;
 
-revoke all on function public.calculate_delivery_quote_v2(uuid, uuid)
-  from public, anon, authenticated;
-grant execute on function public.calculate_delivery_quote_v2(uuid, uuid)
-  to service_role;
+  if to_regprocedure('public.calculate_delivery_quote_v2(uuid,uuid)') is not null then
+    revoke all on function public.calculate_delivery_quote_v2(uuid, uuid)
+      from public, anon, authenticated;
+    grant execute on function public.calculate_delivery_quote_v2(uuid, uuid)
+      to service_role;
+  end if;
+end;
+$$;
 
 do $$
 begin

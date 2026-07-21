@@ -16,6 +16,7 @@ import {
 
 const sidebarItems = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+  { label: 'Domi IA', href: '/admin/domi', icon: Sparkles, featured: true },
   { label: 'Pedidos', href: '/admin/pedidos', icon: ClipboardList },
   { label: 'Crear Pedido', href: '/admin/pedidos/crear', icon: Package },
   { label: 'Liquidación', href: '/admin/liquidaciones', icon: Scale, featured: true },
@@ -92,6 +93,7 @@ export function AdminSidebar() {
     Auditoría: 'audit.read',
     Seguridad: 'security.read',
     Dashboard: '',
+    'Domi IA': '',
     Cobertura: '',
     Promociones: '',
     Reseñas: '',
@@ -132,7 +134,9 @@ export function AdminSidebar() {
       <nav className="flex-1 overflow-y-auto overscroll-contain p-3 pb-6">
         <p className={cn('mb-2 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground/70', compact && 'lg:hidden')}>Menú de administración</p>
         <ul className="space-y-1">{filtered.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+          const isActive = item.href === '/admin'
+            ? pathname === '/admin'
+            : pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
           return <li key={item.href}><Link href={item.href} onClick={() => setMobileOpen(false)} className={cn(
             'group relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200',

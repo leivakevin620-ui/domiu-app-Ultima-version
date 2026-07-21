@@ -53,6 +53,12 @@ interface CartContextValue {
     businessName: string,
     options?: AddItemOptions,
   ) => void;
+  replaceWithItem: (
+    product: MarketplaceProduct,
+    businessId: string,
+    businessName: string,
+    options?: AddItemOptions,
+  ) => void;
   removeItem: (itemId: string) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
   clearCart: () => void;
@@ -100,6 +106,19 @@ function saveCart(state: CartState) {
   }
 }
 
+function createCartItem(product: MarketplaceProduct, options: AddItemOptions = {}): CartItem {
+  const quantity = Math.max(1, Math.min(99, Math.floor(options.quantity ?? 1)));
+  const unitPrice = options.unitPrice ?? product.price;
+  return {
+    id: crypto.randomUUID?.() ?? Math.random().toString(36),
+    product,
+    quantity,
+    unitPrice,
+    customization: options.customization,
+    notes: options.customization?.preparationNote,
+  };
+}
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<CartState>(EMPTY_CART);
   const [hydrated, setHydrated] = useState(false);
@@ -125,16 +144,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       businessName: string,
       options: AddItemOptions = {},
     ) => {
-      const quantity = options.quantity ?? 1;
-      const unitPrice = options.unitPrice ?? product.price;
-      const item: CartItem = {
-        id: crypto.randomUUID?.() ?? Math.random().toString(36),
-        product,
-        quantity,
-        unitPrice,
-        customization: options.customization,
-        notes: options.customization?.preparationNote,
-      };
+      const item = createCartItem(product, options);
 
       setState((previous) => {
         if (
@@ -150,7 +160,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           (current) =>
             current.product.id === product.id &&
             JSON.stringify(current.customization ?? {}) === signature &&
-            current.unitPrice === unitPrice,
+            current.unitPrice === item.unitPrice,
         );
 
         if (existing) {
@@ -160,7 +170,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             businessName,
             items: previous.items.map((current) =>
               current.id === existing.id
-                ? { ...current, quantity: current.quantity + quantity }
+                ? { ...current, quantity: Math.min(99, current.quantity + item.quantity) }
                 : current,
             ),
           };
@@ -171,6 +181,22 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           businessName,
           items: [...previous.items, item],
         };
+      });
+    },
+    [],
+  );
+
+  const replaceWithItem = useCallback(
+    (
+      product: MarketplaceProduct,
+      businessId: string,
+      businessName: string,
+      options: AddItemOptions = {},
+    ) => {
+      setState({
+        businessId,
+        businessName,
+        items: [createCartItem(product, options)],
       });
     },
     [],
@@ -189,7 +215,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setState((previous) => ({
       ...previous,
       items: previous.items.map((item) =>
-        item.id === itemId ? { ...item, quantity } : item,
+        item.id === itemId ? { ...item, quantity: Math.min(99, quantity) } : item,
       ),
     }));
   }, []);
@@ -208,11 +234,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       ),
       isEmpty: state.items.length === 0,
       addItem,
+      replaceWithItem,
       removeItem,
       updateQuantity,
       clearCart,
     }),
-    [state, addItem, removeItem, updateQuantity, clearCart],
+    [state, addItem, replaceWithItem, removeItem, updateQuantity, clearCart],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

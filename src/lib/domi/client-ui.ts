@@ -169,6 +169,19 @@ function payloadError(payload: unknown): string | null {
   return typeof error === 'string' && error.trim() ? error.trim() : null;
 }
 
+function isDomiChatRequest(input: RequestInfo | URL) {
+  if (typeof input === 'string') return input.includes('/api/domi/chat');
+  if (input instanceof URL) return input.pathname.includes('/api/domi/chat');
+  return typeof input.url === 'string' && input.url.includes('/api/domi/chat');
+}
+
+function publishDomiAgentResponse(payload: unknown) {
+  if (typeof window === 'undefined' || !payload || typeof payload !== 'object') return;
+  window.dispatchEvent(new CustomEvent('domiu:domi-agent-response', {
+    detail: payload,
+  }));
+}
+
 export async function requestDomiJson<T>(
   input: RequestInfo | URL,
   init?: RequestInit,
@@ -212,5 +225,6 @@ export async function requestDomiJson<T>(
     throw new DomiRequestError('Domi devolvió una respuesta inválida.', 502);
   }
 
+  if (isDomiChatRequest(input)) publishDomiAgentResponse(payload);
   return payload as T;
 }

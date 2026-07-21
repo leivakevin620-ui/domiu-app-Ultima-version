@@ -27,10 +27,16 @@ type RequireAuthResult = AuthResult | AuthError;
 
 async function createServerSupabaseClient() {
   const cookieStore = await cookies();
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseKey) throw new Error('supabase_auth_configuration_missing');
 
   return createServerClient(supabaseUrl, supabaseKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -41,7 +47,7 @@ async function createServerSupabaseClient() {
             cookieStore.set(name, value, options)
           );
         } catch {
-          // Forward compatibility: in some Next.js versions this throws in read-only contexts
+          // Algunos contextos de React Server Components son de solo lectura.
         }
       },
     },
@@ -53,20 +59,22 @@ export const getServerSession = cache(async (): Promise<{
 }> => {
   try {
     const supabase = await createServerSupabaseClient();
-
-    const { data: { session }, error } = await supabase.auth.getSession();
-    if (!error && session?.user) {
-      return { userId: session.user.id, email: session.user.email || '' };
-    }
-
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (!userError && user) {
+    // getUser valida el JWT contra Supabase Auth. No se usa getSession porque
+    // únicamente decodifica el estado local de cookies y no es una autorización.
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (!error && user) {
       return { userId: user.id, email: user.email || '' };
     }
 
     return { error: 'No autenticado', status: 401 };
-  } catch {
-    return { error: 'Error de autenticación', status: 500 };
+  } catch (cause) {
+    const reason = cause instanceof Error ? cause.message : 'unknown_auth_error';
+    return {
+      error: reason === 'supabase_auth_configuration_missing'
+        ? 'Configuración de autenticación incompleta'
+        : 'Error de autenticación',
+      status: 500,
+    };
   }
 });
 
@@ -77,13 +85,13 @@ export const requireAuth = cache(async (): Promise<RequireAuthResult> => {
   }
 
   const serviceClient = getServiceClient();
-  const { data: profile } = await serviceClient
+  const { data: profile, error } = await serviceClient
     .from('profiles')
     .select('*')
     .eq('id', session.userId)
     .single();
 
-  if (!profile) {
+  if (error || !profile) {
     return { error: { message: 'Perfil no encontrado', status: 404 } };
   }
 

@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
@@ -5,6 +6,9 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     tsconfigPaths: true,
+    alias: {
+      'server-only': resolve(process.cwd(), 'src/test/server-only-stub.ts'),
+    },
   },
   test: {
     environment: 'jsdom',
@@ -28,6 +32,7 @@ export default defineConfig({
       exclude: [
         'src/**/*.d.ts',
         'src/test/setup.ts',
+        'src/test/server-only-stub.ts',
         'src/lib/domi/**/*.test.ts',
       ],
     },

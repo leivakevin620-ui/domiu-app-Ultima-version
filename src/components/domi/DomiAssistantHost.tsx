@@ -3,6 +3,10 @@
 import React from 'react';
 import { RotateCcw, Sparkles } from 'lucide-react';
 import { DomiAssistantStable } from '@/components/domi/DomiAssistantStable';
+import { DomiAgentBridge } from '@/components/domi/DomiAgentBridge';
+import { DomiVoiceDock } from '@/components/domi/DomiVoiceDock';
+import { DomiProactiveDock } from '@/components/domi/DomiProactiveDock';
+import { DomiFeedbackDock } from '@/components/domi/DomiFeedbackDock';
 import styles from '@/components/domi/DomiAssistantTheme.module.css';
 
 interface DomiBoundaryState {
@@ -62,6 +66,10 @@ export function DomiAssistantHost() {
   return (
     <DomiAssistantBoundary>
       <DomiAssistantStable />
+      <DomiAgentBridge />
+      <DomiVoiceDock />
+      <DomiProactiveDock />
+      <DomiFeedbackDock />
       <span className={`${styles.themeMarker} sr-only`} aria-hidden="true">
         <Sparkles aria-hidden="true" /> Asistente Domi activo
       </span>

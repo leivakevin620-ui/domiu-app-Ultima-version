@@ -5,6 +5,7 @@ import { getServiceClient } from '@/lib/db/supabase';
 import { memoryKey, type DomiMemoryCandidate, type DomiRiskLevel } from '@/lib/domi/security';
 import type { DomiServerContext } from '@/lib/domi/server-context';
 import type { DomiNavigationLink } from '@/lib/domi/tools/types';
+import type { DomiClientCommand } from '@/lib/domi/agent/types';
 
 const cartItemSchema = z.object({
   productId: z.string().uuid(),
@@ -38,12 +39,15 @@ export interface DomiAssistantResponse {
   tool: string | null;
   toolArguments: Record<string, unknown> | null;
   toolData: Record<string, unknown> | null;
+  clientCommands: DomiClientCommand[];
   requiresConfirmation: boolean;
   riskLevel: DomiRiskLevel;
   memoryCandidate: DomiMemoryCandidate | null;
   suggestedActions: string[];
   navigation: DomiNavigationLink[];
   escalateToHuman: boolean;
+  generationModel: string | null;
+  generationProvider: string | null;
 }
 
 const ROLE_INTRO: Record<string, string> = {
@@ -74,7 +78,10 @@ export function buildDomiAssistantPayload(args: {
   tool?: string | null;
   toolArguments?: Record<string, unknown> | null;
   toolData?: Record<string, unknown> | null;
+  clientCommands?: DomiClientCommand[];
   escalateToHuman?: boolean;
+  generationModel?: string | null;
+  generationProvider?: string | null;
 }): DomiAssistantResponse {
   return {
     message: args.message,
@@ -84,12 +91,15 @@ export function buildDomiAssistantPayload(args: {
     tool: args.tool || null,
     toolArguments: args.toolArguments || null,
     toolData: args.toolData || null,
+    clientCommands: args.clientCommands || [],
     requiresConfirmation: Boolean(args.requiresConfirmation),
     riskLevel: args.riskLevel || 'low',
     memoryCandidate: args.memoryCandidate || null,
     suggestedActions: args.suggestedActions || [],
     navigation: args.navigation || [],
     escalateToHuman: Boolean(args.escalateToHuman),
+    generationModel: args.generationModel || null,
+    generationProvider: args.generationProvider || null,
   };
 }
 
@@ -154,7 +164,11 @@ export async function saveDomiMemory(
 }
 
 export function domiModelForAssistant(assistant: DomiAssistantResponse, mode: string) {
+  if (assistant.generationModel && assistant.generationProvider) {
+    return `${assistant.generationProvider}:${assistant.generationModel}`;
+  }
   if (assistant.requiresConfirmation || assistant.tool?.startsWith('action.')) return 'domi-secure-actions-v1';
+  if (assistant.tool?.startsWith('agent.')) return 'domi-complete-agent-v1';
   if (mode === 'tool') return 'domi-secure-tools-v2';
   return 'domi-secure-knowledge-v2';
 }
@@ -181,6 +195,8 @@ export async function insertDomiAssistantMessage(args: {
       response: args.assistant,
       memoryCandidate: args.assistant.memoryCandidate,
       memoryState: args.memoryState || null,
+      generationProvider: args.assistant.generationProvider,
+      generationModel: args.assistant.generationModel,
     },
   });
   if (error) throw new Error('assistant_message_write_failed');

@@ -8,6 +8,8 @@ import type { DomiToolResult } from '@/lib/domi/tools/types';
 import { getDomiUserSettings } from '@/lib/domi/user-settings';
 import { processDomiMemory } from '@/lib/domi/chat/memory';
 import type { PreparedDomiChat } from '@/lib/domi/chat/session';
+import { runDomiConversationOrchestrator } from '@/lib/domi/agent/conversation-orchestrator';
+import { generateGroundedDomiAnswer } from '@/lib/domi/model/grounded-generator';
 import {
   buildDomiAssistantPayload,
   buildDomiKnowledgeAnswer,
@@ -18,12 +20,18 @@ import {
   type DomiAssistantResponse,
 } from '@/lib/domi/chat/protocol';
 
+interface AuditToolResult {
+  name: string;
+  success: boolean;
+  recordCount: number;
+}
+
 async function persist(args: {
   prepared: PreparedDomiChat;
   assistant: DomiAssistantResponse;
   mode: 'knowledge' | 'memory' | 'tool';
   memoryState?: 'pending' | 'saved' | 'cancelled';
-  toolResult?: DomiToolResult;
+  toolResult?: DomiToolResult | AuditToolResult;
 }) {
   const { prepared } = args;
   await insertDomiAssistantMessage({
@@ -109,6 +117,49 @@ export async function respondToDomiChat(prepared: PreparedDomiChat) {
       });
     }
 
+    const advanced = await runDomiConversationOrchestrator({
+      supabase: prepared.supabase,
+      context: prepared.context,
+      settings,
+      conversationId: prepared.conversationId,
+      message: prepared.message,
+    });
+    if (advanced) {
+      const assistant = buildDomiAssistantPayload({
+        message: advanced.message,
+        intent: advanced.intent,
+        context: prepared.context,
+        tool: advanced.tool,
+        toolArguments: { message: prepared.message },
+        toolData: {
+          ...advanced.data,
+          clientCommands: advanced.clientCommands || advanced.data.clientCommands || [],
+        },
+        clientCommands: advanced.clientCommands,
+        suggestedActions: advanced.suggestedActions,
+        navigation: advanced.navigation,
+        requiresConfirmation: advanced.requiresConfirmation,
+        riskLevel: advanced.riskLevel,
+        escalateToHuman: advanced.escalateToHuman,
+      });
+      await persist({
+        prepared,
+        assistant,
+        mode: 'tool',
+        toolResult: {
+          name: advanced.tool,
+          success: true,
+          recordCount: advanced.recordCount,
+        },
+      });
+      return response({
+        prepared,
+        assistant,
+        mode: 'tool',
+        headers: { 'X-Domi-Tool': advanced.tool },
+      });
+    }
+
     const toolPlan = planDomiCustomerTool(prepared.context, prepared.message);
     if (toolPlan) {
       const toolResult = await executeDomiCustomerTool(
@@ -152,35 +203,54 @@ export async function respondToDomiChat(prepared: PreparedDomiChat) {
       .limit(30);
     if (error) throw new Error('knowledge_read_failed');
 
-    const answer = buildDomiKnowledgeAnswer(
+    const approvedKnowledge = (knowledge ?? []).map((item) => ({
+      title: String(item.title),
+      content: String(item.content),
+    }));
+    const deterministicAnswer = buildDomiKnowledgeAnswer(
       prepared.context,
       prepared.message,
-      (knowledge ?? []).map((item) => ({
-        title: String(item.title),
-        content: String(item.content),
-      })),
+      approvedKnowledge,
     );
+    const generated = await generateGroundedDomiAnswer({
+      context: prepared.context,
+      message: prepared.message,
+      deterministicAnswer,
+      knowledge: approvedKnowledge,
+    });
     const suggestedActions = settings.proactiveEnabled
       ? prepared.context.role === 'admin'
-        ? ['Revisar pedidos', 'Consultar liquidaciones']
+        ? ['Revisar pedidos', 'Evaluar Domi']
         : prepared.context.role === 'merchant'
           ? ['Revisar pedidos', 'Consultar inventario']
           : prepared.context.role === 'courier'
             ? ['Revisar pedidos asignados', 'Consultar ganancias']
-            : ['Buscar productos', 'Consultar mis pedidos', 'Consultar mi carrito']
+            : ['Recomiéndame algo con $30.000', 'Consultar mis pedidos', 'Ver promociones']
       : [];
     const assistant = buildDomiAssistantPayload({
-      message: answer,
+      message: generated?.answer || deterministicAnswer,
       intent: prepared.intent,
       context: prepared.context,
       suggestedActions,
+      generationModel: generated?.model || null,
+      generationProvider: generated?.provider || null,
     });
     await persist({ prepared, assistant, mode: 'knowledge' });
     return response({
       prepared,
       assistant,
       mode: 'knowledge',
+      headers: generated ? { 'X-Domi-Generation': 'grounded' } : { 'X-Domi-Generation': 'deterministic' },
       extra: {
+        generation: generated ? {
+          provider: generated.provider,
+          model: generated.model,
+          latencyMs: generated.latencyMs,
+          usage: generated.usage,
+        } : {
+          provider: 'deterministic',
+          model: 'domi-secure-knowledge-v2',
+        },
         context: {
           role: prepared.context.role,
           permissions: prepared.context.permissions,
@@ -190,6 +260,8 @@ export async function respondToDomiChat(prepared: PreparedDomiChat) {
           tenantType: prepared.context.tenantType,
           memoryEnabled: settings.memoryEnabled,
           proactiveEnabled: settings.proactiveEnabled,
+          voiceEnabled: settings.voiceEnabled,
+          learningEnabled: settings.learningEnabled,
         },
       },
     });

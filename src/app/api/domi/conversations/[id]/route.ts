@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/auth/server-auth';
 import { getServiceClient } from '@/lib/db/supabase';
+import { rejectUnsafeMutation } from '@/lib/http/request-security';
 import {
   normalizeConversationStatus,
   sanitizeConversationTitle,
@@ -108,6 +109,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const rejected = rejectUnsafeMutation(request);
+  if (rejected) return rejected;
+
   const auth = await requireAuth();
   if (auth.error) {
     return NextResponse.json({ error: auth.error.message }, { status: auth.error.status, headers: headers() });
@@ -161,7 +165,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   }
 }
 
-export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const rejected = rejectUnsafeMutation(request);
+  if (rejected) return rejected;
+
   const auth = await requireAuth();
   if (auth.error) {
     return NextResponse.json({ error: auth.error.message }, { status: auth.error.status, headers: headers() });
