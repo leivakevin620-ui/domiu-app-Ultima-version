@@ -120,6 +120,9 @@ export const manualOrderRequestSchema = z
     if (input.salesChannel === 'other' && !input.salesChannelDetail) {
       context.addIssue({ code: 'custom', path: ['salesChannelDetail'], message: 'Describe el canal de origen' });
     }
+    if (input.panel === 'admin' && !input.adminReason) {
+      context.addIssue({ code: 'custom', path: ['adminReason'], message: 'El motivo administrativo de creación es obligatorio' });
+    }
     if (input.panel === 'business' && input.courierId) {
       context.addIssue({ code: 'custom', path: ['courierId'], message: 'El comercio no puede asignar repartidor desde este flujo' });
     }
@@ -194,7 +197,24 @@ export function getManualOrderErrorMessage(error: unknown): string {
     manual_order_invalid_paid_amount: 'El valor pagado no es válido.',
     manual_order_total_out_of_range: 'El total del pedido está fuera del rango permitido.',
     manual_order_paid_amount_exceeds_total: 'El valor pagado no puede superar el total.',
+    manual_order_idempotency_required: 'No se pudo proteger la creación contra duplicados.',
+    manual_order_idempotency_conflict: 'Esta confirmación ya fue usada con datos diferentes. Recarga el formulario.',
   };
   const key = Object.keys(known).find((candidate) => raw.includes(candidate));
-  return key ? known[key] : 'No se pudo crear el pedido manual. Revisa los datos e inténtalo nuevamente.';
+  if (key) return known[key];
+
+  const safeMessages = [
+    'No tienes permiso para crear pedidos manuales',
+    'Negocio no encontrado o no autorizado',
+    'El negocio está inactivo',
+    'Cliente registrado no encontrado',
+    'El cliente registrado está suspendido o inactivo',
+    'Los artículos personalizados no están habilitados para este negocio',
+    'Para marcar el pago como completado, el valor pagado debe ser igual al total',
+    'Solo administración puede asignar un repartidor en la creación',
+    'El repartidor seleccionado no está disponible',
+    'El motivo administrativo de creación es obligatorio',
+  ];
+  const safe = safeMessages.find((message) => raw.includes(message));
+  return safe || 'No se pudo crear el pedido manual. Revisa los datos e inténtalo nuevamente.';
 }
