@@ -1,0 +1,51 @@
+name: Domi Lockfile Refresh
+
+on:
+  push:
+    branches:
+      - feat/domi-complete-agent-20260719
+    paths:
+      - package.json
+      - .github/workflows/domi-lockfile-refresh.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: domi-lockfile-refresh
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Descargar rama
+        uses: actions/checkout@v4
+        with:
+          ref: feat/domi-complete-agent-20260719
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Regenerar lockfile
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Versionar lockfile cuando cambie
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- package-lock.json; then
+            echo 'El lockfile ya está actualizado.'
+            exit 0
+          fi
+          git config user.name 'domiu-security-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add package-lock.json
+          git commit -m 'fix(deps): cerrar última vulnerabilidad transitiva'
+          git push origin HEAD:feat/domi-complete-agent-20260719
