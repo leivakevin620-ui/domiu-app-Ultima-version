@@ -39,7 +39,7 @@ on:
       - '.github/workflows/domi-ci.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: domi-ci-${{ github.ref }}
@@ -53,8 +53,6 @@ jobs:
       - name: Descargar código
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
-          fetch-depth: 0
           show-progress: false
 
       - name: Escanear secretos y archivos de entorno
@@ -81,31 +79,6 @@ jobs:
         with:
           node-version: 20
           cache: npm
-
-      - name: Regenerar lockfile de dependencias
-        run: npm install --package-lock-only --ignore-scripts
-
-      - name: Versionar lockfile regenerado
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feat/domi-complete-agent-20260719'
-        shell: bash
-        run: |
-          set -euo pipefail
-          if git diff --quiet -- package-lock.json; then
-            echo 'El lockfile ya está actualizado.'
-            exit 0
-          fi
-          git config user.name 'domiu-security-bot'
-          git config user.email 'actions@users.noreply.github.com'
-          git add package-lock.json
-          git commit -m 'fix(deps): regenerar lockfile sin dependencias CLI en producción'
-          git push origin HEAD:feat/domi-complete-agent-20260719
-
-      - name: Publicar lockfile regenerado
-        uses: actions/upload-artifact@v4
-        with:
-          name: domi-safe-lockfile
-          path: package-lock.json
-          retention-days: 1
 
       - name: Instalar dependencias
         run: npm ci
