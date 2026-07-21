@@ -66,6 +66,7 @@ function cleanText(value: unknown, maxLength: number) {
 
 function normalizeClaim(value: string) {
   return value
+    .replace(/[.,;:!?]+$/g, '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, '')
@@ -79,7 +80,10 @@ function numberOrNull(value: unknown) {
 
 function sanitizeGroundingFact(value: unknown, maxLength: number) {
   return cleanText(value, maxLength)
-    .replace(/\b(ignore|ignora|omite|revela|muestra)\b.{0,40}\b(instrucciones?|prompt|sistema|developer|politicas?|políticas?|secretos?|tokens?)\b/gi, '[contenido no confiable omitido]')
+    .replace(
+      /\b(ignore|ignora|omite|revela|muestra)\b.{0,80}\b(instrucciones?|prompt|sistema|developer|politicas?|políticas?|secretos?|tokens?)\b[^.?!]{0,120}[.?!]?/gi,
+      '[contenido no confiable omitido]',
+    )
     .replace(/\b(system|assistant|developer)\s*:/gi, '[etiqueta omitida]');
 }
 
@@ -87,7 +91,7 @@ function extractGroundedClaims(value: string) {
   const matches = value.match(
     /\$\s?\d[\d.,]*|\b\d+(?:[.,]\d+)?\s?(?:cop|pesos?|%|minutos?|horas?|d[ií]as?|semanas?|meses?)\b|\b(?:[01]?\d|2[0-3]):[0-5]\d\b/gi,
   ) ?? [];
-  return [...new Set(matches.map(normalizeClaim))];
+  return [...new Set(matches.map(normalizeClaim).filter(Boolean))];
 }
 
 export function hasUnsupportedDomiClaims(answer: string, verifiedSources: string[]) {
