@@ -9,19 +9,21 @@ import { DomiULogo, DomiUMark } from '@/components/brand/DomiULogo';
 import {
   LayoutDashboard, Package, ClipboardList, Users, BarChart3, Settings,
   Star, LogOut, ChevronLeft, Globe, Menu, X, MapPinned, CreditCard,
+  PackagePlus,
 } from 'lucide-react';
 
 const sidebarItems = [
-  { label: 'Dashboard', href: '/negocio', icon: LayoutDashboard },
+  { label: 'Dashboard', href: '/negocio', icon: LayoutDashboard, exact: true },
   { label: 'Productos', href: '/negocio/productos', icon: Package },
-  { label: 'Pedidos', href: '/negocio/pedidos', icon: ClipboardList },
+  { label: 'Pedidos', href: '/negocio/pedidos', icon: ClipboardList, exact: true },
+  { label: 'Crear pedido manual', href: '/negocio/pedidos/crear', icon: PackagePlus },
   { label: 'Clientes', href: '/negocio/clientes', icon: Users },
   { label: 'Mapa en vivo', href: '/negocio/mapa', icon: Globe },
   { label: 'Locales', href: '/negocio/configuracion/ubicacion', icon: MapPinned },
   { label: 'Métodos de pago', href: '/negocio/configuracion/pagos', icon: CreditCard },
   { label: 'Reportes', href: '/negocio/reportes', icon: BarChart3 },
   { label: 'Reseñas', href: '/negocio/resenas', icon: Star },
-  { label: 'Configuración', href: '/negocio/configuracion', icon: Settings },
+  { label: 'Configuración', href: '/negocio/configuracion', icon: Settings, exact: true },
 ];
 
 export function BusinessSidebar() {
@@ -76,7 +78,7 @@ export function BusinessSidebar() {
       <nav className="flex-1 overflow-y-auto p-3">
         <ul className="space-y-0.5">
           {sidebarItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            const isActive = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(item.href + '/');
             const Icon = item.icon;
             return (
               <li key={item.href}>
