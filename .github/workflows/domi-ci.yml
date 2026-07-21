@@ -12,10 +12,11 @@ on:
       - 'src/contexts/CartContext.tsx'
       - 'src/lib/domi/**'
       - 'src/test/domi-**'
-      - 'supabase/migrations/**domi**'
+      - 'supabase/migrations/**'
       - 'vitest.config.mts'
       - 'package.json'
       - 'package-lock.json'
+      - '.gitignore'
       - '.github/workflows/domi-ci.yml'
   push:
     branches: [master]
@@ -28,10 +29,11 @@ on:
       - 'src/contexts/CartContext.tsx'
       - 'src/lib/domi/**'
       - 'src/test/domi-**'
-      - 'supabase/migrations/**domi**'
+      - 'supabase/migrations/**'
       - 'vitest.config.mts'
       - 'package.json'
       - 'package-lock.json'
+      - '.gitignore'
       - '.github/workflows/domi-ci.yml'
 
 permissions:
@@ -49,6 +51,25 @@ jobs:
       - name: Descargar código
         uses: actions/checkout@v4
 
+      - name: Bloquear secretos y archivos de entorno
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          forbidden_env_files="$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -vE '(^|/)\.env\.example$' || true)"
+          if [[ -n "$forbidden_env_files" ]]; then
+            echo '::error::Hay archivos de entorno versionados en el repositorio.'
+            printf '%s\n' "$forbidden_env_files"
+            exit 1
+          fi
+
+          secret_assignments="$(git grep -InE '(SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|VERCEL_OIDC_TOKEN)[[:space:]]*=[[:space:]]*[\"'"'"'][^\"'"'"']+' -- . ':!*.example' ':!docs/**' || true)"
+          if [[ -n "$secret_assignments" ]]; then
+            echo '::error::Se detectaron posibles secretos privados escritos directamente en archivos.'
+            printf '%s\n' "$secret_assignments" | sed -E 's/=.*/=<redacted>/'
+            exit 1
+          fi
+
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
@@ -57,6 +78,9 @@ jobs:
 
       - name: Instalar dependencias
         run: npm ci
+
+      - name: Auditar dependencias de producción
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Probar seguridad y contexto
         run: npx vitest run src/lib/domi/security.test.ts --reporter=verbose
