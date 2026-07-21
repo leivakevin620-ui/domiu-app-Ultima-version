@@ -62,5 +62,13 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.9"
+  },
+  "overrides": {
+    "body-parser": "2.3.0",
+    "js-yaml": "4.3.0",
+    "brace-expansion@5.0.6": "5.0.7",
+    "next": {
+      "postcss": "8.5.10"
+    }
   }
 }
