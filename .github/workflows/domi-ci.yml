@@ -83,26 +83,34 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
-      - name: Generar auditoría de dependencias de producción
+      - name: Generar auditorías npm
         id: npm_audit
         continue-on-error: true
-        run: npm audit --omit=dev --json > npm-audit.json
+        run: |
+          npm audit --omit=dev --json > npm-audit-production.json || true
+          npm audit --json > npm-audit-all.json || true
 
-      - name: Publicar auditoría npm
+      - name: Publicar auditorías npm
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: domi-npm-audit
-          path: npm-audit.json
+          path: |
+            npm-audit-production.json
+            npm-audit-all.json
           retention-days: 1
 
       - name: Validar vulnerabilidades altas o críticas
         run: |
           node - <<'NODE'
-          const report = require('./npm-audit.json');
-          const counts = report.metadata?.vulnerabilities ?? {};
-          console.log('Auditoría de producción:', counts);
-          if ((counts.high ?? 0) > 0 || (counts.critical ?? 0) > 0) process.exit(1);
+          const production = require('./npm-audit-production.json');
+          const complete = require('./npm-audit-all.json');
+          const prodCounts = production.metadata?.vulnerabilities ?? {};
+          const allCounts = complete.metadata?.vulnerabilities ?? {};
+          console.log('Auditoría de producción:', prodCounts);
+          console.log('Auditoría completa:', allCounts);
+          if ((prodCounts.high ?? 0) > 0 || (prodCounts.critical ?? 0) > 0) process.exit(1);
+          if ((allCounts.high ?? 0) > 0 || (allCounts.critical ?? 0) > 0) process.exit(1);
           NODE
 
       - name: Probar seguridad y contexto
