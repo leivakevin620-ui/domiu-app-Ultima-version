@@ -24,8 +24,8 @@ const optionalText = (max: number) =>
     .string()
     .trim()
     .max(max)
-    .optional()
-    .transform((value) => value || undefined);
+    .transform((value) => value || undefined)
+    .optional();
 
 export const manualOrderItemSchema = z
   .object({
