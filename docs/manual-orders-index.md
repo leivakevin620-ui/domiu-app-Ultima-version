@@ -1,0 +1,17 @@
+# Documentación de pedidos manuales
+
+- [Arquitectura y operación](MANUAL-ORDERS-ENTERPRISE-2026-07-21.md)
+- [API](manual-orders-api.md)
+- [Modelo de datos](manual-orders-data-model.md)
+- [Flujo](manual-orders-flow.md)
+- [Roles y permisos](manual-orders-permissions.md)
+- [RLS y seguridad](manual-orders-rls.md)
+- [Interfaz](manual-orders-ui.md)
+- [Guía administrativa](manual-orders-admin-guide.md)
+- [Guía del comercio](manual-orders-merchant-guide.md)
+- [Pruebas](manual-orders-testing.md)
+- [Operación](manual-orders-operations.md)
+- [Notificaciones](manual-orders-notifications.md)
+- [Troubleshooting](manual-orders-troubleshooting.md)
+- [Checklist](manual-orders-release-checklist.md)
+- [ADR-0007](adr/ADR-0007-MANUAL-ORDERS-DOMAIN.md)
