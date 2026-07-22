@@ -22,10 +22,19 @@ function diagnostic(message, level = 'info') {
   else console.log(safeMessage)
 }
 
-function keyKind(value) {
-  if (value.startsWith('sb_secret_')) return 'sb_secret'
-  if (value.split('.').length === 3) return 'legacy_jwt'
-  return 'unknown'
+function assertLegacyServiceRole(name, value) {
+  if (value.split('.').length !== 3) {
+    throw new Error(
+      `${name} must be the legacy service_role JWT from Legacy API Keys; opaque sb_secret keys are not accepted by this Storage migration`,
+    )
+  }
+}
+
+function createStorageClient(projectUrl, serviceRoleKey) {
+  return new StorageClient(`${projectUrl}/storage/v1`, {
+    apikey: serviceRoleKey,
+    Authorization: `Bearer ${serviceRoleKey}`,
+  })
 }
 
 let source
@@ -38,22 +47,23 @@ try {
     }
   }
 
+  assertLegacyServiceRole('SOURCE_SERVICE_ROLE_KEY', process.env.SOURCE_SERVICE_ROLE_KEY)
+  assertLegacyServiceRole('TARGET_SERVICE_ROLE_KEY', process.env.TARGET_SERVICE_ROLE_KEY)
+
   diagnostic(`Source URL host: ${new URL(process.env.SOURCE_SUPABASE_URL).host}`)
   diagnostic(`Target URL host: ${new URL(process.env.TARGET_SUPABASE_URL).host}`)
-  diagnostic(
-    `Source key type: ${keyKind(process.env.SOURCE_SERVICE_ROLE_KEY)}; length: ${process.env.SOURCE_SERVICE_ROLE_KEY.length}`,
-  )
-  diagnostic(
-    `Target key type: ${keyKind(process.env.TARGET_SERVICE_ROLE_KEY)}; length: ${process.env.TARGET_SERVICE_ROLE_KEY.length}`,
-  )
+  diagnostic('Source key type: legacy service_role JWT')
+  diagnostic('Target key type: legacy service_role JWT')
 
-  source = new StorageClient(`${process.env.SOURCE_SUPABASE_URL}/storage/v1`, {
-    apikey: process.env.SOURCE_SERVICE_ROLE_KEY,
-  })
-  target = new StorageClient(`${process.env.TARGET_SUPABASE_URL}/storage/v1`, {
-    apikey: process.env.TARGET_SERVICE_ROLE_KEY,
-  })
-  diagnostic('Storage clients initialized with apikey headers')
+  source = createStorageClient(
+    process.env.SOURCE_SUPABASE_URL,
+    process.env.SOURCE_SERVICE_ROLE_KEY,
+  )
+  target = createStorageClient(
+    process.env.TARGET_SUPABASE_URL,
+    process.env.TARGET_SERVICE_ROLE_KEY,
+  )
+  diagnostic('Storage clients initialized')
 } catch (error) {
   diagnostic(error instanceof Error ? error.stack ?? error.message : String(error), 'error')
   process.exit(1)
