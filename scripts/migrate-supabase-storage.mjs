@@ -37,6 +37,22 @@ function createStorageClient(projectUrl, serviceRoleKey) {
   })
 }
 
+async function withRetry(label, operation, attempts = 4) {
+  let lastError
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await operation()
+    } catch (error) {
+      lastError = error
+      if (attempt === attempts) break
+      const delay = 500 * 2 ** (attempt - 1)
+      diagnostic(`${label}: intento ${attempt} falló; reintentando en ${delay} ms`)
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+  throw lastError
+}
+
 let source
 let target
 
@@ -75,11 +91,13 @@ const CONCURRENCY = 4
 async function listFolder(bucket, path = '') {
   const all = []
   for (let offset = 0; ; offset += PAGE_SIZE) {
-    const { data, error } = await source.from(bucket).list(path, {
-      limit: PAGE_SIZE,
-      offset,
-      sortBy: { column: 'name', order: 'asc' },
-    })
+    const { data, error } = await withRetry(`List ${bucket}/${path}`, () =>
+      source.from(bucket).list(path, {
+        limit: PAGE_SIZE,
+        offset,
+        sortBy: { column: 'name', order: 'asc' },
+      }),
+    )
     if (error) throw new Error(`List failed ${bucket}/${path}: ${error.message}`)
     all.push(...(data ?? []))
     if (!data || data.length < PAGE_SIZE) break
@@ -102,38 +120,22 @@ async function listAllFiles(bucket, path = '') {
   return files
 }
 
-async function ensureBucket(bucket) {
-  const options = {
-    public: Boolean(bucket.public),
-    fileSizeLimit: bucket.file_size_limit ?? undefined,
-    allowedMimeTypes: bucket.allowed_mime_types ?? undefined,
-  }
-
-  const { data: existing, error: getError } = await target.getBucket(bucket.id)
-  if (getError && !String(getError.message).toLowerCase().includes('not found')) {
-    throw new Error(`Get bucket ${bucket.id}: ${getError.message}`)
-  }
-
-  if (!existing) {
-    const { error } = await target.createBucket(bucket.id, options)
-    if (error) throw new Error(`Create bucket ${bucket.id}: ${error.message}`)
-  } else {
-    const { error } = await target.updateBucket(bucket.id, options)
-    if (error) throw new Error(`Update bucket ${bucket.id}: ${error.message}`)
-  }
-}
-
 async function copyFile(bucket, file) {
-  const { data, error: downloadError } = await source.from(bucket).download(file.path)
+  const { data, error: downloadError } = await withRetry(
+    `Download ${bucket}/${file.path}`,
+    () => source.from(bucket).download(file.path),
+  )
   if (downloadError) {
     throw new Error(`Download ${bucket}/${file.path}: ${downloadError.message}`)
   }
 
-  const { error: uploadError } = await target.from(bucket).upload(file.path, data, {
-    upsert: true,
-    contentType: file.metadata?.mimetype ?? data.type ?? undefined,
-    cacheControl: file.metadata?.cacheControl ?? '3600',
-  })
+  const { error: uploadError } = await withRetry(`Upload ${bucket}/${file.path}`, () =>
+    target.from(bucket).upload(file.path, data, {
+      upsert: true,
+      contentType: file.metadata?.mimetype ?? data.type ?? undefined,
+      cacheControl: file.metadata?.cacheControl ?? '3600',
+    }),
+  )
   if (uploadError) {
     throw new Error(`Upload ${bucket}/${file.path}: ${uploadError.message}`)
   }
@@ -163,15 +165,17 @@ async function runPool(items, worker, concurrency) {
 }
 
 try {
-  const { data: buckets, error: bucketsError } = await source.listBuckets()
+  const { data: buckets, error: bucketsError } = await withRetry('List buckets', () =>
+    source.listBuckets(),
+  )
   if (bucketsError) throw new Error(`List buckets: ${bucketsError.message}`)
 
   diagnostic(`Buckets found: ${(buckets ?? []).length}`)
+  diagnostic('Bucket metadata already restored through the database migration; skipping bucket recreation')
 
   let copied = 0
   for (const bucket of buckets ?? []) {
     diagnostic(`Preparing bucket: ${bucket.id}`)
-    await ensureBucket(bucket)
     const files = await listAllFiles(bucket.id)
     diagnostic(`Objects discovered in ${bucket.id}: ${files.length}`)
 
