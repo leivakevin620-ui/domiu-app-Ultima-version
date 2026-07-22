@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import { createClient } from '@supabase/supabase-js'
+import { StorageClient } from '@supabase/storage-js'
 
 const required = [
   'SOURCE_SUPABASE_URL',
@@ -47,17 +47,13 @@ try {
     `Target key type: ${keyKind(process.env.TARGET_SERVICE_ROLE_KEY)}; length: ${process.env.TARGET_SERVICE_ROLE_KEY.length}`,
   )
 
-  source = createClient(
-    process.env.SOURCE_SUPABASE_URL,
-    process.env.SOURCE_SERVICE_ROLE_KEY,
-    { auth: { persistSession: false, autoRefreshToken: false } },
-  )
-  target = createClient(
-    process.env.TARGET_SUPABASE_URL,
-    process.env.TARGET_SERVICE_ROLE_KEY,
-    { auth: { persistSession: false, autoRefreshToken: false } },
-  )
-  diagnostic('Supabase clients initialized')
+  source = new StorageClient(`${process.env.SOURCE_SUPABASE_URL}/storage/v1`, {
+    apikey: process.env.SOURCE_SERVICE_ROLE_KEY,
+  })
+  target = new StorageClient(`${process.env.TARGET_SUPABASE_URL}/storage/v1`, {
+    apikey: process.env.TARGET_SERVICE_ROLE_KEY,
+  })
+  diagnostic('Storage clients initialized with apikey headers')
 } catch (error) {
   diagnostic(error instanceof Error ? error.stack ?? error.message : String(error), 'error')
   process.exit(1)
@@ -69,7 +65,7 @@ const CONCURRENCY = 4
 async function listFolder(bucket, path = '') {
   const all = []
   for (let offset = 0; ; offset += PAGE_SIZE) {
-    const { data, error } = await source.storage.from(bucket).list(path, {
+    const { data, error } = await source.from(bucket).list(path, {
       limit: PAGE_SIZE,
       offset,
       sortBy: { column: 'name', order: 'asc' },
@@ -103,35 +99,31 @@ async function ensureBucket(bucket) {
     allowedMimeTypes: bucket.allowed_mime_types ?? undefined,
   }
 
-  const { data: existing, error: getError } = await target.storage.getBucket(bucket.id)
+  const { data: existing, error: getError } = await target.getBucket(bucket.id)
   if (getError && !String(getError.message).toLowerCase().includes('not found')) {
     throw new Error(`Get bucket ${bucket.id}: ${getError.message}`)
   }
 
   if (!existing) {
-    const { error } = await target.storage.createBucket(bucket.id, options)
+    const { error } = await target.createBucket(bucket.id, options)
     if (error) throw new Error(`Create bucket ${bucket.id}: ${error.message}`)
   } else {
-    const { error } = await target.storage.updateBucket(bucket.id, options)
+    const { error } = await target.updateBucket(bucket.id, options)
     if (error) throw new Error(`Update bucket ${bucket.id}: ${error.message}`)
   }
 }
 
 async function copyFile(bucket, file) {
-  const { data, error: downloadError } = await source.storage
-    .from(bucket)
-    .download(file.path)
+  const { data, error: downloadError } = await source.from(bucket).download(file.path)
   if (downloadError) {
     throw new Error(`Download ${bucket}/${file.path}: ${downloadError.message}`)
   }
 
-  const { error: uploadError } = await target.storage
-    .from(bucket)
-    .upload(file.path, data, {
-      upsert: true,
-      contentType: file.metadata?.mimetype ?? data.type ?? undefined,
-      cacheControl: file.metadata?.cacheControl ?? '3600',
-    })
+  const { error: uploadError } = await target.from(bucket).upload(file.path, data, {
+    upsert: true,
+    contentType: file.metadata?.mimetype ?? data.type ?? undefined,
+    cacheControl: file.metadata?.cacheControl ?? '3600',
+  })
   if (uploadError) {
     throw new Error(`Upload ${bucket}/${file.path}: ${uploadError.message}`)
   }
@@ -161,7 +153,7 @@ async function runPool(items, worker, concurrency) {
 }
 
 try {
-  const { data: buckets, error: bucketsError } = await source.storage.listBuckets()
+  const { data: buckets, error: bucketsError } = await source.listBuckets()
   if (bucketsError) throw new Error(`List buckets: ${bucketsError.message}`)
 
   diagnostic(`Buckets found: ${(buckets ?? []).length}`)
