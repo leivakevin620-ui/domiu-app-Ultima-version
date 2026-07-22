@@ -76,7 +76,7 @@ jobs:
         if: steps.operation.outputs.value == 'storage' || steps.operation.outputs.value == 'verify' || steps.operation.outputs.value == 'all'
         uses: actions/setup-node@v4
         with:
-          node-version: 20.19.0
+          node-version: 22
           cache: npm
 
       - name: Instalar dependencias
