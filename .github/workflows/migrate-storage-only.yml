@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: migrate-storage-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   migrate-storage:
     if: github.head_ref == 'chore/migrate-supabase-free-20260722'
