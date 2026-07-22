@@ -40,7 +40,7 @@ jobs:
       - name: Copiar archivos físicos de Storage
         env:
           SOURCE_SUPABASE_URL: https://vuwaqmwgvldqmmgkpyjh.supabase.co
-          TARGET_SUPABASE_URL: https://muikwpyjaojeolwcuvqf.supabase.co
+          TARGET_SUPABASE_URL: https://muikwpyjaojeolwcuvqf.storage.supabase.co
           SOURCE_SERVICE_ROLE_KEY: ${{ secrets.SOURCE_SERVICE_ROLE_KEY }}
           TARGET_SERVICE_ROLE_KEY: ${{ secrets.TARGET_SERVICE_ROLE_KEY }}
           NODE_OPTIONS: --dns-result-order=ipv4first
