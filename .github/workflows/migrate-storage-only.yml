@@ -28,7 +28,7 @@ jobs:
       - name: Instalar dependencias
         run: |
           npm ci
-          npm install --no-save @aws-sdk/client-s3
+          npm install --no-save @aws-sdk/client-s3 @aws-sdk/s3-request-presigner
 
       - name: Validar secretos
         env:
