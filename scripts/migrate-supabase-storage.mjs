@@ -132,12 +132,15 @@ function encodeStoragePath(value) {
 }
 
 async function uploadRaw(bucket, path, body, contentType, cacheControl) {
+  const targetHost = new URL(process.env.TARGET_SUPABASE_URL).hostname
+  const projectRef = targetHost.split('.')[0]
   const endpoint = `${process.env.TARGET_SUPABASE_URL}/storage/v1/object/${encodeURIComponent(bucket)}/${encodeStoragePath(path)}`
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       apikey: process.env.TARGET_SERVICE_ROLE_KEY,
       Authorization: `Bearer ${process.env.TARGET_SERVICE_ROLE_KEY}`,
+      'x-forwarded-host': `${projectRef}.supabase.co`,
       'Content-Type': contentType || 'application/octet-stream',
       'Cache-Control': `max-age=${cacheControl || '3600'}`,
       'x-upsert': 'true',
