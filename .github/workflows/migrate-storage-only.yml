@@ -28,7 +28,8 @@ jobs:
       - name: Instalar dependencias
         run: |
           npm ci
-          npm install --no-save @aws-sdk/client-s3 @aws-sdk/s3-request-presigner
+          npm install --no-save @aws-sdk/client-s3
+          aws --version
 
       - name: Validar secretos
         env:
@@ -40,6 +41,35 @@ jobs:
           test -n "$SOURCE_SERVICE_ROLE_KEY"
           test -n "$TARGET_S3_ACCESS_KEY_ID"
           test -n "$TARGET_S3_SECRET_ACCESS_KEY"
+
+      - name: Probar escritura S3 temporal
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TARGET_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TARGET_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-west-2
+          AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+          AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+          TARGET_S3_ENDPOINT: https://muikwpyjaojeolwcuvqf.storage.supabase.co/storage/v1/s3
+        run: |
+          set -Eeuo pipefail
+          mkdir -p migration-work
+          printf 'domiu-storage-migration-probe' > migration-work/probe.txt
+          {
+            echo "# Prueba S3"
+            echo "Fecha UTC: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            aws s3api put-object \
+              --bucket avatars \
+              --key __migration_probe__/probe.txt \
+              --body migration-work/probe.txt \
+              --endpoint-url "$TARGET_S3_ENDPOINT" \
+              --region "$AWS_DEFAULT_REGION"
+            aws s3api delete-object \
+              --bucket avatars \
+              --key __migration_probe__/probe.txt \
+              --endpoint-url "$TARGET_S3_ENDPOINT" \
+              --region "$AWS_DEFAULT_REGION"
+            echo "S3 probe completed successfully"
+          } 2>&1 | tee migration-work/s3-probe.txt
 
       # Esta ejecución copia únicamente los archivos físicos; no toca la base, Auth ni Vercel.
       - name: Copiar archivos físicos de Storage
@@ -58,6 +88,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: supabase-storage-only-summary
-          path: migration-work/service-verification.txt
+          path: |
+            migration-work/service-verification.txt
+            migration-work/s3-probe.txt
           if-no-files-found: ignore
           retention-days: 3
+
+      - name: Limpiar archivos temporales
+        if: always()
+        run: rm -f migration-work/probe.txt
