@@ -46,12 +46,23 @@ jobs:
           test -n "$TARGET_S3_ACCESS_KEY_ID"
           test -n "$TARGET_S3_SECRET_ACCESS_KEY"
 
+      - name: Preparar ruta DNS al proyecto nuevo
+        env:
+          DIRECT_STORAGE_HOST: muikwpyjaojeolwcuvqf.storage.supabase.co
+          PROJECT_API_HOST: muikwpyjaojeolwcuvqf.supabase.co
+        run: |
+          set -Eeuo pipefail
+          storage_ip=$(getent ahostsv4 "$DIRECT_STORAGE_HOST" | awk 'NR==1 {print $1}')
+          test -n "$storage_ip"
+          echo "$storage_ip $PROJECT_API_HOST" | sudo tee -a /etc/hosts >/dev/null
+          getent hosts "$PROJECT_API_HOST"
+
       - name: Probar escritura S3 temporal
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.TARGET_S3_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TARGET_S3_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-west-2
-          TARGET_S3_ENDPOINT: https://muikwpyjaojeolwcuvqf.storage.supabase.co/storage/v1/s3
+          TARGET_S3_ENDPOINT: https://muikwpyjaojeolwcuvqf.supabase.co/storage/v1/s3
         run: |
           set -Eeuo pipefail
           mkdir -p migration-work
@@ -96,7 +107,7 @@ jobs:
         env:
           SOURCE_SUPABASE_URL: https://vuwaqmwgvldqmmgkpyjh.supabase.co
           SOURCE_SERVICE_ROLE_KEY: ${{ secrets.SOURCE_SERVICE_ROLE_KEY }}
-          TARGET_S3_ENDPOINT: https://muikwpyjaojeolwcuvqf.storage.supabase.co/storage/v1/s3
+          TARGET_S3_ENDPOINT: https://muikwpyjaojeolwcuvqf.supabase.co/storage/v1/s3
           TARGET_S3_REGION: us-west-2
           TARGET_S3_ACCESS_KEY_ID: ${{ secrets.TARGET_S3_ACCESS_KEY_ID }}
           TARGET_S3_SECRET_ACCESS_KEY: ${{ secrets.TARGET_S3_SECRET_ACCESS_KEY }}
