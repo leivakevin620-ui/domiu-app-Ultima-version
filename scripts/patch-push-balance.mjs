@@ -183,16 +183,24 @@ replaceRequired(
   `  const activos = pedidos.filter((p) => !["Entregado", "Cancelado"].includes(p.estado));
   const entregados = pedidos.filter((p) => p.estado === "Entregado");
   const pcEntregados = pcPedidos.filter((p: any) => String(p.estado || "").toLowerCase() === "entregado");
+  const esPagoEfectivo = (pedido: any) => {
+    const metodo = String(pedido.metodo_pago || "efectivo").trim().toLowerCase();
+    return metodo === "efectivo" || metodo === "cash";
+  };
   const totalEntregados = entregados.length + pcEntregados.length;
   const totalGenerado =
     entregados.reduce((sum, pedido) => sum + Number(pedido.precio || 0), 0) +
     pcEntregados.reduce((sum, pedido) => sum + Number(pedido.domicilio || 0), 0);
   const totalEmpresa =
-    entregados.reduce((sum, pedido) => sum + Number(pedido.empresa_recibe || 0), 0) +
-    pcEntregados.reduce(
-      (sum, pedido) => sum + Number(pedido.comision_empresa || pedido.ganancia_empresa || 0),
-      0,
-    );
+    entregados
+      .filter(esPagoEfectivo)
+      .reduce((sum, pedido) => sum + Number(pedido.empresa_recibe || 0), 0) +
+    pcEntregados
+      .filter(esPagoEfectivo)
+      .reduce(
+        (sum, pedido) => sum + Number(pedido.comision_empresa || pedido.ganancia_empresa || 0),
+        0,
+      );
   const totalRepartidor =
     entregados.reduce((sum, pedido) => sum + Number(pedido.pago_repartidor || 0), 0) +
     pcEntregados.reduce(
@@ -288,7 +296,7 @@ replaceRequired(
         <div style={{ ...card, gridColumn: "1 / -1", display: "flex", justifyContent: "space-between", alignItems: "center", borderColor: "rgba(245,158,11,0.28)", background: "linear-gradient(135deg, rgba(245,158,11,0.10), rgba(30,41,59,1))" }}>
           <div>
             <p style={{ margin: 0, fontSize: 11, color: colors.gray500, fontWeight: 700 }}>SALDO PENDIENTE CON LA EMPRESA</p>
-            <p style={{ margin: "4px 0 0", fontSize: 13, color: colors.gray400 }}>Comisiones de los domicilios entregados durante el turno.</p>
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: colors.gray400 }}>Parte de DomiU en los domicilios pagados en efectivo durante el turno.</p>
           </div>
           <p style={{ margin: 0, fontSize: 25, fontWeight: 950, color: totalEmpresa > 0 ? colors.amber : colors.green }}>{fmt(totalEmpresa)}</p>
         </div>`,
