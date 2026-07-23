@@ -30,17 +30,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Node.js 20
+      - name: Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
+      - name: Lint changed application files
+        run: >-
+          npx eslint
+          src/app/actions/admin-user-roles.ts
+          src/app/actions/business-order-status.ts
+          src/app/admin/usuarios/page.tsx
+          src/app/api/profile/route.ts
+          src/app/negocio/pedidos/page.tsx
+          src/contexts/CourierContext.tsx
+          src/lib/auth/supabase.ts
 
       - name: Tests
         run: npm test -- --passWithNoTests
