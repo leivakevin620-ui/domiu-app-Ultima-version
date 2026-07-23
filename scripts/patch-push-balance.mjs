@@ -56,7 +56,7 @@ replaceRequired(
       const config = await configResponse.json();
       if (!configResponse.ok || !config.enabled || !config.publicKey) {
         const missing = Array.isArray(config.missing) ? config.missing.join(", ") : "configuración del servidor";
-        throw new Error(`Web Push incompleto: ${missing}`);
+        throw new Error("Web Push incompleto: " + missing);
       }
 
       let permission = Notification.permission;
@@ -259,7 +259,7 @@ replaceRequired(
               padding: "9px 12px",
               borderRadius: 11,
               border: "none",
-              background: pushStatus === "ready" ? "rgba(16,185,129,0.14)" : `linear-gradient(135deg, ${colors.primary}, ${colors.primaryDark})`,
+              background: pushStatus === "ready" ? "rgba(16,185,129,0.14)" : "linear-gradient(135deg, " + colors.primary + ", " + colors.primaryDark + ")",
               color: pushStatus === "ready" ? colors.green : "#fff",
               fontSize: 11,
               fontWeight: 900,
