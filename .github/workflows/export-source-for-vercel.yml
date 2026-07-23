@@ -23,7 +23,8 @@ jobs:
             --exclude='node_modules' \
             --exclude='.next' \
             --exclude='.vercel' \
-            -czf domiu-master-source.tar.gz .
+            -czf /tmp/domiu-master-source.tar.gz .
+          mv /tmp/domiu-master-source.tar.gz ./domiu-master-source.tar.gz
 
       - name: Upload source archive
         uses: actions/upload-artifact@v4
