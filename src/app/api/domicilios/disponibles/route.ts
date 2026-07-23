@@ -11,32 +11,46 @@ function getAdmin() {
   });
 }
 
+async function getActiveTurnStart(supabase: ReturnType<typeof getAdmin>) {
+  const { data, error } = await supabase
+    .from("turnos")
+    .select("opened_at, created_at")
+    .eq("activo", true)
+    .order("opened_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.opened_at || data?.created_at || null;
+}
+
 export async function GET(req: Request) {
   try {
     const supabase = getAdmin();
     const { searchParams } = new URL(req.url);
     const repartidorId = searchParams.get("repartidor_id");
     const onlyMine = searchParams.get("mis_aceptados") === "true";
+    const scope = searchParams.get("scope") || "current";
 
-    if (onlyMine && repartidorId) {
-      const { data, error } = await supabase
-        .from("domicilios_disponibles")
-        .select("*")
-        .eq("repartidor_id", repartidorId)
-        .neq("estado", "cancelado")
-        .order("created_at", { ascending: false });
+    const activeTurnStart = scope === "history" ? null : await getActiveTurnStart(supabase);
+    if (scope !== "history" && !activeTurnStart) return NextResponse.json([]);
 
-      if (error) throw error;
-      return NextResponse.json(data || []);
-    }
-
-    // Domicilios disponibles (no aceptados aun)
-    const { data, error } = await supabase
+    let query = supabase
       .from("domicilios_disponibles")
       .select("*")
-      .eq("estado", "disponible")
       .order("created_at", { ascending: false });
 
+    if (activeTurnStart) query = query.gte("created_at", activeTurnStart);
+
+    if (onlyMine && repartidorId) {
+      query = query
+        .eq("repartidor_id", repartidorId)
+        .neq("estado", "cancelado");
+    } else {
+      query = query.eq("estado", "disponible");
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
     return NextResponse.json(data || []);
   } catch (error: any) {
