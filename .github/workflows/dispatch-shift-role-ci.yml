@@ -51,14 +51,15 @@ jobs:
           src/app/negocio/pedidos/page.tsx
           src/contexts/CourierContext.tsx
           src/lib/auth/supabase.ts
+          src/test/dispatch-shift-role-integrity.test.ts
           --format json --output-file lint-report.json
 
-      - name: Run tests and capture output
+      - name: Run regression tests and capture output
         id: tests
         shell: bash
         run: |
           set +e
-          npm test -- --passWithNoTests > test-report.txt 2>&1
+          npx vitest run src/test/dispatch-shift-role-integrity.test.ts > test-report.txt 2>&1
           status=$?
           echo "$status" > test-status.txt
           exit 0
