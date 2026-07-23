@@ -19,34 +19,34 @@ type DomiULogoProps = {
 };
 
 /**
- * Isotipo oficial de DomiU. Usa su archivo independiente, transparente y completo.
- * Nunca recorta el logotipo principal ni agrega fondos, bordes o residuos visuales.
+ * Isotipo oficial de DomiU.
+ *
+ * El contenedor mantiene siempre la relación de aspecto y la imagen utiliza
+ * object-contain. De esta forma el arte nunca se estira, aplasta ni recorta.
  */
 export function DomiUMark({ className, title = 'DomiU Magdalena' }: DomiUMarkProps) {
   return (
     <span
       role="img"
       aria-label={title}
-      className={cn('relative block h-10 w-14 shrink-0 overflow-visible', className)}
+      className={cn('relative block aspect-[1.15/1] h-10 shrink-0 overflow-visible', className)}
     >
       <img
         src={DOMIU_OFFICIAL_MARK_DATA_URI}
         alt={title}
         draggable={false}
         decoding="async"
-        className="absolute inset-0 h-full w-full select-none object-contain"
+        className="absolute inset-0 h-full w-full select-none object-contain object-center"
       />
     </span>
   );
 }
 
 /**
- * Lockup oficial completo de DomiU Magdalena.
+ * Logotipo oficial completo de DomiU Magdalena.
  *
- * El archivo entregado por la marca está guardado sobre un lienzo cuadrado que
- * contiene espacio transparente debajo del arte. El SVG conserva cada píxel
- * visible del logo y elimina únicamente ese espacio vacío del área de maquetación.
- * Así el encabezado nunca estira, aplasta ni corta el símbolo o la palabra DomiU.
+ * No se modifica el archivo entregado por la marca. El tamaño se controla
+ * únicamente desde el contenedor y nunca se fuerza simultáneamente ancho y alto.
  */
 export function DomiULogo({
   className,
@@ -56,35 +56,56 @@ export function DomiULogo({
   showTagline = false,
 }: DomiULogoProps) {
   if (compact) {
-    return <DomiUMark className={cn('h-10 w-14', markClassName, className)} />;
+    return <DomiUMark className={cn('h-10', markClassName, className)} />;
   }
 
   return (
     <span
       role="img"
       aria-label="DomiU Magdalena — Pide fácil, recibe rápido"
-      className={cn('inline-flex shrink-0 items-center justify-center', className)}
+      className={cn(
+        'relative inline-flex shrink-0 items-center justify-center overflow-visible',
+        showTagline ? 'h-20 w-20 sm:h-24 sm:w-24' : 'h-14 w-14 sm:h-16 sm:w-16',
+        className,
+      )}
       data-variant={variant}
     >
-      <svg
-        viewBox="0 0 128 82"
-        preserveAspectRatio="xMidYMid meet"
-        aria-hidden="true"
-        focusable="false"
-        className={cn(
-          'block max-h-full shrink-0 overflow-visible select-none',
-          showTagline ? 'w-28 sm:w-32' : 'w-24 sm:w-28',
-        )}
-      >
-        <image
-          href={DOMIU_OFFICIAL_LOGO_DATA_URI}
-          x="0"
-          y="0"
-          width="128"
-          height="128"
-          preserveAspectRatio="xMidYMin meet"
-        />
-      </svg>
+      <img
+        src={DOMIU_OFFICIAL_LOGO_DATA_URI}
+        alt="DomiU Magdalena — Pide fácil, recibe rápido"
+        draggable={false}
+        decoding="async"
+        className="h-full w-full select-none object-contain object-center"
+      />
+    </span>
+  );
+}
+
+/**
+ * Lockup horizontal seguro para barras laterales y encabezados estrechos.
+ * Usa el isotipo oficial y texto tipográfico, evitando encoger el lienzo cuadrado
+ * del logotipo completo hasta volverlo ilegible.
+ */
+export function DomiUBrandLockup({
+  className,
+  compact = false,
+}: {
+  className?: string;
+  compact?: boolean;
+}) {
+  if (compact) return <DomiUMark className={cn('h-10', className)} />;
+
+  return (
+    <span className={cn('inline-flex min-w-0 items-center gap-2.5', className)}>
+      <DomiUMark className="h-11" />
+      <span className="min-w-0 leading-none">
+        <span className="block truncate font-heading text-lg font-black italic tracking-tight text-white">
+          DOMI<span className="text-[#FFC400]">U</span>
+        </span>
+        <span className="mt-1 block truncate text-[9px] font-extrabold uppercase tracking-[0.28em] text-slate-300">
+          Magdalena
+        </span>
+      </span>
     </span>
   );
 }
