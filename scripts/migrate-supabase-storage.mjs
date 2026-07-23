@@ -1,0 +1,241 @@
+import dns from 'node:dns'
+import fs from 'node:fs'
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { StorageClient } from '@supabase/storage-js'
+
+dns.setDefaultResultOrder('ipv4first')
+
+const required = [
+  'SOURCE_SUPABASE_URL',
+  'SOURCE_SERVICE_ROLE_KEY',
+  'TARGET_S3_ENDPOINT',
+  'TARGET_S3_REGION',
+  'TARGET_S3_ACCESS_KEY_ID',
+  'TARGET_S3_SECRET_ACCESS_KEY',
+]
+
+fs.mkdirSync('migration-work', { recursive: true })
+const diagnosticPath = 'migration-work/service-verification.txt'
+fs.writeFileSync(
+  diagnosticPath,
+  `# Migración de Storage\nFecha UTC: ${new Date().toISOString()}\nDestino: Supabase S3\nRed: IPv4 preferido\nChecksums: solo cuando sean obligatorios\n`,
+)
+
+function diagnostic(message, level = 'info') {
+  const safeMessage = String(message)
+  fs.appendFileSync(diagnosticPath, `${level.toUpperCase()}: ${safeMessage}\n`)
+  if (level === 'error') console.error(safeMessage)
+  else console.log(safeMessage)
+}
+
+function formatError(error) {
+  if (!(error instanceof Error)) return String(error)
+  const cause = error.cause instanceof Error ? ` | cause=${error.cause.message}` : ''
+  const metadata = error.$metadata
+    ? ` | status=${error.$metadata.httpStatusCode ?? 'unknown'} requestId=${error.$metadata.requestId ?? 'unknown'}`
+    : ''
+  return `${error.stack ?? error.message}${cause}${metadata}`
+}
+
+async function readResponseBody(body) {
+  if (!body) return ''
+  try {
+    if (typeof body.transformToString === 'function') return await body.transformToString()
+    if (typeof body.text === 'function') return await body.text()
+    if (typeof body[Symbol.asyncIterator] === 'function') {
+      const chunks = []
+      for await (const chunk of body) chunks.push(Buffer.from(chunk))
+      return Buffer.concat(chunks).toString('utf8')
+    }
+  } catch {
+    return ''
+  }
+  return ''
+}
+
+async function normalizeS3Error(error) {
+  if (!(error instanceof Error)) return new Error(String(error))
+
+  const response = error.$response
+  const status = response?.statusCode ?? error.$metadata?.httpStatusCode ?? 'unknown'
+  const contentType = response?.headers?.['content-type'] ?? 'unknown'
+  const body = (await readResponseBody(response?.body)).slice(0, 1200)
+  const bodyDetail = body ? ` | response=${body}` : ''
+
+  const normalized = new Error(
+    `S3 request failed: status=${status} content-type=${contentType}${bodyDetail}`,
+  )
+  normalized.cause = error
+  normalized.$metadata = error.$metadata
+  return normalized
+}
+
+async function withRetry(label, operation, attempts = 4) {
+  let lastError
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await operation()
+    } catch (error) {
+      lastError = error
+      if (attempt === attempts) break
+      const delay = 500 * 2 ** (attempt - 1)
+      diagnostic(`${label}: intento ${attempt} falló; reintentando en ${delay} ms`)
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+  throw lastError
+}
+
+let source
+let targetS3
+
+try {
+  for (const key of required) {
+    if (!process.env[key]) throw new Error(`Missing required environment variable: ${key}`)
+  }
+
+  source = new StorageClient(`${process.env.SOURCE_SUPABASE_URL}/storage/v1`, {
+    apikey: process.env.SOURCE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${process.env.SOURCE_SERVICE_ROLE_KEY}`,
+  })
+
+  targetS3 = new S3Client({
+    forcePathStyle: true,
+    region: process.env.TARGET_S3_REGION,
+    endpoint: process.env.TARGET_S3_ENDPOINT,
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
+    credentials: {
+      accessKeyId: process.env.TARGET_S3_ACCESS_KEY_ID,
+      secretAccessKey: process.env.TARGET_S3_SECRET_ACCESS_KEY,
+    },
+  })
+
+  diagnostic(`Source URL host: ${new URL(process.env.SOURCE_SUPABASE_URL).host}`)
+  diagnostic(`Target S3 host: ${new URL(process.env.TARGET_S3_ENDPOINT).host}`)
+  diagnostic(`Target S3 region: ${process.env.TARGET_S3_REGION}`)
+  diagnostic('Source REST and target S3 clients initialized')
+} catch (error) {
+  diagnostic(formatError(error), 'error')
+  process.exit(1)
+}
+
+const PAGE_SIZE = 1000
+const CONCURRENCY = 4
+
+async function listFolder(bucket, path = '') {
+  const all = []
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const { data, error } = await withRetry(`List ${bucket}/${path}`, () =>
+      source.from(bucket).list(path, {
+        limit: PAGE_SIZE,
+        offset,
+        sortBy: { column: 'name', order: 'asc' },
+      }),
+    )
+    if (error) throw new Error(`List failed ${bucket}/${path}: ${error.message}`)
+    all.push(...(data ?? []))
+    if (!data || data.length < PAGE_SIZE) break
+  }
+  return all
+}
+
+async function listAllFiles(bucket, path = '') {
+  const entries = await listFolder(bucket, path)
+  const files = []
+
+  for (const entry of entries) {
+    const fullPath = path ? `${path}/${entry.name}` : entry.name
+    if (entry.id && entry.metadata) files.push({ path: fullPath, metadata: entry.metadata })
+    else files.push(...(await listAllFiles(bucket, fullPath)))
+  }
+  return files
+}
+
+async function putObject(bucket, filePath, bytes, contentType, cacheControl) {
+  try {
+    return await targetS3.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: filePath,
+        Body: bytes,
+        ContentLength: bytes.length,
+        ContentType: contentType,
+        CacheControl: `max-age=${cacheControl}`,
+      }),
+    )
+  } catch (error) {
+    throw await normalizeS3Error(error)
+  }
+}
+
+async function copyFile(bucket, file) {
+  const { data, error: downloadError } = await withRetry(
+    `Download ${bucket}/${file.path}`,
+    () => source.from(bucket).download(file.path),
+  )
+  if (downloadError) throw new Error(`Download ${bucket}/${file.path}: ${downloadError.message}`)
+
+  const bytes = Buffer.from(await data.arrayBuffer())
+  const contentType = file.metadata?.mimetype ?? data.type ?? 'application/octet-stream'
+  const cacheControl = file.metadata?.cacheControl ?? '3600'
+
+  await withRetry(`S3 PutObject ${bucket}/${file.path}`, () =>
+    putObject(bucket, file.path, bytes, contentType, cacheControl),
+  )
+}
+
+async function runPool(items, worker, concurrency) {
+  let cursor = 0
+  const errors = []
+
+  async function runner() {
+    while (true) {
+      const index = cursor++
+      if (index >= items.length) return
+      try {
+        await worker(items[index], index)
+      } catch (error) {
+        errors.push(error)
+        diagnostic(formatError(error), 'error')
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: concurrency }, () => runner()))
+  if (errors.length) throw new Error(`${errors.length} Storage objects failed to migrate`)
+}
+
+try {
+  const { data: buckets, error: bucketsError } = await withRetry('List buckets', () =>
+    source.listBuckets(),
+  )
+  if (bucketsError) throw new Error(`List buckets: ${bucketsError.message}`)
+
+  diagnostic(`Buckets found: ${(buckets ?? []).length}`)
+  diagnostic('Bucket metadata already restored through the database migration')
+
+  let copied = 0
+  for (const bucket of buckets ?? []) {
+    diagnostic(`Preparing bucket: ${bucket.id}`)
+    const files = await listAllFiles(bucket.id)
+    diagnostic(`Objects discovered in ${bucket.id}: ${files.length}`)
+
+    await runPool(
+      files,
+      async (file) => {
+        await copyFile(bucket.id, file)
+        copied += 1
+        if (copied % 25 === 0) diagnostic(`Objects copied: ${copied}`)
+      },
+      CONCURRENCY,
+    )
+  }
+
+  diagnostic(`Storage migration completed. Objects copied: ${copied}`)
+} catch (error) {
+  diagnostic(formatError(error), 'error')
+  process.exit(1)
+} finally {
+  targetS3?.destroy()
+}

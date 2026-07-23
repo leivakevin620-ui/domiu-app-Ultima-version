@@ -1,0 +1,134 @@
+name: Migrar Storage Supabase
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - '.github/workflows/migrate-storage-only.yml'
+      - 'scripts/migrate-supabase-storage.mjs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migrate-storage-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migrate-storage:
+    if: github.head_ref == 'chore/migrate-supabase-free-20260722'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: |
+          npm ci
+          npm install --no-save @aws-sdk/client-s3
+          curl --version
+
+      - name: Validar secretos
+        env:
+          SOURCE_SERVICE_ROLE_KEY: ${{ secrets.SOURCE_SERVICE_ROLE_KEY }}
+          TARGET_S3_ACCESS_KEY_ID: ${{ secrets.TARGET_S3_ACCESS_KEY_ID }}
+          TARGET_S3_SECRET_ACCESS_KEY: ${{ secrets.TARGET_S3_SECRET_ACCESS_KEY }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$SOURCE_SERVICE_ROLE_KEY"
+          test -n "$TARGET_S3_ACCESS_KEY_ID"
+          test -n "$TARGET_S3_SECRET_ACCESS_KEY"
+
+      - name: Preparar ruta DNS al proyecto nuevo
+        env:
+          DIRECT_STORAGE_HOST: muikwpyjaojeolwcuvqf.storage.supabase.co
+          PROJECT_API_HOST: muikwpyjaojeolwcuvqf.supabase.co
+        run: |
+          set -Eeuo pipefail
+          storage_ip=$(getent ahostsv4 "$DIRECT_STORAGE_HOST" | awk 'NR==1 {print $1}')
+          test -n "$storage_ip"
+          echo "$storage_ip $PROJECT_API_HOST" | sudo tee -a /etc/hosts >/dev/null
+          getent hosts "$PROJECT_API_HOST"
+
+      - name: Probar escritura S3 temporal
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TARGET_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TARGET_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-west-2
+          PROJECT_API_HOST: muikwpyjaojeolwcuvqf.supabase.co
+          TARGET_S3_ENDPOINT: https://muikwpyjaojeolwcuvqf.supabase.co/storage/v1/s3
+        run: |
+          set -Eeuo pipefail
+          mkdir -p migration-work
+          printf 'domiu-storage-migration-probe' > migration-work/probe.txt
+          probe_url="$TARGET_S3_ENDPOINT/avatars/__migration_probe__/probe.txt"
+          {
+            echo "# Prueba S3"
+            echo "Fecha UTC: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            status=$(curl \
+              --silent \
+              --show-error \
+              --output migration-work/probe-response.txt \
+              --write-out '%{http_code}' \
+              --aws-sigv4 "aws:amz:$AWS_DEFAULT_REGION:s3" \
+              --user "$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY" \
+              --header "x-forwarded-host: $PROJECT_API_HOST" \
+              --request PUT \
+              --upload-file migration-work/probe.txt \
+              "$probe_url")
+            echo "PUT status: $status"
+            cat migration-work/probe-response.txt
+            echo
+            test "$status" -ge 200 -a "$status" -lt 300
+
+            delete_status=$(curl \
+              --silent \
+              --show-error \
+              --output migration-work/delete-response.txt \
+              --write-out '%{http_code}' \
+              --aws-sigv4 "aws:amz:$AWS_DEFAULT_REGION:s3" \
+              --user "$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY" \
+              --header "x-forwarded-host: $PROJECT_API_HOST" \
+              --request DELETE \
+              "$probe_url")
+            echo "DELETE status: $delete_status"
+            cat migration-work/delete-response.txt
+            echo
+            test "$delete_status" -ge 200 -a "$delete_status" -lt 300
+            echo "S3 probe completed successfully"
+          } 2>&1 | tee migration-work/s3-probe.txt
+
+      # Esta ejecución copia únicamente los archivos físicos; no toca la base, Auth ni Vercel.
+      - name: Copiar archivos físicos de Storage
+        env:
+          SOURCE_SUPABASE_URL: https://vuwaqmwgvldqmmgkpyjh.supabase.co
+          SOURCE_SERVICE_ROLE_KEY: ${{ secrets.SOURCE_SERVICE_ROLE_KEY }}
+          TARGET_S3_ENDPOINT: https://muikwpyjaojeolwcuvqf.supabase.co/storage/v1/s3
+          TARGET_S3_REGION: us-west-2
+          TARGET_S3_ACCESS_KEY_ID: ${{ secrets.TARGET_S3_ACCESS_KEY_ID }}
+          TARGET_S3_SECRET_ACCESS_KEY: ${{ secrets.TARGET_S3_SECRET_ACCESS_KEY }}
+          TARGET_PROJECT_HOST: muikwpyjaojeolwcuvqf.supabase.co
+          NODE_OPTIONS: --dns-result-order=ipv4first
+        run: node scripts/migrate-supabase-storage.mjs
+
+      - name: Publicar diagnóstico no sensible
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-storage-only-summary
+          path: |
+            migration-work/service-verification.txt
+            migration-work/s3-probe.txt
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Limpiar archivos temporales
+        if: always()
+        run: rm -f migration-work/probe.txt migration-work/probe-response.txt migration-work/delete-response.txt

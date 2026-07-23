@@ -1,0 +1,239 @@
+name: Migrar Supabase a organización gratuita
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Operación que se ejecutará
+        required: true
+        default: preflight
+        type: choice
+        options:
+          - preflight
+          - database
+          - storage
+          - verify
+          - all
+  pull_request:
+    branches: [master]
+    paths:
+      - '.github/migration-operation'
+      - '.github/workflows/migrate-supabase-project.yml'
+      - 'scripts/migrate-supabase-storage.mjs'
+      - 'scripts/verify-supabase-migration.mjs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migrate-supabase-production-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  SOURCE_PROJECT_REF: vuwaqmwgvldqmmgkpyjh
+  TARGET_PROJECT_REF: muikwpyjaojeolwcuvqf
+  SOURCE_SUPABASE_URL: https://vuwaqmwgvldqmmgkpyjh.supabase.co
+  TARGET_SUPABASE_URL: https://muikwpyjaojeolwcuvqf.supabase.co
+
+jobs:
+  migrate:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'chore/migrate-supabase-free-20260722'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Resolver fase autorizada
+        id: operation
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_OPERATION: ${{ inputs.operation }}
+        run: |
+          set -Eeuo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            operation="$DISPATCH_OPERATION"
+          else
+            operation="$(tr -d '[:space:]' < .github/migration-operation)"
+          fi
+
+          case "$operation" in
+            preflight|database|storage|verify|all) ;;
+            *)
+              echo "Operación no autorizada: $operation" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "value=$operation" >> "$GITHUB_OUTPUT"
+          echo "## Migración Supabase" >> "$GITHUB_STEP_SUMMARY"
+          echo "Fase autorizada: **$operation**" >> "$GITHUB_STEP_SUMMARY"
+          echo "Origen: \`$SOURCE_PROJECT_REF\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Destino: \`$TARGET_PROJECT_REF\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Configurar Node.js
+        if: steps.operation.outputs.value == 'storage' || steps.operation.outputs.value == 'verify' || steps.operation.outputs.value == 'all'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        if: steps.operation.outputs.value == 'storage' || steps.operation.outputs.value == 'verify' || steps.operation.outputs.value == 'all'
+        run: npm ci
+
+      - name: Instalar Supabase CLI
+        if: steps.operation.outputs.value == 'database' || steps.operation.outputs.value == 'all'
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Instalar cliente PostgreSQL
+        if: steps.operation.outputs.value == 'preflight' || steps.operation.outputs.value == 'database' || steps.operation.outputs.value == 'verify' || steps.operation.outputs.value == 'all'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          psql --version
+
+      - name: Validar secretos requeridos
+        shell: bash
+        env:
+          OPERATION: ${{ steps.operation.outputs.value }}
+          SOURCE_DB_URL: ${{ secrets.SOURCE_DB_URL }}
+          TARGET_DB_URL: ${{ secrets.TARGET_DB_URL }}
+          SOURCE_SERVICE_ROLE_KEY: ${{ secrets.SOURCE_SERVICE_ROLE_KEY }}
+          TARGET_SERVICE_ROLE_KEY: ${{ secrets.TARGET_SERVICE_ROLE_KEY }}
+        run: |
+          set -Eeuo pipefail
+          required=()
+
+          case "$OPERATION" in
+            preflight|database)
+              required=(SOURCE_DB_URL TARGET_DB_URL)
+              ;;
+            storage)
+              required=(SOURCE_SERVICE_ROLE_KEY TARGET_SERVICE_ROLE_KEY)
+              ;;
+            verify|all)
+              required=(SOURCE_DB_URL TARGET_DB_URL SOURCE_SERVICE_ROLE_KEY TARGET_SERVICE_ROLE_KEY)
+              ;;
+          esac
+
+          missing=0
+          for key in "${required[@]}"; do
+            if [ -z "${!key:-}" ]; then
+              echo "Falta el secreto: $key"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Comprobar conexiones y estado inicial
+        if: steps.operation.outputs.value == 'preflight' || steps.operation.outputs.value == 'database' || steps.operation.outputs.value == 'all'
+        env:
+          SOURCE_DB_URL: ${{ secrets.SOURCE_DB_URL }}
+          TARGET_DB_URL: ${{ secrets.TARGET_DB_URL }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p migration-work
+          {
+            echo "# Preflight Supabase"
+            echo "Fecha UTC: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo
+            echo "## Origen"
+            psql "$SOURCE_DB_URL" -v ON_ERROR_STOP=1 -Atc "select 'database=' || current_database(); select 'public_tables=' || count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE'; select 'auth_users=' || count(*) from auth.users; select 'storage_buckets=' || count(*) from storage.buckets; select 'storage_objects=' || count(*) from storage.objects;"
+            echo
+            echo "## Destino antes de migrar"
+            psql "$TARGET_DB_URL" -v ON_ERROR_STOP=1 -Atc "select 'database=' || current_database(); select 'public_tables=' || count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE'; select 'auth_users=' || count(*) from auth.users; select 'storage_buckets=' || count(*) from storage.buckets; select 'storage_objects=' || count(*) from storage.objects;"
+          } | tee migration-work/preflight.txt
+
+      - name: Crear respaldo lógico del proyecto antiguo
+        if: steps.operation.outputs.value == 'database' || steps.operation.outputs.value == 'all'
+        env:
+          SOURCE_DB_URL: ${{ secrets.SOURCE_DB_URL }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p migration-work
+          supabase db dump --db-url "$SOURCE_DB_URL" -f migration-work/roles.sql --role-only
+          supabase db dump --db-url "$SOURCE_DB_URL" -f migration-work/schema.sql
+          supabase db dump --db-url "$SOURCE_DB_URL" -f migration-work/data.sql --use-copy --data-only -x "storage.buckets_vectors" -x "storage.vector_indexes"
+          supabase db dump --db-url "$SOURCE_DB_URL" -f migration-work/history_schema.sql --schema supabase_migrations
+          supabase db dump --db-url "$SOURCE_DB_URL" -f migration-work/history_data.sql --use-copy --data-only --schema supabase_migrations
+          sed -i '/GRANT "postgres" TO "cli_login_postgres"/d' migration-work/roles.sql
+
+      - name: Restaurar base, Auth y metadatos de Storage
+        if: steps.operation.outputs.value == 'database' || steps.operation.outputs.value == 'all'
+        env:
+          TARGET_DB_URL: ${{ secrets.TARGET_DB_URL }}
+        run: |
+          set -Eeuo pipefail
+          psql \
+            --single-transaction \
+            --variable ON_ERROR_STOP=1 \
+            --file migration-work/roles.sql \
+            --file migration-work/schema.sql \
+            --command 'SET session_replication_role = replica' \
+            --file migration-work/data.sql \
+            --dbname "$TARGET_DB_URL"
+
+          psql \
+            --single-transaction \
+            --variable ON_ERROR_STOP=1 \
+            --file migration-work/history_schema.sql \
+            --file migration-work/history_data.sql \
+            --dbname "$TARGET_DB_URL"
+
+      - name: Copiar objetos de Storage
+        if: steps.operation.outputs.value == 'storage' || steps.operation.outputs.value == 'all'
+        env:
+          SOURCE_SERVICE_ROLE_KEY: ${{ secrets.SOURCE_SERVICE_ROLE_KEY }}
+          TARGET_SERVICE_ROLE_KEY: ${{ secrets.TARGET_SERVICE_ROLE_KEY }}
+        run: node scripts/migrate-supabase-storage.mjs
+
+      - name: Verificar usuarios y Storage
+        if: steps.operation.outputs.value == 'verify' || steps.operation.outputs.value == 'all'
+        env:
+          SOURCE_SERVICE_ROLE_KEY: ${{ secrets.SOURCE_SERVICE_ROLE_KEY }}
+          TARGET_SERVICE_ROLE_KEY: ${{ secrets.TARGET_SERVICE_ROLE_KEY }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p migration-work
+          node scripts/verify-supabase-migration.mjs | tee migration-work/service-verification.txt
+
+      - name: Comparar conteos de base de datos
+        if: steps.operation.outputs.value == 'verify' || steps.operation.outputs.value == 'all'
+        env:
+          SOURCE_DB_URL: ${{ secrets.SOURCE_DB_URL }}
+          TARGET_DB_URL: ${{ secrets.TARGET_DB_URL }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p migration-work
+          SOURCE_COUNTS=$(psql "$SOURCE_DB_URL" -v ON_ERROR_STOP=1 -Atc "select json_build_object('public_tables',(select count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE'),'auth_users',(select count(*) from auth.users),'storage_buckets',(select count(*) from storage.buckets),'storage_objects',(select count(*) from storage.objects));")
+          TARGET_COUNTS=$(psql "$TARGET_DB_URL" -v ON_ERROR_STOP=1 -Atc "select json_build_object('public_tables',(select count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE'),'auth_users',(select count(*) from auth.users),'storage_buckets',(select count(*) from storage.buckets),'storage_objects',(select count(*) from storage.objects));")
+          {
+            echo "source=$SOURCE_COUNTS"
+            echo "target=$TARGET_COUNTS"
+          } | tee migration-work/database-verification.txt
+          test "$SOURCE_COUNTS" = "$TARGET_COUNTS"
+
+      - name: Publicar resumen no sensible
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-migration-summary-${{ steps.operation.outputs.value || 'unknown' }}
+          path: |
+            migration-work/preflight.txt
+            migration-work/service-verification.txt
+            migration-work/database-verification.txt
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Eliminar respaldos sensibles del runner
+        if: always()
+        run: |
+          rm -f migration-work/roles.sql
+          rm -f migration-work/schema.sql
+          rm -f migration-work/data.sql
+          rm -f migration-work/history_schema.sql
+          rm -f migration-work/history_data.sql
