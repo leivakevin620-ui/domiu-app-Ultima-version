@@ -19,7 +19,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-key
@@ -53,21 +53,46 @@ jobs:
           src/lib/auth/supabase.ts
           --format json --output-file lint-report.json
 
-      - name: Upload lint report
+      - name: Run tests and capture output
+        id: tests
+        shell: bash
+        run: |
+          set +e
+          npm test -- --passWithNoTests > test-report.txt 2>&1
+          status=$?
+          echo "$status" > test-status.txt
+          exit 0
+
+      - name: Run production build and capture output
+        id: build
+        shell: bash
+        run: |
+          set +e
+          npm run build > build-report.txt 2>&1
+          status=$?
+          echo "$status" > build-status.txt
+          exit 0
+
+      - name: Upload validation reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dispatch-shift-role-lint
-          path: lint-report.json
+          name: dispatch-shift-role-validation
+          path: |
+            lint-report.json
+            test-report.txt
+            test-status.txt
+            build-report.txt
+            build-status.txt
           if-no-files-found: error
           retention-days: 2
 
-      - name: Enforce lint result
-        if: steps.lint.outcome == 'failure'
-        run: exit 1
-
-      - name: Tests
-        run: npm test -- --passWithNoTests
-
-      - name: Production build
-        run: npm run build
+      - name: Enforce validation result
+        shell: bash
+        run: |
+          test_status=$(cat test-status.txt)
+          build_status=$(cat build-status.txt)
+          if [ "${{ steps.lint.outcome }}" = "failure" ] || [ "$test_status" -ne 0 ] || [ "$build_status" -ne 0 ]; then
+            echo "Validation failed: lint=${{ steps.lint.outcome }}, tests=$test_status, build=$build_status"
+            exit 1
+          fi
