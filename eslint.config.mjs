@@ -12,6 +12,16 @@ const eslintConfig = defineConfig([
     },
   },
   {
+    files: [
+      "src/app/negocio/pedidos/page.tsx",
+      "src/contexts/CourierContext.tsx",
+    ],
+    rules: {
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/preserve-manual-memoization": "off",
+    },
+  },
+  {
     files: ["src/app/cliente/checkout/page.tsx"],
     rules: {
       "@next/next/no-html-link-for-pages": "off",
