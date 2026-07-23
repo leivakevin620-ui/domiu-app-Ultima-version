@@ -1,10 +1,16 @@
 import { createClient } from "@supabase/supabase-js";
 import { asCoordinate, isFreshLocation, rankRidersByDistance } from "@/lib/dispatch";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
-const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY!;
+const FALLBACK_VAPID_PUBLIC_KEY =
+  "BFh0n5qxJo1oA0MADsQEOODyEkNan-QvFB5UgfhzGu0GyjkR30Mb1lTGShcAPJCafjZHwEt4nirMCzeGr_pACMQ";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const vapidPublicKey =
+  process.env.VAPID_PUBLIC_KEY ||
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
+  FALLBACK_VAPID_PUBLIC_KEY;
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || "";
 const vapidSubject = process.env.VAPID_SUBJECT || "mailto:domiumagdalena@gmail.com";
 
 interface PushSubscriptionRow {
@@ -12,10 +18,41 @@ interface PushSubscriptionRow {
   subscription_json: string;
 }
 
+export function getPushPublicConfig() {
+  return {
+    enabled: Boolean(supabaseUrl && serviceKey && vapidPublicKey && vapidPrivateKey),
+    publicKey: vapidPublicKey,
+    subject: vapidSubject,
+    missing: [
+      !supabaseUrl ? "NEXT_PUBLIC_SUPABASE_URL" : null,
+      !serviceKey ? "SUPABASE_SERVICE_ROLE_KEY" : null,
+      !vapidPrivateKey ? "VAPID_PRIVATE_KEY" : null,
+    ].filter(Boolean),
+  };
+}
+
+export async function sendPushToSubscription(
+  subscriptionJson: string,
+  payload: Record<string, unknown>,
+) {
+  const config = getPushPublicConfig();
+  if (!config.enabled) {
+    throw new Error(`Web Push no está configurado: ${config.missing.join(", ")}`);
+  }
+
+  const webpush = await import("web-push");
+  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+  return webpush.sendNotification(JSON.parse(subscriptionJson), JSON.stringify(payload), {
+    TTL: 120,
+    urgency: "high",
+  });
+}
+
 export async function enviarPushCercanos(domicilio: any) {
   try {
-    if (!supabaseUrl || !serviceKey || !vapidPublicKey || !vapidPrivateKey) {
-      return { sent: 0, error: "Variables Web Push incompletas" };
+    const config = getPushPublicConfig();
+    if (!config.enabled) {
+      return { sent: 0, selected: 0, error: `Variables Web Push incompletas: ${config.missing.join(", ")}` };
     }
 
     const supabase = createClient(supabaseUrl, serviceKey, {
@@ -26,7 +63,7 @@ export async function enviarPushCercanos(domicilio: any) {
       .from("push_subscriptions")
       .select("repartidor_id, subscription_json");
     if (subscriptionsError) throw subscriptionsError;
-    if (!subscriptions?.length) return { sent: 0, selected: 0 };
+    if (!subscriptions?.length) return { sent: 0, selected: 0, reason: "no_subscriptions" };
 
     const riderIds = [...new Set(subscriptions.map((item) => item.repartidor_id).filter(Boolean))];
     const { data: riders, error: ridersError } = await supabase
@@ -58,8 +95,8 @@ export async function enviarPushCercanos(domicilio: any) {
     const ranked = rankRidersByDistance(origin, freshLocations);
     const nearestIds = new Set(ranked.slice(0, 3).map((item) => item.repartidor_id));
 
-    // Si ningún repartidor tiene GPS reciente, se usa un grupo pequeño de disponibles
-    // para no dejar el pedido sin aviso, pero nunca se envía indiscriminadamente a todos.
+    // Si ningún repartidor tiene GPS reciente, se avisa a un grupo pequeño de disponibles
+    // para no dejar el pedido sin atención. La API de ofertas mantiene la prioridad geográfica.
     if (nearestIds.size === 0) {
       [...availableIds].slice(0, 3).forEach((id) => nearestIds.add(id));
     }
@@ -67,17 +104,18 @@ export async function enviarPushCercanos(domicilio: any) {
     const selectedSubscriptions = (subscriptions as PushSubscriptionRow[]).filter((item) =>
       nearestIds.has(item.repartidor_id),
     );
-    if (!selectedSubscriptions.length) return { sent: 0, selected: 0 };
-
-    const webpush = await import("web-push");
-    webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+    if (!selectedSubscriptions.length) {
+      return { sent: 0, selected: 0, reason: "no_eligible_subscriptions", available: availableIds.size };
+    }
 
     let sent = 0;
+    const errors: Array<{ riderId: string; statusCode?: number; message: string }> = [];
+
     await Promise.allSettled(
       selectedSubscriptions.map(async (row) => {
         try {
           const rankedRider = ranked.find((item) => item.repartidor_id === row.repartidor_id);
-          const payload = JSON.stringify({
+          await sendPushToSubscription(row.subscription_json, {
             title: "Nuevo domicilio cercano",
             body: `${domicilio.negocio_nombre || "Negocio"} → ${domicilio.direccion_destino || "Destino"} · $${Number(domicilio.valor_domicilio || 0).toLocaleString("es-CO")}`,
             domicilioId: domicilio.id,
@@ -95,14 +133,16 @@ export async function enviarPushCercanos(domicilio: any) {
                 : null,
             },
           });
-
-          await webpush.sendNotification(JSON.parse(row.subscription_json), payload, {
-            TTL: 90,
-            urgency: "high",
-          });
           sent += 1;
         } catch (error: any) {
-          if (error?.statusCode === 404 || error?.statusCode === 410) {
+          const statusCode = Number(error?.statusCode) || undefined;
+          errors.push({
+            riderId: row.repartidor_id,
+            statusCode,
+            message: error?.message || "Error enviando push",
+          });
+
+          if (statusCode === 404 || statusCode === 410) {
             await supabase
               .from("push_subscriptions")
               .delete()
@@ -114,14 +154,17 @@ export async function enviarPushCercanos(domicilio: any) {
       }),
     );
 
-    return {
+    const result = {
       sent,
       selected: selectedSubscriptions.length,
       riderIds: [...nearestIds],
+      errors,
     };
+    console.info("Resultado Web Push cercano", result);
+    return result;
   } catch (error) {
     console.error("Error enviando push cercano:", error);
-    return { sent: 0, error };
+    return { sent: 0, selected: 0, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
