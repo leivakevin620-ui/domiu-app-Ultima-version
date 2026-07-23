@@ -55,9 +55,17 @@ Esta iteración mejora la legibilidad general de la aplicación y habilita un fl
 - `src/app/admin/pedidos/crear/page.tsx`
 - `src/app/negocio/pedidos/crear/page.tsx`
 
-## Validación requerida
+## Validación completada
 
-Antes de producción se debe verificar:
+- Lint aprobado.
+- Pruebas de regresión aprobadas.
+- TypeScript y build de producción aprobados.
+- Esquema de Supabase verificado para perfiles, negocios, direcciones, pedidos, repartidores y seguimiento.
+- Enums vigentes de roles, pedidos, pagos y direcciones verificados.
+
+## Validación operativa pendiente
+
+Antes de considerar concluida la puesta en producción se debe verificar:
 
 - inicio de sesión de un administrador;
 - inicio de sesión de un negocio;
