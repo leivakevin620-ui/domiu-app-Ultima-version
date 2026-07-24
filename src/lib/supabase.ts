@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 const FALLBACK_SUPABASE_URL = "https://muikwpjyaojeolwcuvqf.supabase.co";
-const FALLBACK_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11aWt3cGp5YW9qZW9sd2N1dnFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2NDc5NjIsImV4cCI6MjEwMDIyMzk2Mn0.Ly8OUPkvy1HV2gCu-QDeXFVGegLGRzBYU-N19GeYyQc";
+const FALLBACK_SUPABASE_ANON_KEY = "sb_publishable_Kcd-ANNCG6ZZhmQhH3jsTA_hqGXOCqO";
 const RETIRED_PROJECTS = ["auyzmvyfscvfzrhhjejq", "vuwaqmwgvldqmmgkpyjh"];
 
 function isUsableConfiguredUrl(value?: string) {
