@@ -1,0 +1,35 @@
+name: Export legacy source for receipt fix
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create source archive
+        run: |
+          tar \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='dist' \
+            --exclude='build' \
+            --exclude='.next' \
+            -czf "$RUNNER_TEMP/domiu-legacy-source.tar.gz" .
+
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: domiu-legacy-source
+          path: ${{ runner.temp }}/domiu-legacy-source.tar.gz
+          if-no-files-found: error
+          retention-days: 1
