@@ -48,7 +48,30 @@ jobs:
           test -n "$TARGET_DB_URL"
 
       - name: Resguardar base antigua en esquema privado
+        id: recovery
+        continue-on-error: true
         env:
           SOURCE_DB_URL: ${{ secrets.SOURCE_DB_URL }}
           TARGET_DB_URL: ${{ secrets.TARGET_DB_URL }}
-        run: node "$RUNNER_TEMP/recovery-runner/recover.mjs"
+        run: |
+          set +e
+          node "$RUNNER_TEMP/recovery-runner/recover.mjs" > "$RUNNER_TEMP/recovery-full.log" 2>&1
+          status=$?
+          tail -n 40 "$RUNNER_TEMP/recovery-full.log" \
+            | sed -E 's#(postgres(ql)?://)[^ @]+@#\1***@#g' \
+            > "$RUNNER_TEMP/recovery-status.txt"
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Publicar diagnóstico reducido
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: legacy-recovery-status
+          path: ${{ runner.temp }}/recovery-status.txt
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Confirmar recuperación
+        if: steps.recovery.outputs.exit_code != '0'
+        run: exit 1
