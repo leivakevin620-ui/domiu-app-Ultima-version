@@ -1,8 +1,13 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { extname, join } from "node:path";
 
-const ACTIVE_URL = JSON.stringify("https://muikwpjyaojeolwcuvqf.supabase.co");
-const ACTIVE_ANON_KEY = JSON.stringify("sb_publishable_Kcd-ANNCG6ZZhmQhH3jsTA_hqGXOCqO");
+const ACTIVE_URL_VALUE = "https://muikwpjyaojeolwcuvqf.supabase.co";
+const ACTIVE_KEY_VALUE = "sb_publishable_Kcd-ANNCG6ZZhmQhH3jsTA_hqGXOCqO";
+const ACTIVE_URL = JSON.stringify(ACTIVE_URL_VALUE);
+const ACTIVE_ANON_KEY = JSON.stringify(ACTIVE_KEY_VALUE);
+const RETIRED_KEYS = [
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11aWt3cGp5YW9qZW9sd2N1dnFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2NDc5NjIsImV4cCI6MjEwMDIyMzk2Mn0.Ly8OUPkvy1HV2gCu-QDeXFVGegLGRzBYU-N19GeYyQc",
+];
 const SOURCE_ROOT = "src";
 const EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx"]);
 
@@ -10,13 +15,17 @@ let changedFiles = 0;
 
 function patchFile(path) {
   const original = readFileSync(path, "utf8");
-  const patched = original
+  let patched = original
     .replace(/process\.env\.NEXT_PUBLIC_SUPABASE_URL!?/g, ACTIVE_URL)
     .replace(/process\.env\.NEXT_PUBLIC_SUPABASE_ANON_KEY!?/g, ACTIVE_ANON_KEY)
     // Las rutas de datos heredadas usan esta variable, pero las tablas de
     // compatibilidad tienen permisos explícitos para anon/authenticated.
     // Las operaciones administrativas de Auth se delegan a una Edge Function.
     .replace(/process\.env\.SUPABASE_SERVICE_ROLE_KEY!?/g, ACTIVE_ANON_KEY);
+
+  for (const retiredKey of RETIRED_KEYS) {
+    patched = patched.replaceAll(retiredKey, ACTIVE_KEY_VALUE);
+  }
 
   if (patched !== original) {
     writeFileSync(path, patched);
