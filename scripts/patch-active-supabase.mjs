@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { extname, join } from "node:path";
 
 const ACTIVE_URL = JSON.stringify("https://muikwpjyaojeolwcuvqf.supabase.co");
-const ACTIVE_ANON_KEY = JSON.stringify("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11aWt3cGp5YW9qZW9sd2N1dnFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2NDc5NjIsImV4cCI6MjEwMDIyMzk2Mn0.Ly8OUPkvy1HV2gCu-QDeXFVGegLGRzBYU-N19GeYyQc");
+const ACTIVE_ANON_KEY = JSON.stringify("sb_publishable_Kcd-ANNCG6ZZhmQhH3jsTA_hqGXOCqO");
 const SOURCE_ROOT = "src";
 const EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx"]);
 
