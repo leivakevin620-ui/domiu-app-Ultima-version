@@ -5,8 +5,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const result = await registerRoleUser({ ...body, rol: "negocio" });
+    const result = await registerRoleUser(await request.json());
     return NextResponse.json(result.body, {
       status: result.status,
       headers: { "Cache-Control": "no-store" },

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "node scripts/patch-legacy-current-shift.mjs && node scripts/patch-map-loader.mjs && node scripts/patch-dispatch-system.mjs && node scripts/patch-push-balance.mjs && node scripts/patch-financial-fallback.mjs && node scripts/patch-turn-archive-reports.mjs && node scripts/patch-receipts-payment-accounts.mjs",
+    "prebuild": "node scripts/patch-legacy-current-shift.mjs && node scripts/patch-map-loader.mjs && node scripts/patch-dispatch-system.mjs && node scripts/patch-push-balance.mjs && node scripts/patch-financial-fallback.mjs && node scripts/patch-turn-archive-reports.mjs && node scripts/patch-receipts-payment-accounts.mjs && node scripts/patch-legacy-users-receipts-v2.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
