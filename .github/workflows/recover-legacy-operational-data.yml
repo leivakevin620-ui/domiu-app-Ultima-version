@@ -1,0 +1,49 @@
+name: Recuperar datos operativos antiguos
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/recover-legacy-operational-data.yml'
+      - 'scripts/recover-legacy-operational-data.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recover-legacy-operational-data
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'recovery/legacy-operational-data-20260724'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Validar conexiones configuradas
+        env:
+          SOURCE_DB_URL: ${{ secrets.SOURCE_DB_URL }}
+          TARGET_DB_URL: ${{ secrets.TARGET_DB_URL }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$SOURCE_DB_URL"
+          test -n "$TARGET_DB_URL"
+
+      - name: Resguardar base antigua en esquema privado
+        env:
+          SOURCE_DB_URL: ${{ secrets.SOURCE_DB_URL }}
+          TARGET_DB_URL: ${{ secrets.TARGET_DB_URL }}
+        run: node scripts/recover-legacy-operational-data.mjs
