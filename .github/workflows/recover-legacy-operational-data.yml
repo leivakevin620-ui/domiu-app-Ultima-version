@@ -28,10 +28,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
-      - name: Instalar dependencias
-        run: npm ci
+      - name: Instalar cliente PostgreSQL aislado
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/recovery-runner"
+          cp scripts/recover-legacy-operational-data.mjs "$RUNNER_TEMP/recovery-runner/recover.mjs"
+          cd "$RUNNER_TEMP/recovery-runner"
+          npm init -y >/dev/null
+          npm install --no-save pg@8
 
       - name: Validar conexiones configuradas
         env:
@@ -46,4 +51,4 @@ jobs:
         env:
           SOURCE_DB_URL: ${{ secrets.SOURCE_DB_URL }}
           TARGET_DB_URL: ${{ secrets.TARGET_DB_URL }}
-        run: node scripts/recover-legacy-operational-data.mjs
+        run: node "$RUNNER_TEMP/recovery-runner/recover.mjs"
