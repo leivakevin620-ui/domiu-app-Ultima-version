@@ -1,38 +1,39 @@
 import { createClient } from "@supabase/supabase-js";
 
-function buildMockClient() {
-  return new Proxy({} as Record<string, unknown>, {
-    get(_target, prop) {
-      if (prop === "then") return undefined;
-      return () => buildMockClient();
-    },
-  });
+const FALLBACK_SUPABASE_URL = "https://muikwpjyaojeolwcuvqf.supabase.co";
+const FALLBACK_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11aWt3cGp5YW9qZW9sd2N1dnFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2NDc5NjIsImV4cCI6MjEwMDIyMzk2Mn0.Ly8OUPkvy1HV2gCu-QDeXFVGegLGRzBYU-N19GeYyQc";
+const RETIRED_PROJECTS = ["auyzmvyfscvfzrhhjejq", "vuwaqmwgvldqmmgkpyjh"];
+
+function isUsableConfiguredUrl(value?: string) {
+  if (!value || value.includes("placeholder")) return false;
+  return !RETIRED_PROJECTS.some((projectRef) => value.includes(projectRef));
 }
 
-function getUrlAndKey() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (supabaseUrl && supabaseAnonKey && !supabaseUrl.includes("placeholder")) {
-    return { supabaseUrl, supabaseAnonKey };
+export function getSupabaseConfig() {
+  const configuredUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const configuredKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (isUsableConfiguredUrl(configuredUrl) && configuredKey) {
+    return { supabaseUrl: configuredUrl!, supabaseAnonKey: configuredKey };
   }
-  if (typeof window !== "undefined") {
-    console.warn("Supabase no configurado. Las funciones de base de datos no estarán disponibles.");
-  }
-  return null;
+
+  return {
+    supabaseUrl: FALLBACK_SUPABASE_URL,
+    supabaseAnonKey: FALLBACK_SUPABASE_ANON_KEY,
+  };
 }
 
 let cachedClient: ReturnType<typeof createClient> | null = null;
-let mockClient: unknown = null;
 
 function getClient() {
-  const config = getUrlAndKey();
-  if (!config) {
-    if (!mockClient) mockClient = buildMockClient();
-    return mockClient as ReturnType<typeof createClient>;
-  }
   if (!cachedClient) {
+    const config = getSupabaseConfig();
     cachedClient = createClient(config.supabaseUrl, config.supabaseAnonKey, {
-      auth: { persistSession: true, autoRefreshToken: true },
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
     });
   }
   return cachedClient;
@@ -41,21 +42,16 @@ function getClient() {
 const supabaseProxy = new Proxy({} as ReturnType<typeof createClient>, {
   get(_target, prop) {
     const client = getClient();
-    const value = (client as Record<string, unknown>)[prop];
-    if (typeof value === "function") return value.bind(client);
-    return value;
+    const value = (client as unknown as Record<string, unknown>)[prop as string];
+    return typeof value === "function" ? value.bind(client) : value;
   },
 });
 
 export { supabaseProxy as supabase };
 
 export function resetSupabaseClient() {
-  const config = getUrlAndKey();
-  if (config) {
-    cachedClient = createClient(config.supabaseUrl, config.supabaseAnonKey, {
-      auth: { persistSession: true, autoRefreshToken: true },
-    });
-  }
+  cachedClient = null;
+  return getClient();
 }
 
 export function getSupabaseClient() {
