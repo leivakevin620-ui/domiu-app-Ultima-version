@@ -1,81 +1,51 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
+
+const ACTIVE_SUPABASE_URL = "https://muikwpjyaojeolwcuvqf.supabase.co";
+const ACTIVE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11aWt3cGp5YW9qZW9sd2N1dnFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2NDc5NjIsImV4cCI6MjEwMDIyMzk2Mn0.Ly8OUPkvy1HV2gCu-QDeXFVGegLGRzBYU-N19GeYyQc";
+
+async function callUserAdmin(payload: Record<string, unknown>) {
+  const token = (await cookies()).get("domiu-access-token")?.value;
+  if (!token) {
+    return NextResponse.json(
+      { error: "Tu sesión administrativa venció. Vuelve a iniciar sesión." },
+      { status: 401, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  try {
+    const response = await fetch(`${ACTIVE_SUPABASE_URL}/functions/v1/legacy-user-admin`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: ACTIVE_ANON_KEY,
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+    const body = await response.json().catch(() => ({ error: "Respuesta administrativa inválida" }));
+    return NextResponse.json(body, {
+      status: response.status,
+      headers: { "Cache-Control": "no-store" },
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error?.message || "No fue posible contactar el servicio administrativo" },
+      { status: 502, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+}
 
 export async function GET() {
-  try {
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    );
-
-    const { data: users, error } = await supabaseAdmin.auth.admin.listUsers();
-    if (error) throw error;
-
-    const { data: profiles } = await supabaseAdmin.from("profiles").select("*");
-
-    const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
-
-    const result = (users?.users || []).map((u: any) => {
-      const p = profileMap.get(u.id);
-      return {
-        id: u.id,
-        email: u.email,
-        nombre: p?.nombre || u.user_metadata?.nombre || "",
-        telefono: p?.telefono || u.user_metadata?.telefono || "",
-        rol: p?.rol || u.user_metadata?.rol || "desconocido",
-        created_at: u.created_at,
-        last_sign_in: u.last_sign_in_at,
-        confirmed: u.email_confirmed_at ? true : false,
-        disabled: u.banned_until ? true : false,
-      };
-    });
-
-    return NextResponse.json(result);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+  return callUserAdmin({ action: "list" });
 }
 
 export async function POST(request: Request) {
   try {
-    const { action, userId, email, password } = await request.json();
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    );
-
-    switch (action) {
-      case "update-email": {
-        const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { email });
-        if (error) throw error;
-        return NextResponse.json({ success: true });
-      }
-      case "reset-password": {
-        const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password });
-        if (error) throw error;
-        return NextResponse.json({ success: true, message: "Contraseña restablecida" });
-      }
-      case "disable": {
-        const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { ban_duration: "24h" });
-        if (error) throw error;
-        return NextResponse.json({ success: true, message: "Usuario desactivado por 24h" });
-      }
-      case "enable": {
-        const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { ban_duration: "none" });
-        if (error) throw error;
-        return NextResponse.json({ success: true, message: "Usuario activado" });
-      }
-      case "delete": {
-        const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
-        if (error) throw error;
-        return NextResponse.json({ success: true, message: "Usuario eliminado" });
-      }
-      default:
-        return NextResponse.json({ error: "Acción no válida" }, { status: 400 });
-    }
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    const body = await request.json();
+    return callUserAdmin(body);
+  } catch {
+    return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
   }
 }
